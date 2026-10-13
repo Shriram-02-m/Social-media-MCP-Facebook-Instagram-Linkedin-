@@ -1,0 +1,12 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "social-media": {
+      "type": "local",
+      "command": ["node", "dist/index.js"],
+      "cwd": "C:/Users/shrir/Music/office_work/Social_Media_apps/social-media-mcp",
+      "enabled": true,
+      "timeout": 10000
+    }
+  }
+}
