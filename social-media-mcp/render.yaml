@@ -3,7 +3,7 @@ services:
     name: social-media-cloud-worker
     runtime: node
     plan: free
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm run worker
     healthCheckPath: /health
     envVars:
