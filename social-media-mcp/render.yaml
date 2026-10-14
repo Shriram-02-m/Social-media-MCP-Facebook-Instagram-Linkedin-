@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: social-media-cloud-worker
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm run worker
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SCHEDULER_MODE
+        value: cloud
+      - key: TOKEN_STORE_BACKEND
+        value: supabase
+      - key: SCHEDULED_IMAGE_STORAGE
+        value: supabase
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: CLOUD_TOKEN_ENCRYPTION_KEY
+        sync: false
+      - key: WORKER_TRIGGER_SECRET
+        sync: false
+      - key: LINKEDIN_CLIENT_ID
+        sync: false
+      - key: LINKEDIN_CLIENT_SECRET
+        sync: false

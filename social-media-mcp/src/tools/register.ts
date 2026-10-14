@@ -6,7 +6,7 @@ import { config } from "../config/env.js";
 import { metaAccountInfo, metaConnectionStatus, publishMeta, readMetaPosts } from "../platforms/meta.js";
 import { linkedinAccountInfo, linkedinConnectionStatus, publishLinkedIn, readLinkedInPosts } from "../platforms/linkedin.js";
 import type { Platform } from "../platforms/types.js";
-import { retryScheduledPost, schedulePosts, scheduledPostStatus } from "../scheduler.js";
+import { cancelScheduledPost, retryScheduledPost, schedulePosts, scheduledPostStatus } from "../scheduler.js";
 import { explainError } from "../utils/http.js";
 import { platformImageRequirements, validateLinkedInAuthorUrn, validatePostContent } from "../utils/validation.js";
 
@@ -132,7 +132,7 @@ export function registerTools(server: McpServer): void {
   }));
 
   server.registerTool("social_schedule_posts", {
-    description: "Persistently schedule separate posts to connected social platforms. The MCP server must remain running at the scheduled times. Meta image URLs are served through the configured public HTTPS tunnel; LinkedIn uploads the same local image file.",
+    description: "Persistently schedule separate posts to connected social platforms. In local mode the MCP scheduler, image server, and public tunnel must remain running; in cloud mode images are stored privately in Supabase Storage and the separate worker publishes them.",
     inputSchema: z.object({
       posts: z.array(z.object({
         platform: z.enum(["instagram", "facebook", "linkedin"]),
@@ -150,8 +150,13 @@ export function registerTools(server: McpServer): void {
     inputSchema: z.object({}),
   }, async () => safely(async () => ({ scheduledPosts: await scheduledPostStatus() })));
 
+  server.registerTool("social_cancel_scheduled_post", {
+    description: "Cancel a scheduled post only if publishing has not started.",
+    inputSchema: z.object({ jobId: z.string().min(1) }),
+  }, async ({ jobId }) => safely(async () => ({ cancelled: await cancelScheduledPost(jobId) })));
+
   server.registerTool("social_retry_scheduled_post", {
-    description: "Safely requeue a failed scheduled post only when it failed image validation before any publishing request was made. Publishing-stage failures are blocked to prevent duplicates.",
+    description: "Safely requeue a failed scheduled post only after pre-publish token or image validation failed. Publishing-stage failures are blocked to prevent duplicates.",
     inputSchema: z.object({ jobId: z.string().min(1) }),
   }, async ({ jobId }) => safely(async () => ({ scheduled: await retryScheduledPost(jobId) })));
 

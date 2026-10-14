@@ -42,6 +42,7 @@ test("built MCP server exposes tools and validates dry-run publishing", async ()
       "social_authorization_start",
       "social_authorization_status",
       "social_authorization_wait",
+      "social_cancel_scheduled_post",
       "social_connection_status",
       "social_publish",
       "social_recent_posts",

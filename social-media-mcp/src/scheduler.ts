@@ -1,14 +1,22 @@
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { Pool, type PoolClient, type QueryResultRow } from "pg";
+import type { PoolClient, QueryResultRow } from "pg";
 import { config } from "./config/env.js";
+import { databasePool } from "./database.js";
+import { ensureDatabaseMigrations } from "./database-migrations.js";
 import { loadTokens } from "./auth/token-store.js";
 import { registerScheduledMedia, unregisterScheduledMedia } from "./auth/oauth.js";
 import { publishMeta } from "./platforms/meta.js";
-import { publishLinkedIn } from "./platforms/linkedin.js";
+import { linkedinTokenForUse, publishLinkedIn, publishLinkedInWithImage } from "./platforms/linkedin.js";
 import type { MetaPlatform, Platform, PublishedPost } from "./platforms/types.js";
+import {
+  createScheduledImageUrl,
+  deleteScheduledImage,
+  downloadScheduledImage,
+  uploadScheduledImage,
+  validateStoredImage,
+} from "./storage/scheduled-images.js";
 import {
   validateScheduledImageWithRetries,
   type ScheduledImageValidation,
@@ -24,21 +32,22 @@ export function canSafelyRetryScheduledPost(
   status: ScheduledPost["status"],
   failureStage: ScheduledPost["failureStage"],
 ): boolean {
-  return status === "failed" && failureStage === "image_validation";
+  return status === "failed" && (failureStage === "image_validation" || failureStage === "token_validation");
 }
 
 interface ScheduledPost extends NewScheduledPost {
   id: string;
   imageToken: string;
   imagePath: string;
+  imageStoragePath?: string;
   contentType: string;
-  status: "scheduled" | "publishing" | "published" | "failed";
+  status: "scheduled" | "publishing" | "published" | "failed" | "cancelled";
   createdAt: string;
   publishedAt?: string;
   result?: PublishedPost;
   error?: string;
   retryCount: number;
-  failureStage?: "image_validation" | "publishing";
+  failureStage?: "token_validation" | "image_validation" | "publishing";
   imageValidation?: ScheduledImageValidation;
 }
 
@@ -49,6 +58,7 @@ interface ScheduledPostRow extends QueryResultRow {
   text: string;
   image_token: string;
   image_path: string;
+  image_storage_path: string | null;
   content_type: string;
   status: ScheduledPost["status"];
   created_at: Date;
@@ -56,48 +66,39 @@ interface ScheduledPostRow extends QueryResultRow {
   result: PublishedPost | null;
   error: string | null;
   retry_count: number;
-  failure_stage: "image_validation" | "publishing" | null;
+  failure_stage: "token_validation" | "image_validation" | "publishing" | null;
   image_validation: ScheduledImageValidation | null;
 }
 
 const schedulerDirectory = path.dirname(config.tokenFile);
 const mediaDirectory = path.join(schedulerDirectory, "scheduled-media");
-const migrationPath = fileURLToPath(new URL("../migrations/001_scheduled_posts.sql", import.meta.url));
 const textLimits: Record<Platform, number> = { instagram: 2200, facebook: 63206, linkedin: 3000 };
-let pool: Pool | undefined;
 let initialization: Promise<void> | undefined;
 let tickTimer: NodeJS.Timeout | undefined;
-let tickRunning = false;
+let workerRunning = false;
 
 function safeError(error: unknown): string {
   const message = error instanceof Error ? error.message : "Unknown publishing error.";
-  return message.replace(/(client_secret|access_token|refresh_token|authorization_code|code)=([^&\s]+)/gi, "$1=[redacted]").slice(0, 700);
-}
-
-function databasePool(): Pool {
-  if (!config.databaseUrl) throw new Error("Set DATABASE_URL to a PostgreSQL connection string to use scheduled posts.");
-  pool ??= new Pool({ connectionString: config.databaseUrl });
-  return pool;
+  return message
+    .replace(/postgres(?:ql)?:\/\/[^\s"'<>]+/gi, "[database URL redacted]")
+    .replace(/(client_secret|access_token|refresh_token|authorization_code|code)=([^&\s]+)/gi, "$1=[redacted]")
+    .replace(/https:\/\/[^\s"'<>]+\/storage\/v1\/object\/sign\/[^\s"'<>]+/gi, "[signed image URL redacted]")
+    .slice(0, 700);
 }
 
 async function ensureScheduleStore(): Promise<void> {
   if (!initialization) {
     initialization = (async () => {
-      const migration = await readFile(migrationPath, "utf8");
-      await databasePool().query(migration);
-      await databasePool().query(`
-        UPDATE scheduled_posts
-        SET status = 'failed',
-            error = 'Scheduler stopped during publishing. Check the platform before retrying to avoid a duplicate post.',
-            failure_stage = COALESCE(failure_stage, 'publishing'),
-            claimed_at = NULL,
-            updated_at = NOW()
-        WHERE status = 'publishing'
-          AND claimed_at < NOW() - INTERVAL '30 minutes'
-      `);
+      await ensureDatabaseMigrations();
     })().catch((error: unknown) => {
       initialization = undefined;
-      throw error;
+      const code = error instanceof Error && "code" in error ? String(error.code) : "UNKNOWN";
+      console.error(JSON.stringify({
+        event: "database_scheduler_initialization_failed",
+        code,
+        message: safeError(error),
+      }));
+      throw new Error(`Could not initialize the PostgreSQL scheduler store (database error ${code}). Check DATABASE_URL, Supabase connectivity/SSL, and migration permissions.`);
     });
   }
   await initialization;
@@ -111,6 +112,7 @@ function fromRow(row: ScheduledPostRow): ScheduledPost {
     text: row.text,
     imageToken: row.image_token,
     imagePath: row.image_path,
+    ...(row.image_storage_path ? { imageStoragePath: row.image_storage_path } : {}),
     contentType: row.content_type,
     status: row.status,
     createdAt: row.created_at.toISOString(),
@@ -126,7 +128,7 @@ function fromRow(row: ScheduledPostRow): ScheduledPost {
 async function loadJobs(): Promise<ScheduledPost[]> {
   await ensureScheduleStore();
   const { rows } = await databasePool().query<ScheduledPostRow>(
-    "SELECT * FROM scheduled_posts ORDER BY created_at, id",
+    "SELECT * FROM public.scheduled_posts ORDER BY created_at, id",
   );
   return rows.map(fromRow);
 }
@@ -134,7 +136,7 @@ async function loadJobs(): Promise<ScheduledPost[]> {
 async function saveJob(job: ScheduledPost): Promise<void> {
   await ensureScheduleStore();
   const { rowCount } = await databasePool().query(
-    `UPDATE scheduled_posts
+    `UPDATE public.scheduled_posts
      SET status = $2, published_at = $3, result = $4::jsonb, error = $5,
          retry_count = $6, failure_stage = $7, image_validation = $8::jsonb,
          claimed_at = CASE WHEN $2 = 'publishing' THEN claimed_at ELSE NULL END,
@@ -165,7 +167,7 @@ function contentTypeFor(imagePath: string): string {
 async function registerPendingMedia(): Promise<void> {
   const currentJobs = await loadJobs();
   for (const job of currentJobs) {
-    if (job.status === "scheduled") {
+    if (job.status === "scheduled" && job.imagePath) {
       await registerScheduledMedia(job.imageToken, job.imagePath, job.contentType);
     }
   }
@@ -173,15 +175,34 @@ async function registerPendingMedia(): Promise<void> {
 
 async function publishJob(job: ScheduledPost): Promise<void> {
   try {
+    job.failureStage = "token_validation";
+    await saveJob(job);
+    if (job.platform === "linkedin") {
+      await linkedinTokenForUse();
+    } else {
+      const token = (await loadTokens())[job.platform];
+      if (!token) throw new Error(`${job.platform} is not connected. Authorize it before retrying this scheduled post.`);
+      if (token.expiresAt !== undefined && token.expiresAt <= Date.now()) {
+        throw new Error(`${job.platform} access token is expired. Reauthorize the account, then safely retry this post.`);
+      }
+    }
+    delete job.failureStage;
     let result: PublishedPost;
     if (job.platform === "linkedin") {
       await validateBeforePublishing(job, false);
       job.failureStage = "publishing";
       await saveJob(job);
-      result = await publishLinkedIn(job.text, job.imagePath);
+      if (job.imageStoragePath) {
+        const image = await downloadScheduledImage(job.imageStoragePath);
+        result = await publishLinkedInWithImage(job.text, image.bytes, image.contentType);
+      } else {
+        result = await publishLinkedIn(job.text, job.imagePath);
+      }
     } else {
       await validateBeforePublishing(job, true);
-      const imageUrl = `${config.imagePublicBaseUrl}/scheduled-media/${job.imageToken}`;
+      const imageUrl = job.imageStoragePath
+        ? await createScheduledImageUrl(job.imageStoragePath)
+        : `${config.imagePublicBaseUrl}/scheduled-media/${job.imageToken}`;
       job.failureStage = "publishing";
       await saveJob(job);
       result = await publishMeta(job.platform as MetaPlatform, job.text, imageUrl);
@@ -218,6 +239,47 @@ async function validateBeforePublishing(job: ScheduledPost, checkPublic: boolean
   const startingRetryCount = job.retryCount;
   job.failureStage = "image_validation";
   await saveJob(job);
+  if (job.imageStoragePath) {
+    for (let attempt = 1; attempt <= config.scheduleImageMaxAttempts; attempt += 1) {
+      const validation = await validateStoredImage(job.imageStoragePath, checkPublic);
+      const willRetry = !validation.valid && validation.retryable && attempt < config.scheduleImageMaxAttempts;
+      job.imageValidation = validation;
+      job.retryCount = startingRetryCount + attempt - 1;
+      if (validation.error) job.error = validation.error;
+      else delete job.error;
+      console.info(JSON.stringify({
+        event: "scheduled_image_validation",
+        jobId: job.id,
+        platform: job.platform,
+        imageUrl: checkPublic ? "private Supabase Storage signed URL (redacted)" : "private Supabase Storage object",
+        validation,
+        attempt,
+        retryCount: job.retryCount,
+      }));
+      if (validation.valid) {
+        delete job.failureStage;
+        delete job.error;
+        return;
+      }
+      if (!willRetry) throw new Error(validation.error ?? "Scheduled image validation failed.");
+      job.retryCount += 1;
+      await saveJob(job);
+      const delayMs = Math.min(
+        config.scheduleImageRetryBaseDelayMs * 2 ** (attempt - 1),
+        config.scheduleImageRetryMaxDelayMs,
+      );
+      console.warn(JSON.stringify({
+        event: "scheduled_image_validation_retry",
+        jobId: job.id,
+        platform: job.platform,
+        retryCount: job.retryCount,
+        delayMs,
+        error: validation.error,
+      }));
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+    throw new Error("Scheduled image retry loop ended unexpectedly.");
+  }
   const { validation, retries } = await validateScheduledImageWithRetries({
       imagePath: job.imagePath,
       imageToken: job.imageToken,
@@ -265,39 +327,53 @@ async function validateBeforePublishing(job: ScheduledPost, checkPublic: boolean
   delete job.failureStage;
 }
 
-async function runDueJobs(): Promise<void> {
-  if (tickRunning) return;
-  tickRunning = true;
+export async function processDueJobs(): Promise<number> {
+  if (workerRunning) return 0;
+  workerRunning = true;
   try {
     await ensureScheduleStore();
+    await databasePool().query(`
+      UPDATE public.scheduled_posts
+      SET status = 'failed',
+          error = 'Worker stopped during publishing. Check the platform before retrying to avoid a duplicate post.',
+          failure_stage = COALESCE(failure_stage, 'publishing'),
+          claimed_at = NULL,
+          updated_at = NOW()
+      WHERE status = 'publishing'
+        AND (claimed_at IS NULL OR claimed_at < NOW() - INTERVAL '30 minutes')
+    `);
     const { rows } = await databasePool().query<ScheduledPostRow>(`
       WITH due AS (
         SELECT id
-        FROM scheduled_posts
+        FROM public.scheduled_posts
         WHERE status = 'scheduled' AND scheduled_at <= NOW()
         ORDER BY scheduled_at
         FOR UPDATE SKIP LOCKED
         LIMIT 10
       )
-      UPDATE scheduled_posts AS post
+      UPDATE public.scheduled_posts AS post
       SET status = 'publishing', claimed_at = NOW(), updated_at = NOW(), error = NULL
       FROM due
       WHERE post.id = due.id
       RETURNING post.*
     `);
     await Promise.all(rows.map((row) => publishJob(fromRow(row))));
+    return rows.length;
   } finally {
-    tickRunning = false;
+    workerRunning = false;
   }
 }
 
 export async function startScheduleRunner(): Promise<void> {
   await ensureScheduleStore();
   const currentJobs = await loadJobs();
-  if (currentJobs.some((job) => job.status === "scheduled")) await registerPendingMedia();
+  if (config.scheduledImageStorage === "local" && currentJobs.some((job) => job.status === "scheduled")) {
+    await registerPendingMedia();
+  }
+  if (config.schedulerMode !== "local") return;
   if (tickTimer) return;
   tickTimer = setInterval(() => {
-    void runDueJobs().catch((error: unknown) => {
+    void processDueJobs().catch((error: unknown) => {
       console.error("Scheduled publishing worker failed:", safeError(error));
     });
   }, 1000);
@@ -312,7 +388,7 @@ export async function schedulePosts(
   const contentType = contentTypeFor(sourceImagePath);
   const currentTime = Date.now();
   for (const post of posts) {
-    if (post.platform !== "linkedin" && !config.imagePublicBaseUrl.startsWith("https://")) {
+    if (config.scheduledImageStorage === "local" && post.platform !== "linkedin" && !config.imagePublicBaseUrl.startsWith("https://")) {
       throw new Error("Scheduled Instagram and Facebook image publishing requires IMAGE_PUBLIC_BASE_URL to be a public HTTPS tunnel URL.");
     }
     const scheduledTime = Date.parse(post.scheduledAt);
@@ -329,11 +405,20 @@ export async function schedulePosts(
   }
 
   await ensureScheduleStore();
-  await mkdir(mediaDirectory, { recursive: true });
-  const storedImagePath = path.join(mediaDirectory, `${randomBytes(16).toString("hex")}${path.extname(sourceImagePath).toLowerCase()}`);
   const image = await readFile(sourceImagePath);
   if (!image.byteLength) throw new Error("The selected schedule image file is empty.");
-  await writeFile(storedImagePath, image, { mode: 0o600, flag: "wx" });
+  if (image.byteLength > config.scheduleImageMaxBytes) {
+    throw new Error("Scheduled image exceeds SCHEDULE_IMAGE_MAX_BYTES.");
+  }
+  let storedImagePath = "";
+  let imageStoragePath: string | undefined;
+  if (config.scheduledImageStorage === "supabase") {
+    imageStoragePath = await uploadScheduledImage(image, contentType, path.extname(sourceImagePath).toLowerCase());
+  } else {
+    await mkdir(mediaDirectory, { recursive: true });
+    storedImagePath = path.join(mediaDirectory, `${randomBytes(16).toString("hex")}${path.extname(sourceImagePath).toLowerCase()}`);
+    await writeFile(storedImagePath, image, { mode: 0o600, flag: "wx" });
+  }
 
   const createdAt = new Date().toISOString();
   const createdJobs: ScheduledPost[] = posts.map((post) => ({
@@ -341,6 +426,7 @@ export async function schedulePosts(
     id: randomBytes(16).toString("hex"),
     imageToken: randomBytes(32).toString("hex"),
     imagePath: storedImagePath,
+    ...(imageStoragePath ? { imageStoragePath } : {}),
     contentType,
     status: "scheduled",
     createdAt,
@@ -348,27 +434,49 @@ export async function schedulePosts(
   }));
   let client: PoolClient | undefined;
   let transactionStarted = false;
+  let commitAttempted = false;
   try {
     client = await databasePool().connect();
-    for (const job of createdJobs) await registerScheduledMedia(job.imageToken, job.imagePath, job.contentType);
+    for (const job of createdJobs) {
+      if (job.imagePath) await registerScheduledMedia(job.imageToken, job.imagePath, job.contentType);
+    }
     await client.query("BEGIN");
     transactionStarted = true;
     for (const job of createdJobs) {
       await client.query(
-        `INSERT INTO scheduled_posts
-          (id, platform, scheduled_at, text, image_token, image_path, content_type, status, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)`,
-        [job.id, job.platform, job.scheduledAt, job.text, job.imageToken, job.imagePath, job.contentType, job.status, job.createdAt],
+        `INSERT INTO public.scheduled_posts
+          (id, platform, scheduled_at, text, image_token, image_path, image_storage_path, content_type, status, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)`,
+        [
+          job.id, job.platform, job.scheduledAt, job.text, job.imageToken, job.imagePath,
+          job.imageStoragePath ?? null, job.contentType, job.status, job.createdAt,
+        ],
       );
     }
+    commitAttempted = true;
     await client.query("COMMIT");
     transactionStarted = false;
   } catch (error) {
     if (transactionStarted) await client?.query("ROLLBACK").catch(() => undefined);
-    for (const job of createdJobs) {
-      unregisterScheduledMedia(job.imageToken);
+    if (!commitAttempted) {
+      for (const job of createdJobs) unregisterScheduledMedia(job.imageToken);
     }
-    await unlink(storedImagePath).catch(() => undefined);
+    if (!commitAttempted && storedImagePath) await unlink(storedImagePath).catch(() => undefined);
+    if (!commitAttempted && imageStoragePath) {
+      await deleteScheduledImage(imageStoragePath).catch((cleanupError: unknown) => {
+        console.error(JSON.stringify({
+          event: "scheduled_image_orphan_cleanup_failed",
+          error: safeError(cleanupError),
+        }));
+      });
+    }
+    if (commitAttempted) {
+      console.error(JSON.stringify({
+        event: "scheduled_post_commit_uncertain",
+        jobIds: createdJobs.map((job) => job.id),
+        message: "The database commit outcome is uncertain; uploaded media was retained to avoid breaking possibly committed jobs.",
+      }));
+    }
     throw error;
   } finally {
     client?.release();
@@ -386,7 +494,7 @@ export async function scheduledPostStatus(): Promise<Array<{
   result?: PublishedPost;
   error?: string;
   retryCount: number;
-  failureStage?: "image_validation" | "publishing";
+  failureStage?: "token_validation" | "image_validation" | "publishing";
   imageValidation?: ScheduledImageValidation;
 }>> {
   const currentJobs = await loadJobs();
@@ -418,7 +526,7 @@ export async function retryScheduledPost(jobId: string): Promise<{
     await client.query("BEGIN");
     transactionStarted = true;
     const { rows } = await client.query<ScheduledPostRow>(
-      "SELECT * FROM scheduled_posts WHERE id = $1 FOR UPDATE",
+      "SELECT * FROM public.scheduled_posts WHERE id = $1 FOR UPDATE",
       [jobId],
     );
     const row = rows[0];
@@ -427,10 +535,12 @@ export async function retryScheduledPost(jobId: string): Promise<{
     if (!canSafelyRetryScheduledPost(row.status, row.failure_stage ?? undefined)) {
       throw new Error("This post failed during publishing, so its outcome may be uncertain. Verify the platform before scheduling a new post; automatic retry is blocked to prevent duplicates.");
     }
-    await registerScheduledMedia(row.image_token, row.image_path, row.content_type);
+    if (row.image_path && !row.image_storage_path) {
+      await registerScheduledMedia(row.image_token, row.image_path, row.content_type);
+    }
     const scheduledAt = new Date().toISOString();
     await client.query(
-      `UPDATE scheduled_posts
+      `UPDATE public.scheduled_posts
        SET status = 'scheduled', scheduled_at = $2, error = NULL,
            failure_stage = NULL, retry_count = 0, image_validation = NULL,
            claimed_at = NULL, updated_at = NOW()
@@ -448,4 +558,30 @@ export async function retryScheduledPost(jobId: string): Promise<{
   }
   await startScheduleRunner();
   return result;
+}
+
+export async function cancelScheduledPost(jobId: string): Promise<{
+  id: string;
+  platform: Platform;
+  status: "cancelled";
+}> {
+  await ensureScheduleStore();
+  const { rows } = await databasePool().query<ScheduledPostRow>(
+    `UPDATE public.scheduled_posts
+     SET status = 'cancelled', error = 'Cancelled before publishing.', claimed_at = NULL, updated_at = NOW()
+     WHERE id = $1 AND status = 'scheduled'
+     RETURNING *`,
+    [jobId],
+  );
+  const row = rows[0];
+  if (!row) {
+    const existing = await databasePool().query<{ status: ScheduledPost["status"] }>(
+      "SELECT status FROM public.scheduled_posts WHERE id = $1",
+      [jobId],
+    );
+    if (!existing.rowCount) throw new Error(`Scheduled post ${jobId} was not found.`);
+    throw new Error(`Only posts that have not started publishing can be cancelled; this post is ${existing.rows[0]!.status}.`);
+  }
+  unregisterScheduledMedia(row.image_token);
+  return { id: row.id, platform: row.platform, status: "cancelled" };
 }

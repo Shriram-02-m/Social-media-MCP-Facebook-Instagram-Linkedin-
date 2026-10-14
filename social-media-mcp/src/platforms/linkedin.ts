@@ -1,17 +1,69 @@
 import { readFile } from "node:fs/promises";
 import { config } from "../config/env.js";
-import { loadTokens } from "../auth/token-store.js";
+import { loadTokens, saveTokens } from "../auth/token-store.js";
 import { apiRequest } from "../utils/http.js";
 import { validateLinkedInAuthorUrn } from "../utils/validation.js";
-import type { LinkedInPost, PublishedPost } from "./types.js";
+import type { LinkedInPost, PublishedPost, StoredToken } from "./types.js";
 
 interface LinkedInProfile { sub: string; name?: string; email?: string; picture?: string }
 interface LinkedInPostList { elements?: LinkedInPost[] }
+interface LinkedInTokenResponse { access_token?: string; refresh_token?: string; expires_in?: number }
 
 const restHeaders = {
   "Linkedin-Version": config.linkedinApiVersion,
   "X-Restli-Protocol-Version": "2.0.0",
 };
+let refreshInFlight: Promise<StoredToken> | undefined;
+
+export async function linkedinTokenForUse(): Promise<StoredToken> {
+  const vault = await loadTokens();
+  const current = vault.linkedin;
+  if (!current) throw new Error("LinkedIn is not connected. Start OAuth first.");
+  if (current.expiresAt === undefined || current.expiresAt > Date.now() + 60_000) return current;
+  if (!current.refreshToken) {
+    throw new Error("LinkedIn access token is expired or about to expire and has no refresh token. Reauthorize LinkedIn.");
+  }
+  if (!config.linkedinClientId || !config.linkedinClientSecret) {
+    throw new Error("LinkedIn token refresh requires LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET.");
+  }
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    const latestVault = await loadTokens();
+    const latest = latestVault.linkedin;
+    if (!latest) throw new Error("LinkedIn is not connected. Start OAuth first.");
+    if (latest.expiresAt === undefined || latest.expiresAt > Date.now() + 60_000) return latest;
+    if (!latest.refreshToken) {
+      throw new Error("LinkedIn access token is expired and has no refresh token. Reauthorize LinkedIn.");
+    }
+    const { data } = await apiRequest<LinkedInTokenResponse>("https://www.linkedin.com/oauth/v2/accessToken", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: latest.refreshToken,
+        client_id: config.linkedinClientId,
+        client_secret: config.linkedinClientSecret,
+      }),
+    });
+    if (!data.access_token || !data.expires_in || data.expires_in <= 0) {
+      throw new Error("LinkedIn refresh did not return a valid access token and expiry. Reauthorize LinkedIn.");
+    }
+    const refreshed: StoredToken = {
+      ...latest,
+      accessToken: data.access_token,
+      ...(data.refresh_token ? { refreshToken: data.refresh_token } : {}),
+      expiresAt: Date.now() + data.expires_in * 1000,
+    };
+    await saveTokens({ ...latestVault, linkedin: refreshed });
+    return refreshed;
+  })();
+  try {
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = undefined;
+  }
+}
 
 export function normalizeLinkedInScopes(scopes: string[]): string[] {
   return [...new Set(scopes.flatMap((scope) => scope.split(/[,\s]+/)).filter(Boolean))];
@@ -49,8 +101,7 @@ export async function linkedinConnectionStatus(): Promise<Record<string, unknown
 }
 
 export async function linkedinAccountInfo(author?: string): Promise<Record<string, unknown>> {
-  const token = (await loadTokens()).linkedin;
-  if (!token) throw new Error("LinkedIn is not connected. Start OAuth first.");
+  const token = await linkedinTokenForUse();
   const { data } = await apiRequest<LinkedInProfile>("https://api.linkedin.com/v2/userinfo", { accessToken: token.accessToken });
   const scopes = normalizeLinkedInScopes(token.scopes);
   return {
@@ -63,8 +114,7 @@ export async function linkedinAccountInfo(author?: string): Promise<Record<strin
 }
 
 export async function readLinkedInPosts(count: number, author?: string): Promise<LinkedInPost[]> {
-  const token = (await loadTokens()).linkedin;
-  if (!token) throw new Error("LinkedIn is not connected. Start OAuth first.");
+  const token = await linkedinTokenForUse();
   const selectedAuthor = authorUrn(author, token.accountId);
   const readScope = selectedAuthor.startsWith("urn:li:organization:") ? "r_organization_social" : "r_member_social";
   if (!normalizeLinkedInScopes(token.scopes).includes(readScope)) {
@@ -89,12 +139,18 @@ function confirmedId(response: Response): string {
   return id;
 }
 
-async function uploadImage(token: string, author: string, imagePath: string): Promise<string> {
-  const image = await readFile(imagePath);
+async function uploadImage(
+  token: string,
+  author: string,
+  imagePath?: string,
+  imageData?: { bytes: Buffer; contentType: string },
+): Promise<string> {
+  const image = imageData?.bytes ?? (imagePath ? await readFile(imagePath) : undefined);
+  if (!image) throw new Error("A LinkedIn image path or image buffer is required.");
   if (!image.byteLength) throw new Error("The selected LinkedIn image file is empty.");
-  const mimeType = imagePath.toLowerCase().endsWith(".png")
+  const mimeType = imageData?.contentType ?? (imagePath?.toLowerCase().endsWith(".png")
     ? "image/png"
-    : imagePath.toLowerCase().endsWith(".gif") ? "image/gif" : "image/jpeg";
+    : imagePath?.toLowerCase().endsWith(".gif") ? "image/gif" : "image/jpeg");
   const initialized = await apiRequest<{ value?: { uploadUrl?: string; image?: string } }>(
     "https://api.linkedin.com/rest/images?action=initializeUpload",
     {
@@ -107,20 +163,28 @@ async function uploadImage(token: string, author: string, imagePath: string): Pr
   const uploadUrl = initialized.data.value?.uploadUrl;
   const imageUrn = initialized.data.value?.image;
   if (!uploadUrl || !imageUrn) throw new Error("LinkedIn did not return an image upload URL and image URN.");
-  const response = await fetch(uploadUrl, { method: "PUT", headers: { "content-type": mimeType }, body: image });
+  const imageBody = new ArrayBuffer(image.byteLength);
+  new Uint8Array(imageBody).set(image);
+  const response = await fetch(uploadUrl, { method: "PUT", headers: { "content-type": mimeType }, body: imageBody });
   if (!response.ok) throw new Error(`LinkedIn image upload failed with HTTP ${response.status}.`);
   return imageUrn;
 }
 
-export async function publishLinkedIn(text?: string, imagePath?: string, requestedAuthor?: string): Promise<PublishedPost> {
-  const token = (await loadTokens()).linkedin;
-  if (!token) throw new Error("LinkedIn is not connected. Start OAuth first.");
+async function publishLinkedInInternal(
+  text: string | undefined,
+  imagePath: string | undefined,
+  requestedAuthor: string | undefined,
+  imageData?: { bytes: Buffer; contentType: string },
+): Promise<PublishedPost> {
+  const token = await linkedinTokenForUse();
   const author = authorUrn(requestedAuthor, token.accountId);
   const writeScope = author.startsWith("urn:li:organization:") ? "w_organization_social" : "w_member_social";
   if (!normalizeLinkedInScopes(token.scopes).includes(writeScope)) {
     throw new Error(`LinkedIn publishing requires the granted ${writeScope} scope. Check your app's approved LinkedIn product and reconnect.`);
   }
-  const imageUrn = imagePath ? await uploadImage(token.accessToken, author, imagePath) : undefined;
+  const imageUrn = imagePath || imageData
+    ? await uploadImage(token.accessToken, author, imagePath, imageData)
+    : undefined;
   const post = {
     author,
     commentary: text ?? "",
@@ -137,4 +201,17 @@ export async function publishLinkedIn(text?: string, imagePath?: string, request
     accessToken: token.accessToken,
   });
   return { platform: "linkedin", id: confirmedId(response), confirmed: true };
+}
+
+export async function publishLinkedIn(text?: string, imagePath?: string, requestedAuthor?: string): Promise<PublishedPost> {
+  return publishLinkedInInternal(text, imagePath, requestedAuthor);
+}
+
+export async function publishLinkedInWithImage(
+  text: string | undefined,
+  bytes: Buffer,
+  contentType: string,
+  requestedAuthor?: string,
+): Promise<PublishedPost> {
+  return publishLinkedInInternal(text, undefined, requestedAuthor, { bytes, contentType });
 }
