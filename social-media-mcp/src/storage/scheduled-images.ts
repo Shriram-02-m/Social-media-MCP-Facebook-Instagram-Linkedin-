@@ -147,7 +147,10 @@ export async function createScheduledImageUrl(objectPath: string): Promise<strin
   if (!response.ok) await responseError(response);
   const result = await response.json() as { signedURL?: string };
   if (!result.signedURL) throw new Error("Supabase Storage did not return a signed image URL.");
-  return new URL(result.signedURL, `${config.supabaseUrl}/storage/v1/`).toString();
+  if (/^https?:\/\//i.test(result.signedURL)) return result.signedURL;
+  const signedPath = result.signedURL.replace(/^\/+/, "");
+  const storagePath = signedPath.startsWith("storage/v1/") ? signedPath : `storage/v1/${signedPath}`;
+  return new URL(storagePath, `${config.supabaseUrl}/`).toString();
 }
 
 export async function validatePublicImageUrl(url: string, expectedType: string): Promise<void> {

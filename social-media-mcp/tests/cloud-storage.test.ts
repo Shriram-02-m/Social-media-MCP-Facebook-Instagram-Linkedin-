@@ -61,6 +61,27 @@ test("cloud image validation checks private object and public signed URL respons
   });
 });
 
+test("cloud image validation resolves Supabase object-relative signed URLs under Storage API path", async () => {
+  let requestNumber = 0;
+  await withFetch(async (input, init) => {
+    requestNumber += 1;
+    if (requestNumber === 1) {
+      return new Response(png, { status: 200, headers: { "content-type": "image/png" } });
+    }
+    if (requestNumber === 2) {
+      assert.equal(init?.method, "POST");
+      return Response.json({ signedURL: "/object/sign/social-media-images/scheduled/test.png?token=private" });
+    }
+    assert.match(String(input), /^https:\/\/example-project\.supabase\.co\/storage\/v1\/object\/sign\//);
+    return new Response(png, { status: 200, headers: { "content-type": "image/png" } });
+  }, async () => {
+    const result = await storage.validateStoredImage("scheduled/test.png", true);
+    assert.equal(result.valid, true);
+    assert.equal(result.public?.valid, true);
+    assert.equal(requestNumber, 3);
+  });
+});
+
 test("cloud image validation distinguishes permanent HTTP 404 from transient network failures", async () => {
   let requestNumber = 0;
   await withFetch(async () => {
