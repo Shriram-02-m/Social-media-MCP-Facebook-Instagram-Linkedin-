@@ -2,7 +2,7 @@ services:
   - type: web
     name: social-media-cloud-worker
     runtime: node
-    plan: starter
+    plan: free
     buildCommand: npm ci && npm run build
     startCommand: npm run worker
     healthCheckPath: /health
