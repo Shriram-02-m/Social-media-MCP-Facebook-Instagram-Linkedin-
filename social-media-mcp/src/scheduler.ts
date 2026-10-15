@@ -8,13 +8,18 @@ import { ensureDatabaseMigrations } from "./database-migrations.js";
 import { loadTokens } from "./auth/token-store.js";
 import { registerScheduledMedia, unregisterScheduledMedia } from "./auth/oauth.js";
 import { publishMeta } from "./platforms/meta.js";
-import { linkedinTokenForUse, publishLinkedIn, publishLinkedInWithImage } from "./platforms/linkedin.js";
+import { linkedinTokenForUse, publishLinkedIn, publishLinkedInWithDocument, publishLinkedInWithImage } from "./platforms/linkedin.js";
 import type { MetaPlatform, Platform, PublishedPost } from "./platforms/types.js";
 import {
   createScheduledImageUrl,
+  deleteScheduledDocument,
   deleteScheduledImage,
+  downloadScheduledDocument,
   downloadScheduledImage,
+  isPdf,
+  uploadScheduledDocument,
   uploadScheduledImage,
+  validateStoredDocument,
   validateStoredImage,
 } from "./storage/scheduled-images.js";
 import {
@@ -28,11 +33,17 @@ export interface NewScheduledPost {
   text: string;
 }
 
+export interface NewScheduledDocument {
+  path: string;
+  title?: string;
+}
+
 export function canSafelyRetryScheduledPost(
   status: ScheduledPost["status"],
   failureStage: ScheduledPost["failureStage"],
 ): boolean {
-  return status === "failed" && (failureStage === "image_validation" || failureStage === "token_validation");
+  return status === "failed"
+    && (failureStage === "image_validation" || failureStage === "document_validation" || failureStage === "token_validation");
 }
 
 interface ScheduledPost extends NewScheduledPost {
@@ -41,13 +52,17 @@ interface ScheduledPost extends NewScheduledPost {
   imagePath: string;
   imageStoragePath?: string;
   contentType: string;
+  documentPath: string;
+  documentStoragePath?: string;
+  documentContentType?: string;
+  documentTitle?: string;
   status: "scheduled" | "publishing" | "published" | "failed" | "cancelled";
   createdAt: string;
   publishedAt?: string;
   result?: PublishedPost;
   error?: string;
   retryCount: number;
-  failureStage?: "token_validation" | "image_validation" | "publishing";
+  failureStage?: "token_validation" | "image_validation" | "document_validation" | "publishing";
   imageValidation?: ScheduledImageValidation;
 }
 
@@ -60,13 +75,17 @@ interface ScheduledPostRow extends QueryResultRow {
   image_path: string;
   image_storage_path: string | null;
   content_type: string;
+  document_path: string | null;
+  document_storage_path: string | null;
+  document_content_type: string | null;
+  document_title: string | null;
   status: ScheduledPost["status"];
   created_at: Date;
   published_at: Date | null;
   result: PublishedPost | null;
   error: string | null;
   retry_count: number;
-  failure_stage: "token_validation" | "image_validation" | "publishing" | null;
+  failure_stage: "token_validation" | "image_validation" | "document_validation" | "publishing" | null;
   image_validation: ScheduledImageValidation | null;
 }
 
@@ -114,6 +133,10 @@ function fromRow(row: ScheduledPostRow): ScheduledPost {
     imagePath: row.image_path,
     ...(row.image_storage_path ? { imageStoragePath: row.image_storage_path } : {}),
     contentType: row.content_type,
+    documentPath: row.document_path ?? "",
+    ...(row.document_storage_path ? { documentStoragePath: row.document_storage_path } : {}),
+    ...(row.document_content_type ? { documentContentType: row.document_content_type } : {}),
+    ...(row.document_title ? { documentTitle: row.document_title } : {}),
     status: row.status,
     createdAt: row.created_at.toISOString(),
     ...(row.published_at ? { publishedAt: row.published_at.toISOString() } : {}),
@@ -189,14 +212,29 @@ async function publishJob(job: ScheduledPost): Promise<void> {
     delete job.failureStage;
     let result: PublishedPost;
     if (job.platform === "linkedin") {
-      await validateBeforePublishing(job, false);
-      job.failureStage = "publishing";
-      await saveJob(job);
-      if (job.imageStoragePath) {
-        const image = await downloadScheduledImage(job.imageStoragePath);
-        result = await publishLinkedInWithImage(job.text, image.bytes, image.contentType);
+      if (job.documentStoragePath || job.documentPath) {
+        await validateDocumentBeforePublishing(job);
+        job.failureStage = "publishing";
+        await saveJob(job);
+        const document = job.documentStoragePath
+          ? await downloadScheduledDocument(job.documentStoragePath)
+          : { bytes: await readFile(job.documentPath), contentType: job.documentContentType ?? "application/pdf" };
+        result = await publishLinkedInWithDocument(
+          job.text,
+          document.bytes,
+          document.contentType,
+          job.documentTitle ?? "Document",
+        );
       } else {
-        result = await publishLinkedIn(job.text, job.imagePath);
+        await validateBeforePublishing(job, false);
+        job.failureStage = "publishing";
+        await saveJob(job);
+        if (job.imageStoragePath) {
+          const image = await downloadScheduledImage(job.imageStoragePath);
+          result = await publishLinkedInWithImage(job.text, image.bytes, image.contentType);
+        } else {
+          result = await publishLinkedIn(job.text, job.imagePath);
+        }
       }
     } else {
       await validateBeforePublishing(job, true);
@@ -327,6 +365,77 @@ async function validateBeforePublishing(job: ScheduledPost, checkPublic: boolean
   delete job.failureStage;
 }
 
+interface DocumentValidationResult {
+  valid: boolean;
+  contentType?: string;
+  bytes?: number;
+  error?: string;
+  retryable: boolean;
+}
+
+async function validateStoredOrLocalDocument(job: ScheduledPost): Promise<DocumentValidationResult> {
+  if (job.documentStoragePath) return validateStoredDocument(job.documentStoragePath);
+  try {
+    const bytes = await readFile(job.documentPath);
+    if (!bytes.byteLength) return { valid: false, error: "Scheduled document file is empty.", retryable: false };
+    if (bytes.byteLength > config.scheduleDocumentMaxBytes) {
+      return { valid: false, error: "Scheduled document exceeds SCHEDULE_DOCUMENT_MAX_BYTES.", retryable: false };
+    }
+    if (!isPdf(bytes)) return { valid: false, error: "Scheduled document is not a valid PDF file.", retryable: false };
+    return { valid: true, contentType: "application/pdf", bytes: bytes.byteLength, retryable: false };
+  } catch (error) {
+    const code = error instanceof Error && "code" in error ? String(error.code) : "";
+    const error_message = code === "ENOENT"
+      ? "Scheduled document file is missing from local scheduler storage."
+      : "Scheduled document file could not be read from local scheduler storage.";
+    return { valid: false, error: error_message, retryable: false };
+  }
+}
+
+async function validateDocumentBeforePublishing(job: ScheduledPost): Promise<void> {
+  const startingRetryCount = job.retryCount;
+  job.failureStage = "document_validation";
+  await saveJob(job);
+  for (let attempt = 1; attempt <= config.scheduleImageMaxAttempts; attempt += 1) {
+    const validation = await validateStoredOrLocalDocument(job);
+    const willRetry = !validation.valid && validation.retryable && attempt < config.scheduleImageMaxAttempts;
+    job.retryCount = startingRetryCount + attempt - 1;
+    if (validation.error) job.error = validation.error;
+    else delete job.error;
+    console.info(JSON.stringify({
+      event: "scheduled_document_validation",
+      jobId: job.id,
+      platform: job.platform,
+      document: job.documentStoragePath ? "private Supabase Storage object" : "local scheduled-document file",
+      validation,
+      attempt,
+      retryCount: job.retryCount,
+    }));
+    if (validation.valid) {
+      delete job.failureStage;
+      delete job.error;
+      return;
+    }
+    if (!willRetry) throw new Error(validation.error ?? "Scheduled document validation failed.");
+    job.retryCount += 1;
+    await saveJob(job);
+    const delayMs = Math.min(
+      config.scheduleImageRetryBaseDelayMs * 2 ** (attempt - 1),
+      config.scheduleImageRetryMaxDelayMs,
+    );
+    console.warn(JSON.stringify({
+      event: "scheduled_document_validation_retry",
+      jobId: job.id,
+      platform: job.platform,
+      retryCount: job.retryCount,
+      delayMs,
+      error: validation.error,
+    }));
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  throw new Error("Scheduled document retry loop ended unexpectedly.");
+}
+
 export async function processDueJobs(): Promise<number> {
   if (workerRunning) return 0;
   workerRunning = true;
@@ -383,6 +492,7 @@ export async function startScheduleRunner(): Promise<void> {
 export async function schedulePosts(
   posts: NewScheduledPost[],
   imagePath: string,
+  document?: NewScheduledDocument,
 ): Promise<Array<Pick<ScheduledPost, "id" | "platform" | "scheduledAt" | "status">>> {
   const sourceImagePath = path.resolve(imagePath);
   const contentType = contentTypeFor(sourceImagePath);
@@ -398,6 +508,9 @@ export async function schedulePosts(
     if (post.text.length > textLimits[post.platform]) {
       throw new Error(`${post.platform} post text exceeds the ${textLimits[post.platform]}-character limit.`);
     }
+  }
+  if (document && !posts.some((post) => post.platform === "linkedin")) {
+    throw new Error("Documents can only be attached to LinkedIn scheduled posts.");
   }
   const tokens = await loadTokens();
   for (const post of posts) {
@@ -420,6 +533,38 @@ export async function schedulePosts(
     await writeFile(storedImagePath, image, { mode: 0o600, flag: "wx" });
   }
 
+  let documentFields: Pick<ScheduledPost, "documentPath" | "documentStoragePath" | "documentContentType" | "documentTitle"> = {
+    documentPath: "",
+  };
+  if (document) {
+    const sourceDocumentPath = path.resolve(document.path);
+    if (path.extname(sourceDocumentPath).toLowerCase() !== ".pdf") {
+      throw new Error("Scheduled documents must be PDF files.");
+    }
+    const documentBytes = await readFile(sourceDocumentPath);
+    if (!documentBytes.byteLength) throw new Error("The selected schedule document file is empty.");
+    if (documentBytes.byteLength > config.scheduleDocumentMaxBytes) {
+      throw new Error("Scheduled document exceeds SCHEDULE_DOCUMENT_MAX_BYTES.");
+    }
+    if (!isPdf(documentBytes)) throw new Error("The selected schedule document is not a valid PDF file.");
+    const documentTitle = document.title?.trim() || path.basename(sourceDocumentPath, path.extname(sourceDocumentPath));
+    let storedDocumentPath = "";
+    let documentStoragePath: string | undefined;
+    if (config.scheduledImageStorage === "supabase") {
+      documentStoragePath = await uploadScheduledDocument(documentBytes, "application/pdf", ".pdf");
+    } else {
+      await mkdir(mediaDirectory, { recursive: true });
+      storedDocumentPath = path.join(mediaDirectory, `${randomBytes(16).toString("hex")}.pdf`);
+      await writeFile(storedDocumentPath, documentBytes, { mode: 0o600, flag: "wx" });
+    }
+    documentFields = {
+      documentPath: storedDocumentPath,
+      ...(documentStoragePath ? { documentStoragePath } : {}),
+      documentContentType: "application/pdf",
+      documentTitle,
+    };
+  }
+
   const createdAt = new Date().toISOString();
   const createdJobs: ScheduledPost[] = posts.map((post) => ({
     ...post,
@@ -428,6 +573,7 @@ export async function schedulePosts(
     imagePath: storedImagePath,
     ...(imageStoragePath ? { imageStoragePath } : {}),
     contentType,
+    ...(post.platform === "linkedin" ? documentFields : { documentPath: "" }),
     status: "scheduled",
     createdAt,
     retryCount: 0,
@@ -445,11 +591,14 @@ export async function schedulePosts(
     for (const job of createdJobs) {
       await client.query(
         `INSERT INTO public.scheduled_posts
-          (id, platform, scheduled_at, text, image_token, image_path, image_storage_path, content_type, status, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)`,
+          (id, platform, scheduled_at, text, image_token, image_path, image_storage_path, content_type,
+           document_path, document_storage_path, document_content_type, document_title, status, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $14)`,
         [
           job.id, job.platform, job.scheduledAt, job.text, job.imageToken, job.imagePath,
-          job.imageStoragePath ?? null, job.contentType, job.status, job.createdAt,
+          job.imageStoragePath ?? null, job.contentType,
+          job.documentPath, job.documentStoragePath ?? null, job.documentContentType ?? null, job.documentTitle ?? null,
+          job.status, job.createdAt,
         ],
       );
     }
@@ -466,6 +615,15 @@ export async function schedulePosts(
       await deleteScheduledImage(imageStoragePath).catch((cleanupError: unknown) => {
         console.error(JSON.stringify({
           event: "scheduled_image_orphan_cleanup_failed",
+          error: safeError(cleanupError),
+        }));
+      });
+    }
+    if (!commitAttempted && documentFields.documentPath) await unlink(documentFields.documentPath).catch(() => undefined);
+    if (!commitAttempted && documentFields.documentStoragePath) {
+      await deleteScheduledDocument(documentFields.documentStoragePath).catch((cleanupError: unknown) => {
+        console.error(JSON.stringify({
+          event: "scheduled_document_orphan_cleanup_failed",
           error: safeError(cleanupError),
         }));
       });
@@ -494,8 +652,9 @@ export async function scheduledPostStatus(): Promise<Array<{
   result?: PublishedPost;
   error?: string;
   retryCount: number;
-  failureStage?: "token_validation" | "image_validation" | "publishing";
+  failureStage?: "token_validation" | "image_validation" | "document_validation" | "publishing";
   imageValidation?: ScheduledImageValidation;
+  document?: { title: string; contentType: string };
 }>> {
   const currentJobs = await loadJobs();
   return currentJobs.map((job) => ({
@@ -509,6 +668,9 @@ export async function scheduledPostStatus(): Promise<Array<{
     retryCount: job.retryCount,
     ...(job.failureStage ? { failureStage: job.failureStage } : {}),
     ...(job.imageValidation ? { imageValidation: job.imageValidation } : {}),
+    ...(job.documentPath || job.documentStoragePath
+      ? { document: { title: job.documentTitle ?? "Document", contentType: job.documentContentType ?? "application/pdf" } }
+      : {}),
   }));
 }
 

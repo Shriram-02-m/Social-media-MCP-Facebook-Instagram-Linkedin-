@@ -170,11 +170,42 @@ async function uploadImage(
   return imageUrn;
 }
 
+async function uploadDocument(
+  token: string,
+  author: string,
+  bytes: Buffer,
+  contentType: string,
+): Promise<string> {
+  if (!bytes.byteLength) throw new Error("The selected LinkedIn document file is empty.");
+  const initialized = await apiRequest<{ value?: { uploadUrl?: string; document?: string } }>(
+    "https://api.linkedin.com/rest/documents?action=initializeUpload",
+    {
+      method: "POST",
+      headers: { ...restHeaders, "content-type": "application/json" },
+      body: JSON.stringify({ initializeUploadRequest: { owner: author } }),
+      accessToken: token,
+    },
+  );
+  const uploadUrl = initialized.data.value?.uploadUrl;
+  const documentUrn = initialized.data.value?.document;
+  if (!uploadUrl || !documentUrn) throw new Error("LinkedIn did not return a document upload URL and document URN.");
+  const documentBody = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(documentBody).set(bytes);
+  const response = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: { "content-type": contentType },
+    body: documentBody,
+  });
+  if (!response.ok) throw new Error(`LinkedIn document upload failed with HTTP ${response.status}.`);
+  return documentUrn;
+}
+
 async function publishLinkedInInternal(
   text: string | undefined,
   imagePath: string | undefined,
   requestedAuthor: string | undefined,
   imageData?: { bytes: Buffer; contentType: string },
+  document?: { bytes: Buffer; contentType: string; title: string },
 ): Promise<PublishedPost> {
   const token = await linkedinTokenForUse();
   const author = authorUrn(requestedAuthor, token.accountId);
@@ -182,15 +213,20 @@ async function publishLinkedInInternal(
   if (!normalizeLinkedInScopes(token.scopes).includes(writeScope)) {
     throw new Error(`LinkedIn publishing requires the granted ${writeScope} scope. Check your app's approved LinkedIn product and reconnect.`);
   }
-  const imageUrn = imagePath || imageData
-    ? await uploadImage(token.accessToken, author, imagePath, imageData)
-    : undefined;
+  let content: { media: { id: string; title?: string } } | undefined;
+  if (document) {
+    const documentUrn = await uploadDocument(token.accessToken, author, document.bytes, document.contentType);
+    content = { media: { id: documentUrn, title: document.title } };
+  } else if (imagePath || imageData) {
+    const imageUrn = await uploadImage(token.accessToken, author, imagePath, imageData);
+    content = { media: { id: imageUrn } };
+  }
   const post = {
     author,
     commentary: text ?? "",
     visibility: "PUBLIC",
     distribution: { feedDistribution: "MAIN_FEED", targetEntities: [], thirdPartyDistributionChannels: [] },
-    ...(imageUrn ? { content: { media: { id: imageUrn } } } : {}),
+    ...(content ? { content } : {}),
     lifecycleState: "PUBLISHED",
     isReshareDisabledByAuthor: false,
   };
@@ -214,4 +250,14 @@ export async function publishLinkedInWithImage(
   requestedAuthor?: string,
 ): Promise<PublishedPost> {
   return publishLinkedInInternal(text, undefined, requestedAuthor, { bytes, contentType });
+}
+
+export async function publishLinkedInWithDocument(
+  text: string | undefined,
+  bytes: Buffer,
+  contentType: string,
+  title: string,
+  requestedAuthor?: string,
+): Promise<PublishedPost> {
+  return publishLinkedInInternal(text, undefined, requestedAuthor, undefined, { bytes, contentType, title });
 }

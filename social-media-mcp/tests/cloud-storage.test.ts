@@ -99,30 +99,6 @@ test("cloud image validation distinguishes permanent HTTP 404 from transient net
     assert.equal(result.retryable, false);
   });
 
-  test("Storage uploads retry bounded temporary failures using the same object key", async () => {
-    let requests = 0;
-    let firstUrl = "";
-    await withFetch(async (input, init) => {
-      requests += 1;
-      if (requests === 1) firstUrl = String(input);
-      else assert.equal(String(input), firstUrl);
-      assert.equal((init?.headers as Record<string, string>)["x-upsert"], "true");
-      return new Response(null, { status: requests === 1 ? 503 : 200 });
-    }, async () => {
-      await storage.uploadScheduledImage(png, "image/png", ".png");
-      assert.equal(requests, 2);
-    });
-
-    requests = 0;
-    await withFetch(async () => {
-      requests += 1;
-      return new Response(null, { status: 429 });
-    }, async () => {
-      await assert.rejects(storage.uploadScheduledImage(png, "image/png", ".png"), /HTTP 429/);
-      assert.equal(requests, 3);
-    });
-  });
-
   await withFetch(async () => {
     throw new TypeError("fetch failed");
   }, async () => {
@@ -130,4 +106,83 @@ test("cloud image validation distinguishes permanent HTTP 404 from transient net
     assert.equal(result.valid, false);
     assert.equal(result.retryable, true);
   });
+});
+
+test("Storage uploads retry bounded temporary failures using the same object key", async () => {
+  let requests = 0;
+  let firstUrl = "";
+  await withFetch(async (input, init) => {
+    requests += 1;
+    if (requests === 1) firstUrl = String(input);
+    else assert.equal(String(input), firstUrl);
+    assert.equal((init?.headers as Record<string, string>)["x-upsert"], "true");
+    return new Response(null, { status: requests === 1 ? 503 : 200 });
+  }, async () => {
+    await storage.uploadScheduledImage(png, "image/png", ".png");
+    assert.equal(requests, 2);
+  });
+
+  requests = 0;
+  await withFetch(async () => {
+    requests += 1;
+    return new Response(null, { status: 429 });
+  }, async () => {
+    await assert.rejects(storage.uploadScheduledImage(png, "image/png", ".png"), /HTTP 429/);
+    assert.equal(requests, 3);
+  });
+});
+
+test("cloud PDF upload stores application/pdf documents and rejects non-PDF data", async () => {
+  const pdf = Buffer.from("%PDF-1.7\n%\xE2\xE3\xCF\xD3\n");
+  await withFetch(async (input, init) => {
+    assert.match(String(input), /^https:\/\/example-project\.supabase\.co\/storage\/v1\/object\/social-media-images\/scheduled\/.+\.pdf$/);
+    assert.equal((init?.headers as Record<string, string>)["content-type"], "application/pdf");
+    return new Response(null, { status: 200 });
+  }, async () => {
+    const objectPath = await storage.uploadScheduledDocument(pdf, "application/pdf", ".pdf");
+    assert.match(objectPath, /^scheduled\/[a-f0-9]+\.pdf$/);
+  });
+
+  await assert.rejects(
+    storage.uploadScheduledDocument(Buffer.from("<html>"), "application/pdf", ".pdf"),
+    /does not match application\/pdf/,
+  );
+  await assert.rejects(
+    storage.uploadScheduledDocument(pdf, "image/png", ".png"),
+    /Unsupported scheduled document MIME type/,
+  );
+});
+
+test("cloud document validation reads the private PDF object and rejects non-PDF bytes", async () => {
+  const pdf = Buffer.from("%PDF-1.7\nobj\nendobj\n");
+  let requests = 0;
+  await withFetch(async () => {
+    requests += 1;
+    return new Response(pdf, { status: 200, headers: { "content-type": "application/pdf" } });
+  }, async () => {
+    const result = await storage.validateStoredDocument("scheduled/guide.pdf");
+    assert.equal(result.valid, true);
+    assert.equal(result.contentType, "application/pdf");
+    assert.equal(result.bytes, pdf.length);
+    assert.equal(requests, 1);
+  });
+
+  await withFetch(async () => {
+    return new Response(Buffer.from("<html>not a pdf</html>"), {
+      status: 200,
+      headers: { "content-type": "application/pdf" },
+    });
+  }, async () => {
+    const result = await storage.validateStoredDocument("scheduled/broken.pdf");
+    assert.equal(result.valid, false);
+    assert.match(result.error ?? "", /does not match application\/pdf/);
+    assert.equal(result.retryable, false);
+  });
+});
+
+test("isPdf only accepts a leading %PDF- header", () => {
+  assert.equal(storage.isPdf(Buffer.from("%PDF-1.4 content")), true);
+  assert.equal(storage.isPdf(Buffer.from("%%PDF")), false);
+  assert.equal(storage.isPdf(Buffer.from("image bytes")), false);
+  assert.equal(storage.isPdf(Buffer.alloc(0)), false);
 });

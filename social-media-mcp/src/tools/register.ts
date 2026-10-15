@@ -132,7 +132,7 @@ export function registerTools(server: McpServer): void {
   }));
 
   server.registerTool("social_schedule_posts", {
-    description: "Persistently schedule separate posts to connected social platforms. In local mode the MCP scheduler, image server, and public tunnel must remain running; in cloud mode images are stored privately in Supabase Storage and the separate worker publishes them.",
+    description: "Persistently schedule separate posts to connected social platforms. In local mode the MCP scheduler, image server, and public tunnel must remain running; in cloud mode images and documents are stored privately in Supabase Storage and the separate worker publishes them. An optional PDF documentPath is attached as a native LinkedIn document post (LinkedIn only).",
     inputSchema: z.object({
       posts: z.array(z.object({
         platform: z.enum(["instagram", "facebook", "linkedin"]),
@@ -140,9 +140,17 @@ export function registerTools(server: McpServer): void {
         text: z.string().min(1).max(63206),
       })).min(1).max(3),
       imagePath: z.string().min(1),
+      documentPath: z.string().min(1).optional()
+        .describe("Local path to a PDF to attach to the LinkedIn post as a native document. Ignored for Instagram and Facebook."),
+      documentTitle: z.string().min(1).max(200).optional()
+        .describe("Title shown on the LinkedIn document. Defaults to the PDF file name."),
     }),
-  }, async ({ posts, imagePath }) => safely(async () => ({
-    scheduled: await schedulePosts(posts, imagePath),
+  }, async ({ posts, imagePath, documentPath, documentTitle }) => safely(async () => ({
+    scheduled: await schedulePosts(
+      posts,
+      imagePath,
+      documentPath ? { path: documentPath, ...(documentTitle ? { title: documentTitle } : {}) } : undefined,
+    ),
   })));
 
   server.registerTool("social_scheduled_posts_status", {

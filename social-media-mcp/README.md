@@ -23,7 +23,7 @@ Put the generated 64-character hex key in `SOCIAL_MCP_TOKEN_ENCRYPTION_KEY`. The
 
 Set `DATABASE_URL` to your Supabase PostgreSQL connection string. Use the direct connection when IPv6 is available, or the Supabase session pooler for IPv4-only environments; URL-encode special characters in the password and require TLS (`sslmode=require`). The scheduler uses a bounded `pg` connection pool and never prints the connection string. Run `npm run db:check` to test `SELECT NOW()` without displaying credentials.
 
-Scheduled-post records and delivery state are stored in the Supabase `public.scheduled_posts` table. `npm run db:migrate` applies the repeatable migrations `001`-`003`; they preserve rows, add constraints and cloud object references, and create the server-only token table and private Storage bucket. Migration `004` is intentionally manual because it requires a real, deployed Render URL and secrets in Supabase Vault. The app uses an atomic `FOR UPDATE SKIP LOCKED` claim so concurrent processes do not take the same due job.
+Scheduled-post records and delivery state are stored in the Supabase `public.scheduled_posts` table. `npm run db:migrate` applies the repeatable migrations `001`-`003` and `005`; they preserve rows, add constraints and cloud object references, add optional LinkedIn document columns and the `application/pdf` Storage MIME type, and create the server-only token table and private Storage bucket. Migration `004` is intentionally manual because it requires a real, deployed Render URL and secrets in Supabase Vault. The app uses an atomic `FOR UPDATE SKIP LOCKED` claim so concurrent processes do not take the same due job.
 
 By default, `SCHEDULER_MODE=local` uses a `setInterval` loop in the MCP process and local images/tokens, so the MCP process, local image server, and ngrok must stay running. The opt-in cloud configuration and deployment steps are described below. Code being present is not evidence that your Render service or Supabase Cron has been deployed.
 
@@ -31,7 +31,7 @@ By default, `SCHEDULER_MODE=local` uses a `setInterval` loop in the MCP process 
 
 1. Set `DATABASE_URL` in the private `.env` using the connection URI from Supabase **Project Settings → Database**. Do not commit `.env`.
 2. Check connectivity: `npm run db:check`.
-3. Run `npm run db:migrate`, then `npm run build` and `npm test`. Migrations `001`-`003` are safe to rerun; the app also applies them when its scheduler starts.
+3. Run `npm run db:migrate`, then `npm run build` and `npm test`. Migrations `001`-`003` and `005` are safe to rerun; the app also applies them when its scheduler starts.
 4. Start or restart the MCP server. Existing scheduled-post rows are not copied from another database automatically.
 
 Pool settings are `DATABASE_POOL_MAX` (default `5`), `DATABASE_CONNECTION_TIMEOUT_MS` (default `10000`), and `DATABASE_IDLE_TIMEOUT_MS` (default `30000`).
@@ -40,7 +40,7 @@ Pool settings are `DATABASE_POOL_MAX` (default `5`), `DATABASE_CONNECTION_TIMEOU
 
 Local mode remains the default. OAuth credentials are encrypted in the local file configured by `SOCIAL_MCP_TOKEN_FILE` (default `%USERPROFILE%\.social-media-mcp\tokens.enc`) using `SOCIAL_MCP_TOKEN_ENCRYPTION_KEY`. Scheduled-image bytes are under `%USERPROFILE%\.social-media-mcp\scheduled-media`; the local scheduler's `setInterval` loop runs with the MCP process. In this mode, Meta scheduled image delivery uses the local image server and ngrok as documented below.
 
-Cloud mode keeps the MCP server for creating/managing posts, but moves the scheduled job execution to a separate Node.js worker on Render. This project uses Node APIs, `pg`, and local file support, so the Node worker avoids assuming that the existing publishing integrations run unchanged in Deno Edge Functions. Supabase Cron calls an authenticated Render endpoint every minute; PostgreSQL row locking still provides the final concurrency protection. `SCHEDULER_MODE=cloud` disables the MCP process's local timer. Cloud jobs store object paths in the private `social-media-images` bucket; Meta receives a short-lived signed URL created at publish time and LinkedIn uploads bytes downloaded server-side. No production scheduled post depends on ngrok or a local image path.
+Cloud mode keeps the MCP server for creating/managing posts, but moves the scheduled job execution to a separate Node.js worker on Render. This project uses Node APIs, `pg`, and local file support, so the Node worker avoids assuming that the existing publishing integrations run unchanged in Deno Edge Functions. Supabase Cron calls an authenticated Render endpoint every minute; PostgreSQL row locking still provides the final concurrency protection. `SCHEDULER_MODE=cloud` disables the MCP process's local timer. Cloud jobs store object paths in the private `social-media-images` bucket; Meta receives a short-lived signed URL created at publish time and LinkedIn uploads bytes downloaded server-side. An optional PDF scheduled with `documentPath` is stored the same way and published as a native LinkedIn document. No production scheduled post depends on ngrok or a local image path.
 
 The project code and SQL are prepared for cloud execution, but **deployment, Supabase Vault secrets, Cron activation, and live cloud publishing are manual steps and are not considered complete until verified in your accounts**.
 
@@ -55,7 +55,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'
 
 Use the 64-character hex value for `CLOUD_TOKEN_ENCRYPTION_KEY`; use the second value as `WORKER_TRIGGER_SECRET`. Keep the latter identical in Render and Supabase Vault. Never put the service-role key or either secret in source control, client applications, or logs.
 
-1. Set the cloud variables in the local MCP server environment, then run `npm run db:migrate`. Migrations `001`-`003` are repeatable; they preserve scheduled rows, add the cloud object-path column, add the encrypted `oauth_tokens` table, and create the private image bucket. The cloud migration refuses to use a bucket named `social-media-images` if it is public. The database connection needs permission to apply these migrations.
+1. Set the cloud variables in the local MCP server environment, then run `npm run db:migrate`. Migrations `001`-`003` and `005` are repeatable; they preserve scheduled rows, add the cloud object-path and optional LinkedIn document columns, add the encrypted `oauth_tokens` table, and create the private image bucket. The cloud migration refuses to use a bucket named `social-media-images` if it is public. The database connection needs permission to apply these migrations.
 2. Stop any currently running local MCP scheduler before migrating pending jobs. Run `npm run tokens:migrate` while the local encrypted vault and `SOCIAL_MCP_TOKEN_ENCRYPTION_KEY` are still available. It inserts encrypted token records and refuses to overwrite existing cloud token rows unless explicitly invoked with `npm run tokens:migrate -- --overwrite`. The local vault is never removed or modified. LinkedIn refresh is attempted only when LinkedIn issued a refresh token; expired or revoked Meta tokens and tokens without a provider refresh token require provider reauthorization.
 3. Run `npm run images:migrate` on the computer that has the original scheduled image files. It uploads scheduled jobs and retryable image-validation failures, stores their cloud object paths, and leaves both the local files and database `image_path` values intact. Run this before enabling cloud Cron. Jobs whose source files are missing are reported as errors and need manual repair or rescheduling.
 4. Configure the MCP process for cloud job creation and management:
@@ -179,10 +179,10 @@ Restart OpenCode after config changes. The server's tools are named with the `so
 - `social_account_info`: return the Instagram account, Facebook account and Pages, or LinkedIn member identity.
 - `social_recent_posts`: read posts only when the connected token has sufficient provider access.
 - `social_publish`: validate or publish to one or more platforms, with independent outcomes.
-- `social_schedule_posts`: persist posts and an image for publishing at specified ISO-8601 times. Local mode uses the local image server and ngrok; cloud mode uploads the image to private Supabase Storage and does not need the MCP host to stay on.
-- `social_scheduled_posts_status`: inspect scheduled, published, and failed jobs, including validation outcome, retry count, and failure stage without exposing credentials or the tokenized image URL.
+- `social_schedule_posts`: persist posts and an image for publishing at specified ISO-8601 times. Local mode uses the local image server and ngrok; cloud mode uploads the image to private Supabase Storage and does not need the MCP host to stay on. An optional `documentPath` PDF (with an optional `documentTitle`) is attached only to the LinkedIn post as a native document; Instagram and Facebook ignore it.
+- `social_scheduled_posts_status`: inspect scheduled, published, and failed jobs, including validation outcome, retry count, failure stage, and attached document metadata without exposing credentials or the tokenized image URL.
 - `social_cancel_scheduled_post`: cancel a post only while it remains in `scheduled` status.
-- `social_retry_scheduled_post`: requeue a failed post only when token or image validation failed before a platform publish request was made. Publishing-stage failures are deliberately blocked because their outcome may be uncertain; verify the destination before creating another post.
+- `social_retry_scheduled_post`: requeue a failed post only when token, image, or document validation failed before a platform publish request was made. Publishing-stage failures are deliberately blocked because their outcome may be uncertain; verify the destination before creating another post.
 - `social_token_store_status`: show token presence/scopes/expiry without revealing token values.
 
 `social_publish` defaults to `dryRun: true`. A real publish requires both `dryRun: false` and `confirmPublish: true` in the same call. No setup or automated test publishes. A success is reported only when Meta returns a post/media ID, or LinkedIn returns a successful response with `x-restli-id`.
@@ -193,7 +193,7 @@ Platform-specific publishing:
 
 - Instagram: `imageUrl` must be HTTPS and publicly fetchable. The server creates a media container, publishes it, and requires the returned media ID.
 - Facebook: text uses the Page `/feed`; an image uses `/photos` with `imageUrl`. The returned post/photo ID is required.
-- LinkedIn: text-only posts use `/rest/posts`. Manual image posts use a local `imagePath`; scheduled cloud image posts download bytes from private Storage, initialize the Images API upload, transfer the bytes, and then create the post.
+- LinkedIn: text-only posts use `/rest/posts`. Manual image posts use a local `imagePath`; scheduled cloud image posts download bytes from private Storage, initialize the Images API upload, transfer the bytes, and then create the post. When a scheduled job has a PDF document, the worker downloads the document bytes, initializes a Documents API upload (`/rest/documents?action=initializeUpload`), transfers the PDF, and creates a post whose `content.media` is the returned `urn:li:document:...` with a title.
 
 For a multi-platform request, each target is attempted independently. One platform's API rejection does not mask another platform's result.
 
@@ -206,6 +206,7 @@ For a multi-platform request, each target is attempted independently. One platfo
 - Local route returns 404: the scheduled image token is missing from the running process or the tunnel is aimed at the wrong local application/port. Restart the MCP server with pending jobs loaded, and verify the ngrok target.
 - Public route returns 404 while the local route is healthy: the ngrok tunnel may be stopped, forwarding to the wrong port, or using an outdated hostname. Update `IMAGE_PUBLIC_BASE_URL` (and OAuth URL when needed), restart the MCP server, and rerun `ngrok http` against `IMAGE_SERVER_PORT`.
 - Invalid MIME, empty image, or size-limit failure: verify the stored image file is PNG, JPEG, or GIF, matches its extension, is non-empty, and is below `SCHEDULE_IMAGE_MAX_BYTES`.
+- Invalid document: the scheduled document must be a PDF named with a `.pdf` extension, start with the `%PDF-` signature, and be below `SCHEDULE_DOCUMENT_MAX_BYTES`. Documents are supported only for LinkedIn.
 - Temporary local/network/5xx failures retry up to `SCHEDULE_IMAGE_MAX_ATTEMPTS`; adjust `SCHEDULE_IMAGE_RETRY_BASE_DELAY_MS` and `SCHEDULE_IMAGE_RETRY_MAX_DELAY_MS` to tune exponential backoff. A validation-stage failure can be manually requeued with `social_retry_scheduled_post`. Publishing-stage failures require destination-side verification to avoid duplicates.
 - The previous Facebook image failure occurred because the local route had the image, but the public ngrok URL returned HTTP 404. Meta could not fetch the image and rejected the photo post; the scheduler recorded “Missing or invalid image file.” A local HTTP 200 alongside a public 404 points to a stopped/misrouted tunnel or stale public URL, not cloud storage or a missing local image.
 - Cloud worker returns 401: compare `WORKER_TRIGGER_SECRET` in Render with `social_worker_secret` in Supabase Vault; do not paste either into logs or public support requests.
@@ -229,4 +230,5 @@ For a multi-platform request, each target is attempted independently. One platfo
 - [LinkedIn authorization code flow](https://learn.microsoft.com/en-us/linkedin/shared/authentication/authorization-code-flow)
 - [LinkedIn Posts API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api)
 - [LinkedIn Images API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/images-api)
+- [LinkedIn Documents API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/documents-api)
 - [LinkedIn organization roles](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/organizations/organization-access-control-by-role)
