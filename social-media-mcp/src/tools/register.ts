@@ -1,4 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/server";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { z } from "zod";
 import { beginAuthorization, getAuthorizationStatus, waitForAuthorization } from "../auth/oauth.js";
 import { loadTokens } from "../auth/token-store.js";
@@ -6,9 +8,22 @@ import { config } from "../config/env.js";
 import { metaAccountInfo, metaConnectionStatus, publishMeta, readMetaPosts } from "../platforms/meta.js";
 import { linkedinAccountInfo, linkedinConnectionStatus, publishLinkedIn, readLinkedInPosts } from "../platforms/linkedin.js";
 import type { Platform } from "../platforms/types.js";
-import { cancelScheduledPost, retryScheduledPost, schedulePosts, scheduledPostStatus } from "../scheduler.js";
+import { cancelScheduledPost, retryScheduledPost, scheduleMediaPosts, schedulePosts, scheduledPostStatus } from "../scheduler.js";
 import { explainError } from "../utils/http.js";
 import { platformImageRequirements, validateLinkedInAuthorUrn, validatePostContent } from "../utils/validation.js";
+
+function imageContentTypeFor(extension: string): string {
+  if (extension === ".png") return "image/png";
+  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
+  if (extension === ".gif") return "image/gif";
+  throw new Error("Scheduled images must be PNG, JPEG, or GIF files.");
+}
+
+function videoContentTypeFor(extension: string): string {
+  if (extension === ".mp4") return "video/mp4";
+  if (extension === ".mov") return "video/quicktime";
+  throw new Error("Scheduled videos must be MP4 or MOV files.");
+}
 
 function textResult(value: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }] };
@@ -152,6 +167,37 @@ export function registerTools(server: McpServer): void {
       documentPath ? { path: documentPath, ...(documentTitle ? { title: documentTitle } : {}) } : undefined,
     ),
   })));
+
+  server.registerTool("social_schedule_media", {
+    description: "Schedule image, video, or Instagram carousel posts to connected platforms from local file paths. Provide one image, one video, two to ten images for an Instagram carousel, or no media for a text-only Facebook/LinkedIn post. Cloud mode stores media privately in Supabase Storage; the worker publishes due jobs.",
+    inputSchema: z.object({
+      posts: z.array(z.object({
+        platform: z.enum(["instagram", "facebook", "linkedin"]),
+        scheduledAt: z.string().datetime({ offset: true }),
+        text: z.string().min(1).max(63206),
+      })).min(1).max(3),
+      media: z.array(z.object({
+        path: z.string().min(1),
+        kind: z.enum(["image", "video"]),
+      })).max(10).default([]),
+      documentPath: z.string().min(1).optional()
+        .describe("Local path to a PDF to attach to the LinkedIn post as a native document. Cannot be combined with media."),
+      documentTitle: z.string().min(1).max(200).optional(),
+    }),
+  }, async ({ posts, media, documentPath, documentTitle }) => safely(async () => {
+    const resolved = await Promise.all(media.map(async (item) => {
+      const extension = path.extname(item.path).toLowerCase();
+      const contentType = item.kind === "video" ? videoContentTypeFor(extension) : imageContentTypeFor(extension);
+      return { kind: item.kind, bytes: await readFile(item.path), contentType, extension };
+    }));
+    return {
+      scheduled: await scheduleMediaPosts(
+        posts,
+        resolved,
+        documentPath ? { path: documentPath, ...(documentTitle ? { title: documentTitle } : {}) } : undefined,
+      ),
+    };
+  }));
 
   server.registerTool("social_scheduled_posts_status", {
     description: "List scheduled posts, image validation results, retry counts, and failure stages without exposing credentials or image URLs.",

@@ -200,12 +200,70 @@ async function uploadDocument(
   return documentUrn;
 }
 
+async function uploadVideo(
+  token: string,
+  author: string,
+  bytes: Buffer,
+): Promise<string> {
+  if (!bytes.byteLength) throw new Error("The selected LinkedIn video file is empty.");
+  const initialized = await apiRequest<{
+    value?: {
+      uploadToken?: string;
+      video?: string;
+      uploadInstructions?: Array<{ uploadUrl: string; firstByte: number; lastByte: number }>;
+    };
+  }>(
+    "https://api.linkedin.com/rest/videos?action=initializeUpload",
+    {
+      method: "POST",
+      headers: { ...restHeaders, "content-type": "application/json" },
+      body: JSON.stringify({
+        initializeUploadRequest: { owner: author, fileSizeBytes: bytes.byteLength },
+      }),
+      accessToken: token,
+    },
+  );
+  const uploadToken = initialized.data.value?.uploadToken;
+  const videoUrn = initialized.data.value?.video;
+  const instructions = initialized.data.value?.uploadInstructions ?? [];
+  if (!uploadToken || !videoUrn || instructions.length === 0) {
+    throw new Error("LinkedIn did not return a video upload token, video URN, and upload instructions.");
+  }
+  const uploadedPartIds: string[] = [];
+  for (const instruction of instructions) {
+    const start = instruction.firstByte;
+    const end = Math.min(instruction.lastByte + 1, bytes.byteLength);
+    const slice = bytes.subarray(start, end);
+    const body = new ArrayBuffer(slice.byteLength);
+    new Uint8Array(body).set(slice);
+    const response = await fetch(instruction.uploadUrl, {
+      method: "PUT",
+      headers: { "content-type": "application/octet-stream" },
+      body,
+    });
+    if (!response.ok) throw new Error(`LinkedIn video part upload failed with HTTP ${response.status}.`);
+    const etag = response.headers.get("etag")?.replace(/^"|"$/g, "");
+    if (etag) uploadedPartIds.push(etag);
+    await response.body?.cancel();
+  }
+  await apiRequest("https://api.linkedin.com/rest/videos?action=finalizeUpload", {
+    method: "POST",
+    headers: { ...restHeaders, "content-type": "application/json" },
+    body: JSON.stringify({
+      finalizeUploadRequest: { video: videoUrn, uploadToken, uploadedPartIds },
+    }),
+    accessToken: token,
+  });
+  return videoUrn;
+}
+
 async function publishLinkedInInternal(
   text: string | undefined,
   imagePath: string | undefined,
   requestedAuthor: string | undefined,
   imageData?: { bytes: Buffer; contentType: string },
   document?: { bytes: Buffer; contentType: string; title: string },
+  video?: { bytes: Buffer; contentType: string },
 ): Promise<PublishedPost> {
   const token = await linkedinTokenForUse();
   const author = authorUrn(requestedAuthor, token.accountId);
@@ -217,6 +275,9 @@ async function publishLinkedInInternal(
   if (document) {
     const documentUrn = await uploadDocument(token.accessToken, author, document.bytes, document.contentType);
     content = { media: { id: documentUrn, title: document.title } };
+  } else if (video) {
+    const videoUrn = await uploadVideo(token.accessToken, author, video.bytes);
+    content = { media: { id: videoUrn } };
   } else if (imagePath || imageData) {
     const imageUrn = await uploadImage(token.accessToken, author, imagePath, imageData);
     content = { media: { id: imageUrn } };
@@ -260,4 +321,13 @@ export async function publishLinkedInWithDocument(
   requestedAuthor?: string,
 ): Promise<PublishedPost> {
   return publishLinkedInInternal(text, undefined, requestedAuthor, undefined, { bytes, contentType, title });
+}
+
+export async function publishLinkedInWithVideo(
+  text: string | undefined,
+  bytes: Buffer,
+  contentType: string,
+  requestedAuthor?: string,
+): Promise<PublishedPost> {
+  return publishLinkedInInternal(text, undefined, requestedAuthor, undefined, undefined, { bytes, contentType });
 }

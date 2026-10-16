@@ -1,7 +1,7 @@
 import { config } from "../config/env.js";
 import { loadTokens } from "../auth/token-store.js";
 import { apiRequest, explainError } from "../utils/http.js";
-import type { MetaPage, MetaPlatform, PublishedPost } from "./types.js";
+import type { MetaPage, MetaPlatform, PublishedPost, StoredToken } from "./types.js";
 
 interface MetaProfile { id?: string; user_id?: string | number; name?: string; username?: string; account_type?: string }
 interface MetaMedia { id: string; caption?: string; media_type?: string; permalink?: string; timestamp?: string }
@@ -10,6 +10,10 @@ interface InstagramContainerStatus { status_code?: "IN_PROGRESS" | "FINISHED" | 
 
 function facebookGraph(path: string): string {
   return `https://graph.facebook.com/${config.metaGraphVersion}/${path}`;
+}
+
+function facebookGraphVideo(path: string): string {
+  return `https://graph-video.facebook.com/${config.metaGraphVersion}/${path}`;
 }
 
 function instagramGraph(path: string): string {
@@ -123,6 +127,112 @@ export async function readMetaPosts(platform: MetaPlatform, count: number): Prom
     { accessToken: token.accessToken },
   );
   return data.data ?? [];
+}
+
+async function requireMetaToken(platform: MetaPlatform): Promise<StoredToken> {
+  const token = (await loadTokens())[platform];
+  if (!token) throw new Error(`${platform} is not connected. Start OAuth first.`);
+  const requiredScopes = platform === "facebook"
+    ? ["pages_show_list", "pages_read_engagement", "pages_manage_posts"]
+    : ["instagram_business_basic", "instagram_business_content_publish"];
+  const missingScopes = requiredScopes.filter((scope) => !token.scopes.includes(scope));
+  if (missingScopes.length) throw new Error(`The ${platform} token is missing granted permission(s): ${missingScopes.join(", ")}. Reconnect and grant them.`);
+  return token;
+}
+
+async function createInstagramContainer(
+  accountId: string,
+  params: URLSearchParams,
+  accessToken: string,
+): Promise<string> {
+  const container = await apiRequest<{ id?: string }>(instagramGraph(`${accountId}/media`), {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: params,
+    accessToken,
+  });
+  if (!container.data.id) throw new Error("Instagram did not return a media container ID.");
+  return container.data.id;
+}
+
+async function publishInstagramContainer(
+  accountId: string,
+  creationId: string,
+  accessToken: string,
+): Promise<string> {
+  const published = await apiRequest<{ id?: string }>(instagramGraph(`${accountId}/media_publish`), {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ creation_id: creationId }),
+    accessToken,
+  });
+  if (!published.data.id) throw new Error("Instagram did not confirm publication with a media ID.");
+  return published.data.id;
+}
+
+export async function publishFacebookVideo(
+  text: string | undefined,
+  videoUrl: string,
+  pageId?: string,
+): Promise<PublishedPost> {
+  const token = await requireMetaToken("facebook");
+  const page = pageForFacebook(token.pages ?? [], pageId);
+  const { data } = await apiRequest<{ id?: string }>(facebookGraphVideo(`${page.id}/videos`), {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      file_url: videoUrl,
+      ...(text ? { description: text, title: text.slice(0, 255) } : {}),
+    }),
+    accessToken: page.accessToken,
+  });
+  if (!data.id) throw new Error("Facebook did not return a video ID; publication is unconfirmed.");
+  return { platform: "facebook", id: data.id, confirmed: true };
+}
+
+export async function publishInstagramReel(
+  text: string | undefined,
+  videoUrl: string,
+  instagramAccountId?: string,
+): Promise<PublishedPost> {
+  const token = await requireMetaToken("instagram");
+  const accountId = selectInstagramAccountId(instagramAccountId, token.accountId);
+  const creationId = await createInstagramContainer(
+    accountId,
+    new URLSearchParams({ media_type: "REELS", video_url: videoUrl, ...(text ? { caption: text } : {}) }),
+    token.accessToken,
+  );
+  await waitForInstagramContainer(creationId, token.accessToken);
+  const publishedId = await publishInstagramContainer(accountId, creationId, token.accessToken);
+  return { platform: "instagram", id: publishedId, confirmed: true };
+}
+
+export async function publishInstagramCarousel(
+  text: string | undefined,
+  imageUrls: string[],
+  instagramAccountId?: string,
+): Promise<PublishedPost> {
+  if (imageUrls.length < 2 || imageUrls.length > 10) {
+    throw new Error("An Instagram carousel must contain between 2 and 10 images.");
+  }
+  const token = await requireMetaToken("instagram");
+  const accountId = selectInstagramAccountId(instagramAccountId, token.accountId);
+  const children: string[] = [];
+  for (const imageUrl of imageUrls) {
+    children.push(await createInstagramContainer(
+      accountId,
+      new URLSearchParams({ image_url: imageUrl, is_carousel_item: "true" }),
+      token.accessToken,
+    ));
+  }
+  const creationId = await createInstagramContainer(
+    accountId,
+    new URLSearchParams({ media_type: "CAROUSEL", children: children.join(","), ...(text ? { caption: text } : {}) }),
+    token.accessToken,
+  );
+  await waitForInstagramContainer(creationId, token.accessToken);
+  const publishedId = await publishInstagramContainer(accountId, creationId, token.accessToken);
+  return { platform: "instagram", id: publishedId, confirmed: true };
 }
 
 export async function publishMeta(

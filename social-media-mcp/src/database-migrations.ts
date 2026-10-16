@@ -1,20 +1,24 @@
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { databasePool } from "./database.js";
+
+const migrationNames = [
+  "001_scheduled_posts.sql",
+  "002_scheduled_posts_constraints.sql",
+  "003_cloud_scheduling.sql",
+  "005_linkedin_documents.sql",
+  "006_scheduled_post_media.sql",
+];
 
 let migrations: Promise<void> | undefined;
 
 export function ensureDatabaseMigrations(): Promise<void> {
   if (!migrations) {
     migrations = (async () => {
-      for (const name of [
-        "001_scheduled_posts.sql",
-        "002_scheduled_posts_constraints.sql",
-        "003_cloud_scheduling.sql",
-        "005_linkedin_documents.sql",
-      ]) {
-        const filePath = fileURLToPath(new URL(`../migrations/${name}`, import.meta.url));
-        await databasePool().query(await readFile(filePath, "utf8"));
+      const directory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../migrations");
+      for (const name of migrationNames) {
+        await databasePool().query(await readFile(path.join(directory, name), "utf8"));
       }
     })().catch((error: unknown) => {
       migrations = undefined;

@@ -7,20 +7,26 @@ import { databasePool } from "./database.js";
 import { ensureDatabaseMigrations } from "./database-migrations.js";
 import { loadTokens } from "./auth/token-store.js";
 import { registerScheduledMedia, unregisterScheduledMedia } from "./auth/oauth.js";
-import { publishMeta } from "./platforms/meta.js";
-import { linkedinTokenForUse, publishLinkedIn, publishLinkedInWithDocument, publishLinkedInWithImage } from "./platforms/linkedin.js";
+import { publishMeta, publishFacebookVideo, publishInstagramReel, publishInstagramCarousel } from "./platforms/meta.js";
+import { linkedinTokenForUse, publishLinkedIn, publishLinkedInWithDocument, publishLinkedInWithImage, publishLinkedInWithVideo } from "./platforms/linkedin.js";
 import type { MetaPlatform, Platform, PublishedPost } from "./platforms/types.js";
 import {
   createScheduledImageUrl,
   deleteScheduledDocument,
   deleteScheduledImage,
+  deleteScheduledVideo,
   downloadScheduledDocument,
   downloadScheduledImage,
+  downloadScheduledVideo,
+  isIsoBmffVideo,
   isPdf,
+  matchesMediaSignature,
   uploadScheduledDocument,
   uploadScheduledImage,
+  uploadScheduledVideo,
   validateStoredDocument,
   validateStoredImage,
+  validateStoredVideo,
 } from "./storage/scheduled-images.js";
 import {
   validateScheduledImageWithRetries,
@@ -38,12 +44,47 @@ export interface NewScheduledDocument {
   title?: string;
 }
 
+export type MediaType = "none" | "image" | "video" | "carousel" | "document";
+
+export interface NewScheduledMedia {
+  kind: "image" | "video";
+  bytes: Buffer;
+  contentType: string;
+  extension: string;
+}
+
+interface ScheduledMediaItem {
+  kind: "image" | "video";
+  position: number;
+  imageToken: string;
+  imagePath: string;
+  storagePath?: string;
+  contentType: string;
+}
+
 export function canSafelyRetryScheduledPost(
   status: ScheduledPost["status"],
   failureStage: ScheduledPost["failureStage"],
 ): boolean {
   return status === "failed"
     && (failureStage === "image_validation" || failureStage === "document_validation" || failureStage === "token_validation");
+}
+
+export function canRescheduleScheduledPost(status: ScheduledPost["status"]): boolean {
+  // Only posts that have not started publishing can be moved. Once a job is
+  // publishing/published (or already cancelled/terminal) its schedule is fixed.
+  return status === "scheduled";
+}
+
+export function normalizeRescheduledTime(scheduledAt: string, now: number = Date.now()): string {
+  const parsed = Date.parse(scheduledAt);
+  if (!Number.isFinite(parsed)) {
+    throw new Error("Choose a valid date and time for the new schedule.");
+  }
+  if (parsed <= now) {
+    throw new Error("The new schedule time must be in the future.");
+  }
+  return new Date(parsed).toISOString();
 }
 
 interface ScheduledPost extends NewScheduledPost {
@@ -62,8 +103,10 @@ interface ScheduledPost extends NewScheduledPost {
   result?: PublishedPost;
   error?: string;
   retryCount: number;
+  mediaType: MediaType;
   failureStage?: "token_validation" | "image_validation" | "document_validation" | "publishing";
   imageValidation?: ScheduledImageValidation;
+  media?: ScheduledMediaItem[];
 }
 
 interface ScheduledPostRow extends QueryResultRow {
@@ -79,6 +122,7 @@ interface ScheduledPostRow extends QueryResultRow {
   document_storage_path: string | null;
   document_content_type: string | null;
   document_title: string | null;
+  media_type: string | null;
   status: ScheduledPost["status"];
   created_at: Date;
   published_at: Date | null;
@@ -87,6 +131,25 @@ interface ScheduledPostRow extends QueryResultRow {
   retry_count: number;
   failure_stage: "token_validation" | "image_validation" | "document_validation" | "publishing" | null;
   image_validation: ScheduledImageValidation | null;
+}
+
+interface ScheduledMediaRow extends QueryResultRow {
+  id: string;
+  post_id: string;
+  position: number;
+  kind: "image" | "video";
+  image_token: string;
+  image_path: string;
+  storage_path: string | null;
+  content_type: string;
+  created_at: Date;
+}
+
+function inferMediaType(row: ScheduledPostRow): MediaType {
+  if (row.media_type) return row.media_type as MediaType;
+  if (row.document_storage_path || row.document_path) return "document";
+  if (!row.image_path && !row.image_storage_path) return "none";
+  return "image";
 }
 
 const schedulerDirectory = path.dirname(config.tokenFile);
@@ -143,9 +206,36 @@ function fromRow(row: ScheduledPostRow): ScheduledPost {
     ...(row.result ? { result: row.result } : {}),
     ...(row.error ? { error: row.error } : {}),
     retryCount: row.retry_count,
+    mediaType: inferMediaType(row),
     ...(row.failure_stage ? { failureStage: row.failure_stage } : {}),
     ...(row.image_validation ? { imageValidation: row.image_validation } : {}),
   };
+}
+
+async function attachMediaToJobs(jobs: ScheduledPost[]): Promise<void> {
+  if (!jobs.length) return;
+  const ids = jobs.map((job) => job.id);
+  const { rows } = await databasePool().query<ScheduledMediaRow>(
+    "SELECT * FROM public.scheduled_post_media WHERE post_id = ANY($1::text[]) ORDER BY post_id, position",
+    [ids],
+  );
+  const byPost = new Map<string, ScheduledMediaItem[]>();
+  for (const row of rows) {
+    const list = byPost.get(row.post_id) ?? [];
+    list.push({
+      kind: row.kind,
+      position: row.position,
+      imageToken: row.image_token,
+      imagePath: row.image_path,
+      ...(row.storage_path ? { storagePath: row.storage_path } : {}),
+      contentType: row.content_type,
+    });
+    byPost.set(row.post_id, list);
+  }
+  for (const job of jobs) {
+    const items = byPost.get(job.id);
+    if (items && items.length) job.media = items;
+  }
 }
 
 async function loadJobs(): Promise<ScheduledPost[]> {
@@ -153,7 +243,9 @@ async function loadJobs(): Promise<ScheduledPost[]> {
   const { rows } = await databasePool().query<ScheduledPostRow>(
     "SELECT * FROM public.scheduled_posts ORDER BY created_at, id",
   );
-  return rows.map(fromRow);
+  const jobs = rows.map(fromRow);
+  await attachMediaToJobs(jobs);
+  return jobs;
 }
 
 async function saveJob(job: ScheduledPost): Promise<void> {
@@ -211,6 +303,9 @@ async function publishJob(job: ScheduledPost): Promise<void> {
     }
     delete job.failureStage;
     let result: PublishedPost;
+    const media = job.media ?? [];
+    const videoItem = job.mediaType === "video" && media.length === 1 ? media[0]! : undefined;
+    const carouselItems = job.mediaType === "carousel" ? media : undefined;
     if (job.platform === "linkedin") {
       if (job.documentStoragePath || job.documentPath) {
         await validateDocumentBeforePublishing(job);
@@ -225,25 +320,60 @@ async function publishJob(job: ScheduledPost): Promise<void> {
           document.contentType,
           job.documentTitle ?? "Document",
         );
-      } else {
-        await validateBeforePublishing(job, false);
+      } else if (videoItem) {
+        await validateMediaBeforePublishing(job, [videoItem], false);
         job.failureStage = "publishing";
         await saveJob(job);
-        if (job.imageStoragePath) {
-          const image = await downloadScheduledImage(job.imageStoragePath);
-          result = await publishLinkedInWithImage(job.text, image.bytes, image.contentType);
+        const video = videoItem.storagePath
+          ? await downloadScheduledVideo(videoItem.storagePath)
+          : { bytes: await readFile(videoItem.imagePath), contentType: videoItem.contentType };
+        result = await publishLinkedInWithVideo(job.text, video.bytes, video.contentType);
+      } else {
+        if (!job.imageStoragePath && !job.imagePath) {
+          job.failureStage = "publishing";
+          await saveJob(job);
+          result = await publishLinkedIn(job.text);
         } else {
-          result = await publishLinkedIn(job.text, job.imagePath);
+          await validateBeforePublishing(job, false);
+          job.failureStage = "publishing";
+          await saveJob(job);
+          if (job.imageStoragePath) {
+            const image = await downloadScheduledImage(job.imageStoragePath);
+            result = await publishLinkedInWithImage(job.text, image.bytes, image.contentType);
+          } else {
+            result = await publishLinkedIn(job.text, job.imagePath);
+          }
         }
       }
-    } else {
-      await validateBeforePublishing(job, true);
-      const imageUrl = job.imageStoragePath
-        ? await createScheduledImageUrl(job.imageStoragePath)
-        : `${config.imagePublicBaseUrl}/scheduled-media/${job.imageToken}`;
+    } else if (carouselItems) {
+      await validateMediaBeforePublishing(job, carouselItems, true);
       job.failureStage = "publishing";
       await saveJob(job);
-      result = await publishMeta(job.platform as MetaPlatform, job.text, imageUrl);
+      const imageUrls: string[] = [];
+      for (const item of carouselItems) imageUrls.push(await mediaPublicUrl(item));
+      result = await publishInstagramCarousel(job.text, imageUrls);
+    } else if (videoItem) {
+      await validateMediaBeforePublishing(job, [videoItem], true);
+      job.failureStage = "publishing";
+      await saveJob(job);
+      const videoUrl = await mediaPublicUrl(videoItem);
+      result = job.platform === "facebook"
+        ? await publishFacebookVideo(job.text, videoUrl)
+        : await publishInstagramReel(job.text, videoUrl);
+    } else {
+      if (!job.imageStoragePath && !job.imagePath) {
+        job.failureStage = "publishing";
+        await saveJob(job);
+        result = await publishMeta(job.platform as MetaPlatform, job.text, undefined);
+      } else {
+        await validateBeforePublishing(job, true);
+        const imageUrl = job.imageStoragePath
+          ? await createScheduledImageUrl(job.imageStoragePath)
+          : `${config.imagePublicBaseUrl}/scheduled-media/${job.imageToken}`;
+        job.failureStage = "publishing";
+        await saveJob(job);
+        result = await publishMeta(job.platform as MetaPlatform, job.text, imageUrl);
+      }
     }
     job.status = "published";
     job.publishedAt = new Date().toISOString();
@@ -436,6 +566,183 @@ async function validateDocumentBeforePublishing(job: ScheduledPost): Promise<voi
   throw new Error("Scheduled document retry loop ended unexpectedly.");
 }
 
+async function mediaPublicUrl(item: ScheduledMediaItem): Promise<string> {
+  if (item.storagePath) return createScheduledImageUrl(item.storagePath);
+  return `${config.imagePublicBaseUrl}/scheduled-media/${item.imageToken}`;
+}
+
+async function readBoundedResponse(response: Response, maxBytes: number): Promise<Buffer> {
+  if (!response.body) throw new Error("Media endpoint returned an empty response.");
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new Error("Media endpoint exceeded the configured maximum size.");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), total);
+}
+
+function publicRetryable(status?: number): boolean {
+  if (status === undefined) return true;
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+async function validatePublicMediaRoute(
+  url: string,
+  expectedType: string,
+  maxBytes: number,
+): Promise<{ valid: boolean; status?: number; error?: string; retryable: boolean }> {
+  let response: Response;
+  try {
+    response = await fetch(url, { signal: AbortSignal.timeout(config.scheduleImageTimeoutMs) });
+  } catch (error) {
+    const message = error instanceof Error && error.name === "TimeoutError"
+      ? "Scheduled media URL validation timed out."
+      : "Scheduled media URL is not reachable.";
+    return { valid: false, error: message, retryable: true };
+  }
+  if (!response.ok) {
+    const status = response.status;
+    await response.body?.cancel();
+    return { valid: false, status, error: `Scheduled media URL returned HTTP ${status}.`, retryable: publicRetryable(status) };
+  }
+  const contentType = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() ?? "";
+  if (contentType !== expectedType) {
+    await response.body?.cancel();
+    return { valid: false, error: `Scheduled media URL returned invalid MIME type: ${contentType || "missing"}.`, retryable: false };
+  }
+  try {
+    const bytes = await readBoundedResponse(response, maxBytes);
+    if (!bytes.byteLength) return { valid: false, error: "Scheduled media URL returned empty data.", retryable: false };
+    if (!matchesMediaSignature(bytes, contentType)) {
+      return { valid: false, error: `Scheduled media URL did not contain valid ${contentType} data.`, retryable: false };
+    }
+    return { valid: true, retryable: false };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Scheduled media URL validation failed.";
+    return { valid: false, error: message, retryable: /timed out|exceeded|not reachable/i.test(message) };
+  }
+}
+
+async function validateLocalMediaItem(
+  item: ScheduledMediaItem,
+  checkPublic: boolean,
+): Promise<ScheduledImageValidation> {
+  const checkedAt = new Date().toISOString();
+  const maxBytes = item.kind === "video" ? config.scheduleVideoMaxBytes : config.scheduleImageMaxBytes;
+  try {
+    const bytes = await readFile(item.imagePath);
+    if (!bytes.byteLength) throw new Error("Scheduled media file is empty.");
+    if (bytes.byteLength > maxBytes) throw new Error("Scheduled media file exceeds its configured maximum size.");
+    if (!matchesMediaSignature(bytes, item.contentType)) {
+      throw new Error(`Scheduled media file is not valid ${item.contentType} data.`);
+    }
+    const local: { valid: boolean; contentType?: string; bytes?: number } = {
+      valid: true,
+      contentType: item.contentType,
+      bytes: bytes.byteLength,
+    };
+    if (!checkPublic) return { valid: true, checkedAt, local, retryable: false };
+    const publicResult = await validatePublicMediaRoute(
+      `${config.imagePublicBaseUrl}/scheduled-media/${item.imageToken}`,
+      item.contentType,
+      maxBytes,
+    );
+    if (publicResult.valid) {
+      return {
+        valid: true,
+        checkedAt,
+        local,
+        public: { valid: true, contentType: item.contentType, bytes: bytes.byteLength },
+        retryable: false,
+      };
+    }
+    return {
+      valid: false,
+      checkedAt,
+      local,
+      public: publicResult,
+      ...(publicResult.error ? { error: publicResult.error } : {}),
+      retryable: publicResult.retryable,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Scheduled media file validation failed.";
+    return { valid: false, checkedAt, local: { valid: false, error: message, retryable: false }, error: message, retryable: false };
+  }
+}
+
+async function validateMediaItem(item: ScheduledMediaItem, checkPublic: boolean): Promise<ScheduledImageValidation> {
+  if (item.storagePath) {
+    return item.kind === "video"
+      ? validateStoredVideo(item.storagePath, checkPublic)
+      : validateStoredImage(item.storagePath, checkPublic);
+  }
+  return validateLocalMediaItem(item, checkPublic);
+}
+
+async function validateMediaBeforePublishing(
+  job: ScheduledPost,
+  items: ScheduledMediaItem[],
+  checkPublic: boolean,
+): Promise<void> {
+  const startingRetryCount = job.retryCount;
+  job.failureStage = "image_validation";
+  await saveJob(job);
+  for (let attempt = 1; attempt <= config.scheduleImageMaxAttempts; attempt += 1) {
+    const validations: ScheduledImageValidation[] = [];
+    for (const item of items) validations.push(await validateMediaItem(item, checkPublic));
+    const firstInvalid = validations.find((validation) => !validation.valid);
+    if (validations[0]) job.imageValidation = validations[0];
+    job.retryCount = startingRetryCount + attempt - 1;
+    if (firstInvalid?.error) job.error = firstInvalid.error;
+    else delete job.error;
+    console.info(JSON.stringify({
+      event: "scheduled_media_validation",
+      jobId: job.id,
+      platform: job.platform,
+      mediaType: job.mediaType,
+      itemCount: items.length,
+      validations,
+      attempt,
+      retryCount: job.retryCount,
+    }));
+    if (!firstInvalid) {
+      delete job.failureStage;
+      delete job.error;
+      return;
+    }
+    const willRetry = firstInvalid.retryable && attempt < config.scheduleImageMaxAttempts;
+    if (!willRetry) throw new Error(firstInvalid.error ?? "Scheduled media validation failed.");
+    job.retryCount += 1;
+    await saveJob(job);
+    const delayMs = Math.min(
+      config.scheduleImageRetryBaseDelayMs * 2 ** (attempt - 1),
+      config.scheduleImageRetryMaxDelayMs,
+    );
+    console.warn(JSON.stringify({
+      event: "scheduled_media_validation_retry",
+      jobId: job.id,
+      platform: job.platform,
+      retryCount: job.retryCount,
+      delayMs,
+      error: firstInvalid.error,
+    }));
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  throw new Error("Scheduled media retry loop ended unexpectedly.");
+}
+
 export async function processDueJobs(): Promise<number> {
   if (workerRunning) return 0;
   workerRunning = true;
@@ -466,7 +773,9 @@ export async function processDueJobs(): Promise<number> {
       WHERE post.id = due.id
       RETURNING post.*
     `);
-    await Promise.all(rows.map((row) => publishJob(fromRow(row))));
+    const jobs = rows.map(fromRow);
+    await attachMediaToJobs(jobs);
+    await Promise.all(jobs.map((job) => publishJob(job)));
     return rows.length;
   } finally {
     workerRunning = false;
@@ -573,6 +882,7 @@ export async function schedulePosts(
     imagePath: storedImagePath,
     ...(imageStoragePath ? { imageStoragePath } : {}),
     contentType,
+    mediaType: document ? "document" : "image",
     ...(post.platform === "linkedin" ? documentFields : { documentPath: "" }),
     status: "scheduled",
     createdAt,
@@ -592,13 +902,13 @@ export async function schedulePosts(
       await client.query(
         `INSERT INTO public.scheduled_posts
           (id, platform, scheduled_at, text, image_token, image_path, image_storage_path, content_type,
-           document_path, document_storage_path, document_content_type, document_title, status, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $14)`,
+           document_path, document_storage_path, document_content_type, document_title, media_type, status, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $15)`,
         [
           job.id, job.platform, job.scheduledAt, job.text, job.imageToken, job.imagePath,
           job.imageStoragePath ?? null, job.contentType,
           job.documentPath, job.documentStoragePath ?? null, job.documentContentType ?? null, job.documentTitle ?? null,
-          job.status, job.createdAt,
+          job.mediaType, job.status, job.createdAt,
         ],
       );
     }
@@ -643,25 +953,257 @@ export async function schedulePosts(
   return createdJobs.map(({ id, platform, scheduledAt, status }) => ({ id, platform, scheduledAt, status }));
 }
 
+const imageMediaContentTypes = new Set(["image/jpeg", "image/png", "image/gif"]);
+const videoMediaContentTypes = new Set(["video/mp4", "video/quicktime"]);
+const extensionsByContentType: Record<string, string[]> = {
+  "image/jpeg": [".jpg", ".jpeg"],
+  "image/png": [".png"],
+  "image/gif": [".gif"],
+  "video/mp4": [".mp4"],
+  "video/quicktime": [".mov"],
+};
+
+function mediaTypeFor(media: NewScheduledMedia[]): MediaType {
+  if (media.length === 0) return "none";
+  if (media.length === 1) return media[0]!.kind === "video" ? "video" : "image";
+  if (media.every((item) => item.kind === "image")) return "carousel";
+  throw new Error("Scheduled media must be a single video or a set of images.");
+}
+
+function validateMediaInput(media: NewScheduledMedia): void {
+  const extension = media.extension.toLowerCase();
+  const allowed = extensionsByContentType[media.contentType];
+  if (media.kind === "image") {
+    if (!imageMediaContentTypes.has(media.contentType)) throw new Error(`Unsupported scheduled image MIME type: ${media.contentType}.`);
+    if (!allowed?.includes(extension)) throw new Error(`Scheduled image extension ${extension} does not match ${media.contentType}.`);
+    if (!media.bytes.byteLength) throw new Error("A scheduled image file is empty.");
+    if (media.bytes.byteLength > config.scheduleImageMaxBytes) throw new Error("A scheduled image exceeds SCHEDULE_IMAGE_MAX_BYTES.");
+  } else {
+    if (!videoMediaContentTypes.has(media.contentType)) throw new Error(`Unsupported scheduled video MIME type: ${media.contentType}.`);
+    if (!allowed?.includes(extension)) throw new Error(`Scheduled video extension ${extension} does not match ${media.contentType}.`);
+    if (!media.bytes.byteLength) throw new Error("A scheduled video file is empty.");
+    if (media.bytes.byteLength > config.scheduleVideoMaxBytes) throw new Error("A scheduled video exceeds SCHEDULE_VIDEO_MAX_BYTES.");
+  }
+}
+
+export async function scheduleMediaPosts(
+  posts: NewScheduledPost[],
+  media: NewScheduledMedia[],
+  document?: NewScheduledDocument,
+): Promise<Array<Pick<ScheduledPost, "id" | "platform" | "scheduledAt" | "status">>> {
+  if (!posts.length) throw new Error("Select at least one platform to schedule.");
+  const currentTime = Date.now();
+  for (const post of posts) {
+    const scheduledTime = Date.parse(post.scheduledAt);
+    if (!Number.isFinite(scheduledTime) || scheduledTime <= currentTime) {
+      throw new Error(`The ${post.platform} schedule must be a valid future ISO-8601 timestamp.`);
+    }
+    if (post.text.length > textLimits[post.platform]) {
+      throw new Error(`${post.platform} post text exceeds the ${textLimits[post.platform]}-character limit.`);
+    }
+  }
+  if (media.length > config.scheduleMediaMaxItems) {
+    throw new Error(`A scheduled post can include at most ${config.scheduleMediaMaxItems} media items.`);
+  }
+  if (document && media.length) throw new Error("Document posts cannot also include image or video media.");
+  if (document && !posts.some((post) => post.platform === "linkedin")) {
+    throw new Error("Documents can only be attached to LinkedIn scheduled posts.");
+  }
+  const mediaType = document ? "document" : mediaTypeFor(media);
+  const platforms = new Set(posts.map((post) => post.platform));
+  if (mediaType === "none" && platforms.has("instagram")) {
+    throw new Error("Instagram requires at least one image or video.");
+  }
+  if (mediaType === "carousel") {
+    if (media.length < 2) throw new Error("An Instagram carousel requires at least two images.");
+    for (const platform of platforms) {
+      if (platform !== "instagram") throw new Error("Instagram carousels can only be published to Instagram.");
+    }
+  }
+  for (const item of media) validateMediaInput(item);
+  if (config.scheduledImageStorage === "local") {
+    const needsPublicUrl = [...platforms].some((platform) => platform !== "linkedin");
+    if (needsPublicUrl && !config.imagePublicBaseUrl.startsWith("https://")) {
+      throw new Error("Scheduled Instagram and Facebook publishing requires IMAGE_PUBLIC_BASE_URL to be a public HTTPS tunnel URL.");
+    }
+  }
+  const tokens = await loadTokens();
+  for (const post of posts) {
+    if (!tokens[post.platform]) throw new Error(`${post.platform} is not connected; authorize it before scheduling.`);
+  }
+
+  await ensureScheduleStore();
+
+  const storedItems: ScheduledMediaItem[] = [];
+  const localFiles: string[] = [];
+  const storageObjects: Array<{ path: string; kind: "image" | "video" }> = [];
+  let commitAttempted = false;
+  let documentFields: Pick<ScheduledPost, "documentPath" | "documentStoragePath" | "documentContentType" | "documentTitle"> = {
+    documentPath: "",
+  };
+  const createdAt = new Date().toISOString();
+  try {
+    for (let index = 0; index < media.length; index += 1) {
+      const item = media[index]!;
+      if (config.scheduledImageStorage === "supabase") {
+        const storagePath = item.kind === "video"
+          ? await uploadScheduledVideo(item.bytes, item.contentType, item.extension.toLowerCase())
+          : await uploadScheduledImage(item.bytes, item.contentType, item.extension.toLowerCase());
+        storageObjects.push({ path: storagePath, kind: item.kind });
+        storedItems.push({ kind: item.kind, position: index, imageToken: "", imagePath: "", storagePath, contentType: item.contentType });
+      } else {
+        await mkdir(mediaDirectory, { recursive: true });
+        const token = randomBytes(32).toString("hex");
+        const filePath = path.join(mediaDirectory, `${randomBytes(16).toString("hex")}${item.extension.toLowerCase()}`);
+        await writeFile(filePath, item.bytes, { mode: 0o600, flag: "wx" });
+        localFiles.push(filePath);
+        await registerScheduledMedia(token, filePath, item.contentType);
+        storedItems.push({ kind: item.kind, position: index, imageToken: token, imagePath: filePath, contentType: item.contentType });
+      }
+    }
+
+    if (document) {
+      const sourceDocumentPath = path.resolve(document.path);
+      if (path.extname(sourceDocumentPath).toLowerCase() !== ".pdf") {
+        throw new Error("Scheduled documents must be PDF files.");
+      }
+      const documentBytes = await readFile(sourceDocumentPath);
+      if (!documentBytes.byteLength) throw new Error("The selected schedule document file is empty.");
+      if (documentBytes.byteLength > config.scheduleDocumentMaxBytes) {
+        throw new Error("Scheduled document exceeds SCHEDULE_DOCUMENT_MAX_BYTES.");
+      }
+      if (!isPdf(documentBytes)) throw new Error("The selected schedule document is not a valid PDF file.");
+      const documentTitle = document.title?.trim() || path.basename(sourceDocumentPath, path.extname(sourceDocumentPath));
+      let storedDocumentPath = "";
+      let documentStoragePath: string | undefined;
+      if (config.scheduledImageStorage === "supabase") {
+        documentStoragePath = await uploadScheduledDocument(documentBytes, "application/pdf", ".pdf");
+      } else {
+        await mkdir(mediaDirectory, { recursive: true });
+        storedDocumentPath = path.join(mediaDirectory, `${randomBytes(16).toString("hex")}.pdf`);
+        await writeFile(storedDocumentPath, documentBytes, { mode: 0o600, flag: "wx" });
+        localFiles.push(storedDocumentPath);
+      }
+      documentFields = {
+        documentPath: storedDocumentPath,
+        ...(documentStoragePath ? { documentStoragePath } : {}),
+        documentContentType: "application/pdf",
+        documentTitle,
+      };
+    }
+
+    const first = storedItems[0];
+    const parentImage = first
+      ? {
+          imageToken: first.imageToken || randomBytes(32).toString("hex"),
+          imagePath: first.imagePath,
+          ...(first.storagePath ? { imageStoragePath: first.storagePath } : {}),
+          contentType: first.contentType,
+        }
+      : { imageToken: randomBytes(32).toString("hex"), imagePath: "", contentType: "application/octet-stream" };
+
+    const createdJobs: ScheduledPost[] = posts.map((post) => ({
+      ...post,
+      id: randomBytes(16).toString("hex"),
+      imageToken: parentImage.imageToken,
+      imagePath: parentImage.imagePath,
+      ...(parentImage.imageStoragePath ? { imageStoragePath: parentImage.imageStoragePath } : {}),
+      contentType: parentImage.contentType,
+      mediaType,
+      ...(post.platform === "linkedin" ? documentFields : { documentPath: "" }),
+      status: "scheduled",
+      createdAt,
+      retryCount: 0,
+    }));
+    let client: PoolClient | undefined;
+    let transactionStarted = false;
+    try {
+      client = await databasePool().connect();
+      await client.query("BEGIN");
+      transactionStarted = true;
+      for (const job of createdJobs) {
+        await client.query(
+          `INSERT INTO public.scheduled_posts
+            (id, platform, scheduled_at, text, image_token, image_path, image_storage_path, content_type,
+             document_path, document_storage_path, document_content_type, document_title, media_type, status, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $15)`,
+          [
+            job.id, job.platform, job.scheduledAt, job.text, job.imageToken, job.imagePath,
+            job.imageStoragePath ?? null, job.contentType,
+            job.documentPath, job.documentStoragePath ?? null, job.documentContentType ?? null, job.documentTitle ?? null,
+            job.mediaType, job.status, job.createdAt,
+          ],
+        );
+        for (const item of storedItems) {
+          await client.query(
+            `INSERT INTO public.scheduled_post_media
+              (id, post_id, position, kind, image_token, image_path, storage_path, content_type, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [
+              randomBytes(16).toString("hex"), job.id, item.position, item.kind,
+              item.imageToken, item.imagePath, item.storagePath ?? null, item.contentType, createdAt,
+            ],
+          );
+        }
+      }
+      commitAttempted = true;
+      await client.query("COMMIT");
+      transactionStarted = false;
+    } catch (error) {
+      if (transactionStarted) await client?.query("ROLLBACK").catch(() => undefined);
+      if (commitAttempted) {
+        console.error(JSON.stringify({
+          event: "scheduled_post_commit_uncertain",
+          jobIds: createdJobs.map((job) => job.id),
+          message: "The database commit outcome is uncertain; uploaded media was retained to avoid breaking possibly committed jobs.",
+        }));
+      }
+      throw error;
+    } finally {
+      client?.release();
+    }
+    await startScheduleRunner();
+    return createdJobs.map(({ id, platform, scheduledAt, status }) => ({ id, platform, scheduledAt, status }));
+  } catch (error) {
+    if (!commitAttempted) {
+      for (const item of storedItems) {
+        if (!item.storagePath) unregisterScheduledMedia(item.imageToken);
+      }
+      for (const file of localFiles) await unlink(file).catch(() => undefined);
+      for (const object of storageObjects) {
+        const cleanup = object.kind === "video" ? deleteScheduledVideo : deleteScheduledImage;
+        await cleanup(object.path).catch(() => undefined);
+      }
+      if (documentFields.documentStoragePath) await deleteScheduledDocument(documentFields.documentStoragePath).catch(() => undefined);
+    }
+    throw error;
+  }
+}
+
 export async function scheduledPostStatus(): Promise<Array<{
   id: string;
   platform: Platform;
+  text: string;
   scheduledAt: string;
   status: ScheduledPost["status"];
   publishedAt?: string;
   result?: PublishedPost;
   error?: string;
   retryCount: number;
+  mediaType: MediaType;
   failureStage?: "token_validation" | "image_validation" | "document_validation" | "publishing";
   imageValidation?: ScheduledImageValidation;
   document?: { title: string; contentType: string };
+  media?: Array<{ kind: "image" | "video"; contentType: string }>;
 }>> {
   const currentJobs = await loadJobs();
   return currentJobs.map((job) => ({
     id: job.id,
     platform: job.platform,
+    text: job.text,
     scheduledAt: job.scheduledAt,
     status: job.status,
+    mediaType: job.mediaType,
     ...(job.publishedAt ? { publishedAt: job.publishedAt } : {}),
     ...(job.result ? { result: job.result } : {}),
     ...(job.error ? { error: job.error } : {}),
@@ -670,6 +1212,9 @@ export async function scheduledPostStatus(): Promise<Array<{
     ...(job.imageValidation ? { imageValidation: job.imageValidation } : {}),
     ...(job.documentPath || job.documentStoragePath
       ? { document: { title: job.documentTitle ?? "Document", contentType: job.documentContentType ?? "application/pdf" } }
+      : {}),
+    ...(job.media && job.media.length
+      ? { media: job.media.map((item) => ({ kind: item.kind, contentType: item.contentType })) }
       : {}),
   }));
 }
@@ -699,6 +1244,15 @@ export async function retryScheduledPost(jobId: string): Promise<{
     }
     if (row.image_path && !row.image_storage_path) {
       await registerScheduledMedia(row.image_token, row.image_path, row.content_type);
+    }
+    const { rows: mediaRows } = await client.query<ScheduledMediaRow>(
+      "SELECT * FROM public.scheduled_post_media WHERE post_id = $1 ORDER BY position",
+      [jobId],
+    );
+    for (const item of mediaRows) {
+      if (item.image_path && !item.storage_path) {
+        await registerScheduledMedia(item.image_token, item.image_path, item.content_type);
+      }
     }
     const scheduledAt = new Date().toISOString();
     await client.query(
@@ -745,5 +1299,89 @@ export async function cancelScheduledPost(jobId: string): Promise<{
     throw new Error(`Only posts that have not started publishing can be cancelled; this post is ${existing.rows[0]!.status}.`);
   }
   unregisterScheduledMedia(row.image_token);
+  const { rows: mediaRows } = await databasePool().query<ScheduledMediaRow>(
+    "SELECT * FROM public.scheduled_post_media WHERE post_id = $1",
+    [jobId],
+  );
+  const storageObjects: Array<{ kind: "image" | "video"; path: string }> = [];
+  const localFiles: string[] = [];
+  for (const item of mediaRows) {
+    if (item.image_token) unregisterScheduledMedia(item.image_token);
+    if (item.storage_path) storageObjects.push({ kind: item.kind, path: item.storage_path });
+    else if (item.image_path) localFiles.push(item.image_path);
+  }
+  if (row.image_storage_path && !mediaRows.some((item) => item.storage_path === row.image_storage_path)) {
+    storageObjects.push({ kind: "image", path: row.image_storage_path });
+  } else if (!row.image_storage_path && row.image_path && !mediaRows.some((item) => item.image_path === row.image_path)) {
+    localFiles.push(row.image_path);
+  }
+  for (const file of localFiles) await unlink(file).catch(() => undefined);
+  for (const object of storageObjects) {
+    const cleanup = object.kind === "video" ? deleteScheduledVideo : deleteScheduledImage;
+    await cleanup(object.path).catch(() => undefined);
+  }
+  if (row.document_storage_path) {
+    await deleteScheduledDocument(row.document_storage_path).catch(() => undefined);
+  } else if (row.document_path) {
+    await unlink(row.document_path).catch(() => undefined);
+  }
+  await databasePool().query(
+    "DELETE FROM public.scheduled_post_media WHERE post_id = $1",
+    [jobId],
+  );
   return { id: row.id, platform: row.platform, status: "cancelled" };
+}
+
+export async function rescheduleScheduledPost(
+  jobId: string,
+  scheduledAt: string,
+): Promise<{
+  id: string;
+  platform: Platform;
+  scheduledAt: string;
+  status: "scheduled";
+}> {
+  const normalizedScheduledAt = normalizeRescheduledTime(scheduledAt);
+  await ensureScheduleStore();
+  const client = await databasePool().connect();
+  let transactionStarted = false;
+  let result: { id: string; platform: Platform; scheduledAt: string; status: "scheduled" };
+  try {
+    await client.query("BEGIN");
+    transactionStarted = true;
+    // Lock the row so a concurrent worker claim (which uses FOR UPDATE SKIP
+    // LOCKED) either skips this job or, if it already moved it to `publishing`,
+    // is observed below and rejected. The job is never republished at the old
+    // time and no duplicate row is created.
+    const { rows } = await client.query<ScheduledPostRow>(
+      "SELECT * FROM public.scheduled_posts WHERE id = $1 FOR UPDATE",
+      [jobId],
+    );
+    const row = rows[0];
+    if (!row) throw new Error(`Scheduled post ${jobId} was not found.`);
+    if (!canRescheduleScheduledPost(row.status)) {
+      throw new Error(`Only scheduled posts can be rescheduled; this post is ${row.status}.`);
+    }
+    await client.query(
+      `UPDATE public.scheduled_posts
+       SET scheduled_at = $2, claimed_at = NULL, updated_at = NOW()
+       WHERE id = $1`,
+      [jobId, normalizedScheduledAt],
+    );
+    await client.query("COMMIT");
+    transactionStarted = false;
+    result = {
+      id: row.id,
+      platform: row.platform,
+      scheduledAt: normalizedScheduledAt,
+      status: "scheduled",
+    };
+  } catch (error) {
+    if (transactionStarted) await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+  await startScheduleRunner();
+  return result;
 }

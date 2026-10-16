@@ -18,13 +18,24 @@ export interface StoredDocumentValidation {
 
 const imageTypes = new Set(["image/jpeg", "image/png", "image/gif"]);
 const documentTypes = new Set(["application/pdf"]);
+const videoTypes = new Set(["video/mp4", "video/quicktime"]);
 
 export function isPdf(bytes: Uint8Array): boolean {
   return bytes.length >= 5
     && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46 && bytes[4] === 0x2d;
 }
 
+export function isIsoBmffVideo(bytes: Uint8Array): boolean {
+  return bytes.length >= 12
+    && bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70;
+}
+
+export function matchesMediaSignature(bytes: Uint8Array, mimeType: string): boolean {
+  return matchesSignature(bytes, mimeType);
+}
+
 function matchesSignature(bytes: Uint8Array, mimeType: string): boolean {
+  if (videoTypes.has(mimeType)) return isIsoBmffVideo(bytes);
   if (mimeType === "image/jpeg") return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
   if (mimeType === "image/png") {
     return bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e
@@ -79,7 +90,7 @@ interface UploadOptions {
   bytes: Buffer;
   contentType: string;
   extension: string;
-  kind: "image" | "document";
+  kind: "image" | "document" | "video";
   allowed: Set<string>;
   maxBytes: number;
 }
@@ -161,6 +172,21 @@ export async function uploadScheduledDocument(
   });
 }
 
+export async function uploadScheduledVideo(
+  bytes: Buffer,
+  contentType: string,
+  extension: string,
+): Promise<string> {
+  return uploadObject({
+    bytes,
+    contentType,
+    extension,
+    kind: "video",
+    allowed: videoTypes,
+    maxBytes: config.scheduleVideoMaxBytes,
+  });
+}
+
 async function deleteObject(objectPath: string): Promise<void> {
   const response = await fetch(storageUrl(`${config.supabaseStorageBucket}/${objectPath}`), {
     method: "DELETE",
@@ -178,9 +204,13 @@ export async function deleteScheduledDocument(objectPath: string): Promise<void>
   await deleteObject(objectPath);
 }
 
+export async function deleteScheduledVideo(objectPath: string): Promise<void> {
+  await deleteObject(objectPath);
+}
+
 interface DownloadOptions {
   objectPath: string;
-  kind: "image" | "document";
+  kind: "image" | "document" | "video";
   allowed: Set<string>;
   maxBytes: number;
 }
@@ -218,6 +248,15 @@ export async function downloadScheduledDocument(objectPath: string): Promise<Sto
     kind: "document",
     allowed: documentTypes,
     maxBytes: config.scheduleDocumentMaxBytes,
+  });
+}
+
+export async function downloadScheduledVideo(objectPath: string): Promise<StoredImage> {
+  return downloadObject({
+    objectPath,
+    kind: "video",
+    allowed: videoTypes,
+    maxBytes: config.scheduleVideoMaxBytes,
   });
 }
 
@@ -268,6 +307,37 @@ export async function validatePublicImageUrl(url: string, expectedType: string):
   if (!matchesSignature(bytes, contentType)) throw new Error(`Signed public image URL did not contain valid ${contentType} data.`);
 }
 
+export async function validatePublicVideoUrl(url: string, expectedType: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(url, { signal: AbortSignal.timeout(config.scheduleImageTimeoutMs) });
+  } catch (error) {
+    if (error instanceof Error && error.name === "TimeoutError") {
+      throw new Error("Signed public video URL validation timed out.");
+    }
+    throw new Error("Signed public video URL is not reachable.");
+  }
+  if (!response.ok) {
+    await response.body?.cancel();
+    throw new Error(`Signed public video URL returned HTTP ${response.status}.`);
+  }
+  const contentType = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() ?? "";
+  if (!videoTypes.has(contentType) || contentType !== expectedType) {
+    await response.body?.cancel();
+    throw new Error(`Signed public video URL returned invalid MIME type: ${contentType || "missing"}.`);
+  }
+  const declaredLength = Number(response.headers.get("content-length") ?? "0");
+  if (declaredLength > config.scheduleVideoMaxBytes) {
+    await response.body?.cancel();
+    throw new Error("Signed public video URL exceeds SCHEDULE_VIDEO_MAX_BYTES.");
+  }
+  const bytes = await readBounded(response, config.scheduleVideoMaxBytes);
+  if (!bytes.byteLength || bytes.byteLength > config.scheduleVideoMaxBytes) {
+    throw new Error("Signed public video URL returned empty or oversized data.");
+  }
+  if (!matchesSignature(bytes, contentType)) throw new Error(`Signed public video URL did not contain valid ${contentType} data.`);
+}
+
 function retryableValidationError(message: string): boolean {
   return /timed out|not reachable|fetch failed|connection|HTTP (408|425|429|5\d\d)/i.test(message);
 }
@@ -299,6 +369,39 @@ export async function validateStoredImage(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Stored image validation failed.";
+    const retryable = retryableValidationError(message);
+    const local = { valid: false, error: message, retryable };
+    return { valid: false, checkedAt, local, error: message, retryable };
+  }
+}
+
+export async function validateStoredVideo(
+  objectPath: string,
+  checkPublic: boolean,
+): Promise<ScheduledImageValidation> {
+  const checkedAt = new Date().toISOString();
+  try {
+    const video = await downloadScheduledVideo(objectPath);
+    const local = { valid: true, contentType: video.contentType, bytes: video.bytes.byteLength };
+    if (!checkPublic) return { valid: true, checkedAt, local, retryable: false };
+    const videoUrl = await createScheduledImageUrl(objectPath);
+    try {
+      await validatePublicVideoUrl(videoUrl, video.contentType);
+      return {
+        valid: true,
+        checkedAt,
+        local,
+        public: { valid: true, contentType: video.contentType, bytes: video.bytes.byteLength },
+        retryable: false,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Signed public video URL validation failed.";
+      const retryable = retryableValidationError(message);
+      const publicResult = { valid: false, error: message, retryable };
+      return { valid: false, checkedAt, local, public: publicResult, error: message, retryable };
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Stored video validation failed.";
     const retryable = retryableValidationError(message);
     const local = { valid: false, error: message, retryable };
     return { valid: false, checkedAt, local, error: message, retryable };

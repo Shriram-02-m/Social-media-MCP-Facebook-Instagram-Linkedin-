@@ -1,0 +1,31 @@
+export {
+  schedulePosts,
+  scheduleMediaPosts,
+  scheduledPostStatus,
+  retryScheduledPost,
+  cancelScheduledPost,
+  rescheduleScheduledPost,
+  processDueJobs,
+  canSafelyRetryScheduledPost,
+  canRescheduleScheduledPost,
+} from "../../../../social-media-mcp/dist/scheduler.js";
+
+export type {
+  NewScheduledPost,
+  NewScheduledDocument,
+  NewScheduledMedia,
+  MediaType,
+} from "../../../../social-media-mcp/dist/scheduler.js";
+
+export { metaConnectionStatus } from "../../../../social-media-mcp/dist/platforms/meta.js";
+export { linkedinConnectionStatus } from "../../../../social-media-mcp/dist/platforms/linkedin.js";
+
+export {
+  beginAuthorization,
+  getAuthorizationStatus,
+  waitForAuthorization,
+} from "../../../../social-media-mcp/dist/auth/oauth.js";
+
+export { databasePool, closeDatabasePool } from "../../../../social-media-mcp/dist/database.js";
+
+export { config } from "../../../../social-media-mcp/dist/config/env.js";

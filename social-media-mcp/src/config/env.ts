@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import dotenv from "dotenv";
 
-dotenv.config({ path: fileURLToPath(new URL("../../.env", import.meta.url)) });
+dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.env") });
 
 function value(name: string, fallback = ""): string {
   return process.env[name]?.trim() || fallback;
@@ -42,6 +42,8 @@ export const config = {
   scheduleImageTimeoutMs: integer("SCHEDULE_IMAGE_TIMEOUT_MS", "10000", 1),
   scheduleImageMaxBytes: integer("SCHEDULE_IMAGE_MAX_BYTES", "10485760", 1),
   scheduleDocumentMaxBytes: integer("SCHEDULE_DOCUMENT_MAX_BYTES", "10485760", 1),
+  scheduleVideoMaxBytes: integer("SCHEDULE_VIDEO_MAX_BYTES", "52428800", 1),
+  scheduleMediaMaxItems: integer("SCHEDULE_MEDIA_MAX_ITEMS", "10", 1),
   scheduleImageMaxAttempts: integer("SCHEDULE_IMAGE_MAX_ATTEMPTS", "3", 1),
   scheduleImageRetryBaseDelayMs: integer("SCHEDULE_IMAGE_RETRY_BASE_DELAY_MS", "1000", 0),
   scheduleImageRetryMaxDelayMs: integer("SCHEDULE_IMAGE_RETRY_MAX_DELAY_MS", "30000", 0),
@@ -97,6 +99,12 @@ if (config.scheduleImageMaxBytes > 10485760) {
 }
 if (config.scheduleDocumentMaxBytes > 10485760) {
   throw new Error("SCHEDULE_DOCUMENT_MAX_BYTES must not exceed the private Storage bucket's 10 MiB limit.");
+}
+if (config.scheduleVideoMaxBytes > 52428800) {
+  throw new Error("SCHEDULE_VIDEO_MAX_BYTES must not exceed the private Storage bucket's 50 MiB limit.");
+}
+if (config.scheduleMediaMaxItems > 10) {
+  throw new Error("SCHEDULE_MEDIA_MAX_ITEMS must not exceed 10 (the Instagram carousel limit).");
 }
 if (config.scheduleImageRetryBaseDelayMs > 300000 || config.scheduleImageRetryMaxDelayMs > 300000) {
   throw new Error("Scheduled image retry delays must not exceed 300000 milliseconds.");

@@ -3,7 +3,7 @@ import { ensureDatabaseMigrations } from "../src/database-migrations.js";
 
 try {
   await ensureDatabaseMigrations();
-  console.info("Database migrations 001-003 and 005 completed. Existing scheduled-post records were preserved.");
+  console.info("Database migrations 001-003, 005, and 006 completed. Existing scheduled-post records were preserved.");
 } catch (error) {
   const message = error instanceof Error ? error.message : "Unknown database migration error.";
   console.error(message.replace(/postgres(?:ql)?:\/\/[^\s"'<>]+/gi, "[database URL redacted]"));
