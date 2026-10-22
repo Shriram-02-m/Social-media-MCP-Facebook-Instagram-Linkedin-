@@ -89,6 +89,7 @@ export function normalizeRescheduledTime(scheduledAt: string, now: number = Date
 
 interface ScheduledPost extends NewScheduledPost {
   id: string;
+  userId: string;
   imageToken: string;
   imagePath: string;
   imageStoragePath?: string;
@@ -111,6 +112,7 @@ interface ScheduledPost extends NewScheduledPost {
 
 interface ScheduledPostRow extends QueryResultRow {
   id: string;
+  user_id: string;
   platform: Platform;
   scheduled_at: Date;
   text: string;
@@ -189,6 +191,7 @@ async function ensureScheduleStore(): Promise<void> {
 function fromRow(row: ScheduledPostRow): ScheduledPost {
   return {
     id: row.id,
+    userId: row.user_id,
     platform: row.platform,
     scheduledAt: row.scheduled_at.toISOString(),
     text: row.text,
@@ -238,7 +241,18 @@ async function attachMediaToJobs(jobs: ScheduledPost[]): Promise<void> {
   }
 }
 
-async function loadJobs(): Promise<ScheduledPost[]> {
+async function loadJobs(ownerId: string): Promise<ScheduledPost[]> {
+  await ensureScheduleStore();
+  const { rows } = await databasePool().query<ScheduledPostRow>(
+    "SELECT * FROM public.scheduled_posts WHERE user_id = $1 ORDER BY created_at, id",
+    [ownerId],
+  );
+  const jobs = rows.map(fromRow);
+  await attachMediaToJobs(jobs);
+  return jobs;
+}
+
+async function loadAllJobs(): Promise<ScheduledPost[]> {
   await ensureScheduleStore();
   const { rows } = await databasePool().query<ScheduledPostRow>(
     "SELECT * FROM public.scheduled_posts ORDER BY created_at, id",
@@ -256,7 +270,7 @@ async function saveJob(job: ScheduledPost): Promise<void> {
          retry_count = $6, failure_stage = $7, image_validation = $8::jsonb,
          claimed_at = CASE WHEN $2 = 'publishing' THEN claimed_at ELSE NULL END,
          updated_at = NOW()
-     WHERE id = $1`,
+     WHERE id = $1 AND user_id = $9`,
     [
       job.id,
       job.status,
@@ -266,6 +280,7 @@ async function saveJob(job: ScheduledPost): Promise<void> {
       job.retryCount,
       job.failureStage ?? null,
       job.imageValidation ? JSON.stringify(job.imageValidation) : null,
+      job.userId,
     ],
   );
   if (rowCount !== 1) throw new Error(`Scheduled post ${job.id} was not found while saving its status.`);
@@ -280,7 +295,7 @@ function contentTypeFor(imagePath: string): string {
 }
 
 async function registerPendingMedia(): Promise<void> {
-  const currentJobs = await loadJobs();
+  const currentJobs = await loadAllJobs();
   for (const job of currentJobs) {
     if (job.status === "scheduled" && job.imagePath) {
       await registerScheduledMedia(job.imageToken, job.imagePath, job.contentType);
@@ -293,9 +308,9 @@ async function publishJob(job: ScheduledPost): Promise<void> {
     job.failureStage = "token_validation";
     await saveJob(job);
     if (job.platform === "linkedin") {
-      await linkedinTokenForUse();
+      await linkedinTokenForUse(job.userId);
     } else {
-      const token = (await loadTokens())[job.platform];
+      const token = (await loadTokens(job.userId))[job.platform];
       if (!token) throw new Error(`${job.platform} is not connected. Authorize it before retrying this scheduled post.`);
       if (token.expiresAt !== undefined && token.expiresAt <= Date.now()) {
         throw new Error(`${job.platform} access token is expired. Reauthorize the account, then safely retry this post.`);
@@ -315,6 +330,7 @@ async function publishJob(job: ScheduledPost): Promise<void> {
           ? await downloadScheduledDocument(job.documentStoragePath)
           : { bytes: await readFile(job.documentPath), contentType: job.documentContentType ?? "application/pdf" };
         result = await publishLinkedInWithDocument(
+          job.userId,
           job.text,
           document.bytes,
           document.contentType,
@@ -327,21 +343,21 @@ async function publishJob(job: ScheduledPost): Promise<void> {
         const video = videoItem.storagePath
           ? await downloadScheduledVideo(videoItem.storagePath)
           : { bytes: await readFile(videoItem.imagePath), contentType: videoItem.contentType };
-        result = await publishLinkedInWithVideo(job.text, video.bytes, video.contentType);
+        result = await publishLinkedInWithVideo(job.userId, job.text, video.bytes, video.contentType);
       } else {
         if (!job.imageStoragePath && !job.imagePath) {
           job.failureStage = "publishing";
           await saveJob(job);
-          result = await publishLinkedIn(job.text);
+          result = await publishLinkedIn(job.userId, job.text);
         } else {
           await validateBeforePublishing(job, false);
           job.failureStage = "publishing";
           await saveJob(job);
           if (job.imageStoragePath) {
             const image = await downloadScheduledImage(job.imageStoragePath);
-            result = await publishLinkedInWithImage(job.text, image.bytes, image.contentType);
+            result = await publishLinkedInWithImage(job.userId, job.text, image.bytes, image.contentType);
           } else {
-            result = await publishLinkedIn(job.text, job.imagePath);
+            result = await publishLinkedIn(job.userId, job.text, job.imagePath);
           }
         }
       }
@@ -351,20 +367,20 @@ async function publishJob(job: ScheduledPost): Promise<void> {
       await saveJob(job);
       const imageUrls: string[] = [];
       for (const item of carouselItems) imageUrls.push(await mediaPublicUrl(item));
-      result = await publishInstagramCarousel(job.text, imageUrls);
+      result = await publishInstagramCarousel(job.userId, job.text, imageUrls);
     } else if (videoItem) {
       await validateMediaBeforePublishing(job, [videoItem], true);
       job.failureStage = "publishing";
       await saveJob(job);
       const videoUrl = await mediaPublicUrl(videoItem);
       result = job.platform === "facebook"
-        ? await publishFacebookVideo(job.text, videoUrl)
-        : await publishInstagramReel(job.text, videoUrl);
+        ? await publishFacebookVideo(job.userId, job.text, videoUrl)
+        : await publishInstagramReel(job.userId, job.text, videoUrl);
     } else {
       if (!job.imageStoragePath && !job.imagePath) {
         job.failureStage = "publishing";
         await saveJob(job);
-        result = await publishMeta(job.platform as MetaPlatform, job.text, undefined);
+          result = await publishMeta(job.userId, job.platform as MetaPlatform, job.text, undefined);
       } else {
         await validateBeforePublishing(job, true);
         const imageUrl = job.imageStoragePath
@@ -372,7 +388,7 @@ async function publishJob(job: ScheduledPost): Promise<void> {
           : `${config.imagePublicBaseUrl}/scheduled-media/${job.imageToken}`;
         job.failureStage = "publishing";
         await saveJob(job);
-        result = await publishMeta(job.platform as MetaPlatform, job.text, imageUrl);
+        result = await publishMeta(job.userId, job.platform as MetaPlatform, job.text, imageUrl);
       }
     }
     job.status = "published";
@@ -784,7 +800,7 @@ export async function processDueJobs(): Promise<number> {
 
 export async function startScheduleRunner(): Promise<void> {
   await ensureScheduleStore();
-  const currentJobs = await loadJobs();
+  const currentJobs = await loadAllJobs();
   if (config.scheduledImageStorage === "local" && currentJobs.some((job) => job.status === "scheduled")) {
     await registerPendingMedia();
   }
@@ -799,6 +815,7 @@ export async function startScheduleRunner(): Promise<void> {
 }
 
 export async function schedulePosts(
+  ownerId: string,
   posts: NewScheduledPost[],
   imagePath: string,
   document?: NewScheduledDocument,
@@ -821,7 +838,7 @@ export async function schedulePosts(
   if (document && !posts.some((post) => post.platform === "linkedin")) {
     throw new Error("Documents can only be attached to LinkedIn scheduled posts.");
   }
-  const tokens = await loadTokens();
+  const tokens = await loadTokens(ownerId);
   for (const post of posts) {
     if (!tokens[post.platform]) throw new Error(`${post.platform} is not connected; authorize it before scheduling.`);
   }
@@ -878,6 +895,7 @@ export async function schedulePosts(
   const createdJobs: ScheduledPost[] = posts.map((post) => ({
     ...post,
     id: randomBytes(16).toString("hex"),
+    userId: ownerId,
     imageToken: randomBytes(32).toString("hex"),
     imagePath: storedImagePath,
     ...(imageStoragePath ? { imageStoragePath } : {}),
@@ -901,11 +919,11 @@ export async function schedulePosts(
     for (const job of createdJobs) {
       await client.query(
         `INSERT INTO public.scheduled_posts
-          (id, platform, scheduled_at, text, image_token, image_path, image_storage_path, content_type,
+          (user_id, id, platform, scheduled_at, text, image_token, image_path, image_storage_path, content_type,
            document_path, document_storage_path, document_content_type, document_title, media_type, status, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $15)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16)`,
         [
-          job.id, job.platform, job.scheduledAt, job.text, job.imageToken, job.imagePath,
+          ownerId, job.id, job.platform, job.scheduledAt, job.text, job.imageToken, job.imagePath,
           job.imageStoragePath ?? null, job.contentType,
           job.documentPath, job.documentStoragePath ?? null, job.documentContentType ?? null, job.documentTitle ?? null,
           job.mediaType, job.status, job.createdAt,
@@ -987,6 +1005,7 @@ function validateMediaInput(media: NewScheduledMedia): void {
 }
 
 export async function scheduleMediaPosts(
+  ownerId: string,
   posts: NewScheduledPost[],
   media: NewScheduledMedia[],
   document?: NewScheduledDocument,
@@ -1027,7 +1046,7 @@ export async function scheduleMediaPosts(
       throw new Error("Scheduled Instagram and Facebook publishing requires IMAGE_PUBLIC_BASE_URL to be a public HTTPS tunnel URL.");
     }
   }
-  const tokens = await loadTokens();
+  const tokens = await loadTokens(ownerId);
   for (const post of posts) {
     if (!tokens[post.platform]) throw new Error(`${post.platform} is not connected; authorize it before scheduling.`);
   }
@@ -1105,6 +1124,7 @@ export async function scheduleMediaPosts(
     const createdJobs: ScheduledPost[] = posts.map((post) => ({
       ...post,
       id: randomBytes(16).toString("hex"),
+      userId: ownerId,
       imageToken: parentImage.imageToken,
       imagePath: parentImage.imagePath,
       ...(parentImage.imageStoragePath ? { imageStoragePath: parentImage.imageStoragePath } : {}),
@@ -1124,11 +1144,11 @@ export async function scheduleMediaPosts(
       for (const job of createdJobs) {
         await client.query(
           `INSERT INTO public.scheduled_posts
-            (id, platform, scheduled_at, text, image_token, image_path, image_storage_path, content_type,
+            (user_id, id, platform, scheduled_at, text, image_token, image_path, image_storage_path, content_type,
              document_path, document_storage_path, document_content_type, document_title, media_type, status, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $15)`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16)`,
           [
-            job.id, job.platform, job.scheduledAt, job.text, job.imageToken, job.imagePath,
+            ownerId, job.id, job.platform, job.scheduledAt, job.text, job.imageToken, job.imagePath,
             job.imageStoragePath ?? null, job.contentType,
             job.documentPath, job.documentStoragePath ?? null, job.documentContentType ?? null, job.documentTitle ?? null,
             job.mediaType, job.status, job.createdAt,
@@ -1180,7 +1200,7 @@ export async function scheduleMediaPosts(
   }
 }
 
-export async function scheduledPostStatus(): Promise<Array<{
+export async function scheduledPostStatus(ownerId: string): Promise<Array<{
   id: string;
   platform: Platform;
   text: string;
@@ -1196,7 +1216,7 @@ export async function scheduledPostStatus(): Promise<Array<{
   document?: { title: string; contentType: string };
   media?: Array<{ kind: "image" | "video"; contentType: string }>;
 }>> {
-  const currentJobs = await loadJobs();
+  const currentJobs = await loadJobs(ownerId);
   return currentJobs.map((job) => ({
     id: job.id,
     platform: job.platform,
@@ -1219,7 +1239,7 @@ export async function scheduledPostStatus(): Promise<Array<{
   }));
 }
 
-export async function retryScheduledPost(jobId: string): Promise<{
+export async function retryScheduledPost(ownerId: string, jobId: string): Promise<{
   id: string;
   platform: Platform;
   scheduledAt: string;
@@ -1233,8 +1253,8 @@ export async function retryScheduledPost(jobId: string): Promise<{
     await client.query("BEGIN");
     transactionStarted = true;
     const { rows } = await client.query<ScheduledPostRow>(
-      "SELECT * FROM public.scheduled_posts WHERE id = $1 FOR UPDATE",
-      [jobId],
+      "SELECT * FROM public.scheduled_posts WHERE id = $1 AND user_id = $2 FOR UPDATE",
+      [jobId, ownerId],
     );
     const row = rows[0];
     if (!row) throw new Error(`Scheduled post ${jobId} was not found.`);
@@ -1276,7 +1296,7 @@ export async function retryScheduledPost(jobId: string): Promise<{
   return result;
 }
 
-export async function cancelScheduledPost(jobId: string): Promise<{
+export async function cancelScheduledPost(ownerId: string, jobId: string): Promise<{
   id: string;
   platform: Platform;
   status: "cancelled";
@@ -1285,15 +1305,15 @@ export async function cancelScheduledPost(jobId: string): Promise<{
   const { rows } = await databasePool().query<ScheduledPostRow>(
     `UPDATE public.scheduled_posts
      SET status = 'cancelled', error = 'Cancelled before publishing.', claimed_at = NULL, updated_at = NOW()
-     WHERE id = $1 AND status = 'scheduled'
+     WHERE id = $1 AND user_id = $2 AND status = 'scheduled'
      RETURNING *`,
-    [jobId],
+    [jobId, ownerId],
   );
   const row = rows[0];
   if (!row) {
     const existing = await databasePool().query<{ status: ScheduledPost["status"] }>(
-      "SELECT status FROM public.scheduled_posts WHERE id = $1",
-      [jobId],
+      "SELECT status FROM public.scheduled_posts WHERE id = $1 AND user_id = $2",
+      [jobId, ownerId],
     );
     if (!existing.rowCount) throw new Error(`Scheduled post ${jobId} was not found.`);
     throw new Error(`Only posts that have not started publishing can be cancelled; this post is ${existing.rows[0]!.status}.`);
@@ -1333,6 +1353,7 @@ export async function cancelScheduledPost(jobId: string): Promise<{
 }
 
 export async function rescheduleScheduledPost(
+  ownerId: string,
   jobId: string,
   scheduledAt: string,
 ): Promise<{
@@ -1354,8 +1375,8 @@ export async function rescheduleScheduledPost(
     // is observed below and rejected. The job is never republished at the old
     // time and no duplicate row is created.
     const { rows } = await client.query<ScheduledPostRow>(
-      "SELECT * FROM public.scheduled_posts WHERE id = $1 FOR UPDATE",
-      [jobId],
+      "SELECT * FROM public.scheduled_posts WHERE id = $1 AND user_id = $2 FOR UPDATE",
+      [jobId, ownerId],
     );
     const row = rows[0];
     if (!row) throw new Error(`Scheduled post ${jobId} was not found.`);
@@ -1364,9 +1385,9 @@ export async function rescheduleScheduledPost(
     }
     await client.query(
       `UPDATE public.scheduled_posts
-       SET scheduled_at = $2, claimed_at = NULL, updated_at = NOW()
-       WHERE id = $1`,
-      [jobId, normalizedScheduledAt],
+       SET scheduled_at = $3, claimed_at = NULL, updated_at = NOW()
+       WHERE id = $1 AND user_id = $2`,
+      [jobId, ownerId, normalizedScheduledAt],
     );
     await client.query("COMMIT");
     transactionStarted = false;

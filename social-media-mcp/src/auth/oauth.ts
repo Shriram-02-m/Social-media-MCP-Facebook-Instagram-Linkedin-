@@ -8,6 +8,7 @@ import type { MetaPage, MetaPlatform, Platform, StoredToken } from "../platforms
 
 interface PendingAuthorization {
   platform: Platform;
+  userId: string;
   sessionId: string;
   expiresAt: number;
   timer: NodeJS.Timeout;
@@ -168,11 +169,11 @@ function handleCallback(request: IncomingMessage, response: ServerResponse): voi
   }
   void (async () => {
     if (authorization.platform === "linkedin") {
-      await finishLinkedInAuthorization(code, callbackUrl("linkedin"));
+      await finishLinkedInAuthorization(authorization.userId, code, callbackUrl("linkedin"));
     } else if (authorization.platform === "instagram") {
-      await finishInstagramAuthorization(code, callbackUrl("instagram"));
+      await finishInstagramAuthorization(authorization.userId, code, callbackUrl("instagram"));
     } else {
-      await finishMetaAuthorization(code, callbackUrl(authorization.platform), authorization.platform);
+      await finishMetaAuthorization(authorization.userId, code, callbackUrl(authorization.platform), authorization.platform);
     }
   })().then(
     () => {
@@ -224,7 +225,7 @@ async function ensureCallbackServer(): Promise<void> {
   return callbackServerPromise;
 }
 
-function addPending(platform: Platform): { state: string; sessionId: string; session: PendingAuthorization } {
+function addPending(platform: Platform, userId: string): { state: string; sessionId: string; session: PendingAuthorization } {
   pruneSessions();
   const state = randomBytes(32).toString("hex");
   const sessionId = randomBytes(16).toString("hex");
@@ -236,6 +237,7 @@ function addPending(platform: Platform): { state: string; sessionId: string; ses
   }, authorizationLifetimeMs);
   session = {
     platform,
+    userId,
     sessionId,
     expiresAt,
     timer,
@@ -248,18 +250,25 @@ function addPending(platform: Platform): { state: string; sessionId: string; ses
   return { state, sessionId, session };
 }
 
-export function getAuthorizationStatus(sessionId: string): AuthorizationSessionStatus {
+function requireOwnedSession(sessionId: string, userId: string): PendingAuthorization {
   const session = sessions.get(sessionId);
-  if (!session) throw new Error("Authorization session not found or expired. Start a new authorization request.");
+  if (!session || session.userId !== userId) {
+    throw new Error("Authorization session not found or expired. Start a new authorization request.");
+  }
+  return session;
+}
+
+export function getAuthorizationStatus(sessionId: string, userId: string): AuthorizationSessionStatus {
+  const session = requireOwnedSession(sessionId, userId);
   return sessionStatus(sessionId, session);
 }
 
 export function waitForAuthorization(
   sessionId: string,
   timeoutSeconds: number,
+  userId: string,
 ): Promise<AuthorizationSessionStatus> {
-  const session = sessions.get(sessionId);
-  if (!session) throw new Error("Authorization session not found or expired. Start a new authorization request.");
+  const session = requireOwnedSession(sessionId, userId);
   if (session.status !== "pending" || timeoutSeconds === 0) return Promise.resolve(sessionStatus(sessionId, session));
   return new Promise((resolve) => {
     let timer: NodeJS.Timeout;
@@ -292,7 +301,7 @@ function validateAuthorizationConfiguration(platform: Platform): void {
   }
 }
 
-export async function beginAuthorization(platform: Platform): Promise<{
+export async function beginAuthorization(platform: Platform, userId: string): Promise<{
   authorizationUrl: string;
   sessionId: string;
   expiresAt: number;
@@ -300,7 +309,7 @@ export async function beginAuthorization(platform: Platform): Promise<{
   validateAuthorizationConfiguration(platform);
   await ensureCallbackServer();
   const redirectUri = callbackUrl(platform);
-  const { state, sessionId, session } = addPending(platform);
+  const { state, sessionId, session } = addPending(platform, userId);
   if (platform === "linkedin") {
     const url = new URL("https://www.linkedin.com/oauth/v2/authorization");
     url.search = new URLSearchParams({
@@ -335,7 +344,7 @@ export async function beginAuthorization(platform: Platform): Promise<{
   return { authorizationUrl: url.toString(), sessionId, expiresAt: session.expiresAt };
 }
 
-async function finishInstagramAuthorization(code: string, redirectUri: string): Promise<void> {
+async function finishInstagramAuthorization(userId: string, code: string, redirectUri: string): Promise<void> {
   const form = new FormData();
   form.set("client_id", config.instagramAppId);
   form.set("client_secret", config.instagramAppSecret);
@@ -364,7 +373,7 @@ async function finishInstagramAuthorization(code: string, redirectUri: string): 
   );
   const accountId = profile.user_id ?? profile.id ?? shortToken.user_id;
   const scopes = instagramPermissionScopes(shortToken.permissions);
-  const vault = await loadTokens();
+  const vault = await loadTokens(userId);
   vault.instagram = {
     accessToken: longToken.access_token,
     ...(longToken.expires_in ? { expiresAt: Date.now() + longToken.expires_in * 1000 } : {}),
@@ -373,10 +382,10 @@ async function finishInstagramAuthorization(code: string, redirectUri: string): 
     accountId: String(accountId),
     ...(profile.username ? { accountName: profile.username } : {}),
   };
-  await saveTokens(vault);
+  await saveTokens(userId, vault);
 }
 
-async function finishMetaAuthorization(code: string, redirectUri: string, platform: MetaPlatform): Promise<void> {
+async function finishMetaAuthorization(userId: string, code: string, redirectUri: string, platform: MetaPlatform): Promise<void> {
   const shortToken = await exchangeMetaCode(code, redirectUri);
   const tokenUrl = new URL(`https://graph.facebook.com/${config.metaGraphVersion}/oauth/access_token`);
   tokenUrl.search = new URLSearchParams({
@@ -416,7 +425,7 @@ async function finishMetaAuthorization(code: string, redirectUri: string, platfo
   } catch {
     pages = [];
   }
-  const vault = await loadTokens();
+  const vault = await loadTokens(userId);
   const record: StoredToken = {
     accessToken: longToken.access_token,
     ...(longToken.expires_in ? { expiresAt: Date.now() + longToken.expires_in * 1000 } : {}),
@@ -427,7 +436,7 @@ async function finishMetaAuthorization(code: string, redirectUri: string, platfo
     pages,
   };
   vault[platform] = record;
-  await saveTokens(vault);
+  await saveTokens(userId, vault);
 }
 
 async function exchangeMetaCode(code: string, redirectUri: string): Promise<string> {
@@ -442,7 +451,7 @@ async function exchangeMetaCode(code: string, redirectUri: string): Promise<stri
   return data.access_token;
 }
 
-async function finishLinkedInAuthorization(code: string, redirectUri: string): Promise<void> {
+async function finishLinkedInAuthorization(userId: string, code: string, redirectUri: string): Promise<void> {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
@@ -459,7 +468,7 @@ async function finishLinkedInAuthorization(code: string, redirectUri: string): P
     "https://api.linkedin.com/v2/userinfo",
     { accessToken: token.access_token },
   );
-  const vault = await loadTokens();
+  const vault = await loadTokens(userId);
   vault.linkedin = {
     accessToken: token.access_token,
     ...(token.refresh_token ? { refreshToken: token.refresh_token } : {}),
@@ -469,5 +478,5 @@ async function finishLinkedInAuthorization(code: string, redirectUri: string): P
     accountId: profile.sub,
     ...(profile.name ? { accountName: profile.name } : {}),
   };
-  await saveTokens(vault);
+  await saveTokens(userId, vault);
 }

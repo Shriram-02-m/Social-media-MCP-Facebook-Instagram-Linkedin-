@@ -13,6 +13,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -50,6 +57,23 @@ const PLATFORM_LABELS: Record<ScheduledPostSummary["platform"], string> = {
   linkedin: "LinkedIn",
 };
 
+const STATUS_LABELS: Record<ScheduledPostSummary["status"], string> = {
+  scheduled: "Scheduled",
+  publishing: "Publishing",
+  published: "Published",
+  failed: "Failed",
+  cancelled: "Cancelled",
+};
+
+const PLATFORM_ORDER: ScheduledPostSummary["platform"][] = [
+  "facebook",
+  "instagram",
+  "linkedin",
+];
+
+type StatusFilter = "all" | ScheduledPostSummary["status"];
+type PlatformFilter = "all" | ScheduledPostSummary["platform"];
+
 function canRetry(post: ScheduledPostSummary): boolean {
   return (
     post.status === "failed" &&
@@ -65,13 +89,17 @@ function canReschedule(post: ScheduledPostSummary): boolean {
 export function PostsList({
   statuses,
   showWorkerButton = false,
+  showFilters = false,
 }: {
   statuses: ScheduledPostSummary["status"][];
   showWorkerButton?: boolean;
+  showFilters?: boolean;
 }) {
   const [posts, setPosts] = useState<ScheduledPostSummary[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rescheduling, setRescheduling] = useState<ScheduledPostSummary | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("all");
 
   const load = useCallback(() => {
     return fetch("/api/posts", { cache: "no-store" })
@@ -96,6 +124,17 @@ export function PostsList({
   }, [load]);
 
   const visible = (posts ?? []).filter((post) => statuses.includes(post.status));
+  const filtered = visible.filter(
+    (post) =>
+      (statusFilter === "all" || post.status === statusFilter) &&
+      (platformFilter === "all" || post.platform === platformFilter),
+  );
+  const filtersActive = statusFilter !== "all" || platformFilter !== "all";
+
+  function resetFilters() {
+    setStatusFilter("all");
+    setPlatformFilter("all");
+  }
 
   async function runAction(
     id: string,
@@ -164,6 +203,78 @@ export function PostsList({
         </div>
       </CardHeader>
       <CardContent>
+        {showFilters && posts !== null ? (
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <Select
+                value={statusFilter}
+                onValueChange={(value) =>
+                  setStatusFilter((value ?? "all") as StatusFilter)
+                }
+              >
+                <SelectTrigger
+                  size="sm"
+                  className="w-full sm:w-44"
+                  aria-label="Filter by status"
+                >
+                  <SelectValue>
+                    {(value) =>
+                      value === "all" || value == null
+                        ? "All Statuses"
+                        : STATUS_LABELS[value as ScheduledPostSummary["status"]]
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  {statuses.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {STATUS_LABELS[status]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={platformFilter}
+                onValueChange={(value) => setPlatformFilter((value ?? "all") as PlatformFilter)}
+              >
+                <SelectTrigger
+                  size="sm"
+                  className="w-full sm:w-40"
+                  aria-label="Filter by app"
+                >
+                  <SelectValue>
+                    {(value) =>
+                      value === "all" || value == null
+                        ? "All Apps"
+                        : PLATFORM_LABELS[value as ScheduledPostSummary["platform"]]
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Apps</SelectItem>
+                  {PLATFORM_ORDER.map((platform) => (
+                    <SelectItem key={platform} value={platform}>
+                      {PLATFORM_LABELS[platform]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                Showing {filtered.length} of {visible.length}
+              </span>
+              {filtersActive ? (
+                <Button size="sm" variant="ghost" onClick={resetFilters}>
+                  Reset
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
         {posts === null ? (
           <div className="flex flex-col gap-3">
             <Skeleton className="h-8 w-full" />
@@ -172,6 +283,15 @@ export function PostsList({
           </div>
         ) : visible.length === 0 ? (
           <p className="text-sm text-muted-foreground">No posts to show.</p>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <p className="text-sm text-muted-foreground">
+              No posts match the selected filters.
+            </p>
+            <Button size="sm" variant="outline" onClick={resetFilters}>
+              Reset filters
+            </Button>
+          </div>
         ) : (
           <Table>
             <TableHeader>
@@ -185,7 +305,7 @@ export function PostsList({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visible.map((post) => (
+              {filtered.map((post) => (
                 <TableRow key={post.id}>
                   <TableCell className="whitespace-nowrap">
                     {PLATFORM_LABELS[post.platform]}

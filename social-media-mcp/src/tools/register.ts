@@ -42,7 +42,7 @@ export function registerTools(server: McpServer): void {
     description: "Start provider OAuth. Open the returned URL in a browser, approve or cancel, then use social_authorization_wait with the returned authorizationSessionId. Keep this MCP server process running until it completes.",
     inputSchema: z.object({ platform: z.enum(["instagram", "facebook", "linkedin"]) }),
   }, async ({ platform }) => safely(async () => {
-    const authorization = await beginAuthorization(platform);
+    const authorization = await beginAuthorization(platform, config.ownerUserId);
     return {
       platform,
       authorizationUrl: authorization.authorizationUrl,
@@ -57,7 +57,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool("social_authorization_status", {
     description: "Check whether an OAuth authorization session is pending, connected, cancelled, failed, or expired.",
     inputSchema: z.object({ authorizationSessionId: z.string().min(1) }),
-  }, async ({ authorizationSessionId }) => safely(async () => getAuthorizationStatus(authorizationSessionId)));
+  }, async ({ authorizationSessionId }) => safely(async () => getAuthorizationStatus(authorizationSessionId, config.ownerUserId)));
 
   server.registerTool("social_authorization_wait", {
     description: "Wait briefly for the OAuth callback on this same MCP server process. Use short waits and call again if it is still pending; long tool calls can time out in MCP clients.",
@@ -66,22 +66,22 @@ export function registerTools(server: McpServer): void {
       timeoutSeconds: z.number().int().min(0).max(20).default(20),
     }),
   }, async ({ authorizationSessionId, timeoutSeconds }) => safely(async () =>
-    waitForAuthorization(authorizationSessionId, timeoutSeconds)));
+    waitForAuthorization(authorizationSessionId, timeoutSeconds, config.ownerUserId)));
 
   server.registerTool("social_connection_status", {
     description: "Verify provider authorization and API access without publishing.",
     inputSchema: z.object({ platform: z.enum(["instagram", "facebook", "linkedin"]).optional() }),
   }, async ({ platform }) => safely(async () => {
     const platforms: Platform[] = platform ? [platform] : ["instagram", "facebook", "linkedin"];
-    return Promise.all(platforms.map((item) => item === "linkedin" ? linkedinConnectionStatus() : metaConnectionStatus(item)));
+    return Promise.all(platforms.map((item) => item === "linkedin" ? linkedinConnectionStatus(config.ownerUserId) : metaConnectionStatus(config.ownerUserId, item)));
   }));
 
   server.registerTool("social_account_info", {
     description: "Return authenticated Instagram or LinkedIn account details, or Facebook account and accessible Pages.",
     inputSchema: z.object({ platform: z.enum(["instagram", "facebook", "linkedin"]), authorUrn: z.string().optional() }),
   }, async ({ platform, authorUrn }) => safely(async () => platform === "linkedin"
-    ? linkedinAccountInfo(authorUrn)
-    : metaAccountInfo(platform)));
+    ? linkedinAccountInfo(config.ownerUserId, authorUrn)
+    : metaAccountInfo(config.ownerUserId, platform)));
 
   server.registerTool("social_recent_posts", {
     description: "Read recent posts allowed by the connected account and granted scopes.",
@@ -92,7 +92,7 @@ export function registerTools(server: McpServer): void {
     }),
   }, async ({ platform, count, authorUrn }) => safely(async () => ({
     platform,
-    posts: platform === "linkedin" ? await readLinkedInPosts(count, authorUrn) : await readMetaPosts(platform, Math.min(count, 25)),
+    posts: platform === "linkedin" ? await readLinkedInPosts(config.ownerUserId, count, authorUrn) : await readMetaPosts(config.ownerUserId, platform, Math.min(count, 25)),
   })));
 
   server.registerTool("social_publish", {
@@ -136,8 +136,8 @@ export function registerTools(server: McpServer): void {
       };
       try {
         const post = platform === "linkedin"
-          ? await publishLinkedIn(input.text, input.imagePath, input.authorUrn)
-          : await publishMeta(platform, input.text, input.imageUrl, input.pageId, input.instagramAccountId);
+          ? await publishLinkedIn(config.ownerUserId, input.text, input.imagePath, input.authorUrn)
+          : await publishMeta(config.ownerUserId, platform, input.text, input.imageUrl, input.pageId, input.instagramAccountId);
         return { platform, success: true, published: post.confirmed, post };
       } catch (error) {
         return { platform, success: false, published: false, error: explainError(error) };
@@ -162,6 +162,7 @@ export function registerTools(server: McpServer): void {
     }),
   }, async ({ posts, imagePath, documentPath, documentTitle }) => safely(async () => ({
     scheduled: await schedulePosts(
+      config.ownerUserId,
       posts,
       imagePath,
       documentPath ? { path: documentPath, ...(documentTitle ? { title: documentTitle } : {}) } : undefined,
@@ -192,6 +193,7 @@ export function registerTools(server: McpServer): void {
     }));
     return {
       scheduled: await scheduleMediaPosts(
+        config.ownerUserId,
         posts,
         resolved,
         documentPath ? { path: documentPath, ...(documentTitle ? { title: documentTitle } : {}) } : undefined,
@@ -202,23 +204,23 @@ export function registerTools(server: McpServer): void {
   server.registerTool("social_scheduled_posts_status", {
     description: "List scheduled posts, image validation results, retry counts, and failure stages without exposing credentials or image URLs.",
     inputSchema: z.object({}),
-  }, async () => safely(async () => ({ scheduledPosts: await scheduledPostStatus() })));
+  }, async () => safely(async () => ({ scheduledPosts: await scheduledPostStatus(config.ownerUserId) })));
 
   server.registerTool("social_cancel_scheduled_post", {
     description: "Cancel a scheduled post only if publishing has not started.",
     inputSchema: z.object({ jobId: z.string().min(1) }),
-  }, async ({ jobId }) => safely(async () => ({ cancelled: await cancelScheduledPost(jobId) })));
+  }, async ({ jobId }) => safely(async () => ({ cancelled: await cancelScheduledPost(config.ownerUserId, jobId) })));
 
   server.registerTool("social_retry_scheduled_post", {
     description: "Safely requeue a failed scheduled post only after pre-publish token or image validation failed. Publishing-stage failures are blocked to prevent duplicates.",
     inputSchema: z.object({ jobId: z.string().min(1) }),
-  }, async ({ jobId }) => safely(async () => ({ scheduled: await retryScheduledPost(jobId) })));
+  }, async ({ jobId }) => safely(async () => ({ scheduled: await retryScheduledPost(config.ownerUserId, jobId) })));
 
   server.registerTool("social_token_store_status", {
     description: "Show stored token presence, expiry, and scopes without exposing secrets.",
     inputSchema: z.object({}),
   }, async () => safely(async () => {
-    const tokens = await loadTokens();
+    const tokens = await loadTokens(config.ownerUserId);
     return Object.fromEntries((["instagram", "facebook", "linkedin"] as const).map((platform) => {
       const token = tokens[platform];
       return [platform, token

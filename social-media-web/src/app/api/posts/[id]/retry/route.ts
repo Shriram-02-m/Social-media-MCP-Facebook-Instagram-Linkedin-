@@ -10,10 +10,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireApiSession();
+    const session = await requireApiSession();
     const { id } = await params;
 
-    const post = (await scheduledPostStatus()).find((item) => item.id === id);
+    const post = (await scheduledPostStatus(session.user.id)).find((item) => item.id === id);
     if (!post) throw new ApiError("That post was not found.", 404);
     if (!canSafelyRetryScheduledPost(post.status, post.failureStage)) {
       throw new ApiError(
@@ -21,7 +21,7 @@ export async function POST(
       );
     }
 
-    const retry = await retryScheduledPost(id);
+    const retry = await retryScheduledPost(session.user.id, id);
     return Response.json({ retry });
   } catch (error) {
     return apiErrorResponse(error);

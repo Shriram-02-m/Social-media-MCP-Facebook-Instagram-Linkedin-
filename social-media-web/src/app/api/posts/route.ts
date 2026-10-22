@@ -48,8 +48,8 @@ async function fileToMedia(file: File): Promise<NewScheduledMedia> {
 
 export async function GET() {
   try {
-    await requireApiSession();
-    const posts = await scheduledPostStatus();
+    const session = await requireApiSession();
+    const posts = await scheduledPostStatus(session.user.id);
     return Response.json({ posts });
   } catch (error) {
     return apiErrorResponse(error);
@@ -58,7 +58,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await requireApiSession();
+    const session = await requireApiSession();
 
     const form = await request.formData();
 
@@ -101,6 +101,7 @@ export async function POST(request: Request) {
     let scheduled: Awaited<ReturnType<typeof scheduleMediaPosts>>;
     try {
       scheduled = await scheduleMediaPosts(
+        session.user.id,
         parsed.data.platforms.map((platform) => ({ platform, scheduledAt, text })),
         media,
       );

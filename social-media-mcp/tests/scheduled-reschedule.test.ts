@@ -34,8 +34,8 @@ test("rescheduling updates the existing job in place and never inserts a duplica
   assert.ok(start >= 0, "rescheduleScheduledPost should be exported from the scheduler");
   const source = scheduler.slice(start);
 
-  assert.match(source, /SELECT \* FROM public\.scheduled_posts WHERE id = \$1 FOR UPDATE/);
-  assert.match(source, /UPDATE public\.scheduled_posts\s+SET scheduled_at = \$2/);
+  assert.match(source, /SELECT \* FROM public\.scheduled_posts WHERE id = \$1 AND user_id = \$2 FOR UPDATE/);
+  assert.match(source, /UPDATE public\.scheduled_posts\s+SET scheduled_at = \$3/);
   assert.match(source, /claimed_at = NULL/);
   assert.match(source, /canRescheduleScheduledPost\(row\.status\)/);
   assert.doesNotMatch(source, /\bINSERT INTO\b/i);

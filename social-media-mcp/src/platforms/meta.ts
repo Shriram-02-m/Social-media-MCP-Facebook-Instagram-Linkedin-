@@ -55,8 +55,8 @@ export async function waitForInstagramContainer(containerId: string, accessToken
   throw new Error("Instagram media container did not finish processing within 120 seconds.");
 }
 
-export async function metaConnectionStatus(platform: MetaPlatform): Promise<Record<string, unknown>> {
-  const token = (await loadTokens())[platform];
+export async function metaConnectionStatus(ownerId: string, platform: MetaPlatform): Promise<Record<string, unknown>> {
+  const token = (await loadTokens(ownerId))[platform];
   if (!token) return { platform, connected: false, reason: "Authorize this platform using social_authorization_start." };
   const requiredScopes = platform === "facebook"
     ? ["pages_show_list", "pages_read_engagement", "pages_manage_posts"]
@@ -86,8 +86,8 @@ export async function metaConnectionStatus(platform: MetaPlatform): Promise<Reco
   }
 }
 
-export async function metaAccountInfo(platform: MetaPlatform): Promise<Record<string, unknown>> {
-  const token = (await loadTokens())[platform];
+export async function metaAccountInfo(ownerId: string, platform: MetaPlatform): Promise<Record<string, unknown>> {
+  const token = (await loadTokens(ownerId))[platform];
   if (!token) throw new Error(`${platform} is not connected. Start OAuth first.`);
   if (platform === "facebook") {
     const { data } = await apiRequest<MetaProfile>(facebookGraph("me?fields=id,name"), { accessToken: token.accessToken });
@@ -105,8 +105,8 @@ export async function metaAccountInfo(platform: MetaPlatform): Promise<Record<st
   return { platform, ...data, id: data.user_id ?? data.id };
 }
 
-export async function readMetaPosts(platform: MetaPlatform, count: number): Promise<MetaMedia[]> {
-  const token = (await loadTokens())[platform];
+export async function readMetaPosts(ownerId: string, platform: MetaPlatform, count: number): Promise<MetaMedia[]> {
+  const token = (await loadTokens(ownerId))[platform];
   if (!token) throw new Error(`${platform} is not connected. Start OAuth first.`);
   const requiredScopes = platform === "facebook"
     ? ["pages_show_list", "pages_read_engagement"]
@@ -129,8 +129,8 @@ export async function readMetaPosts(platform: MetaPlatform, count: number): Prom
   return data.data ?? [];
 }
 
-async function requireMetaToken(platform: MetaPlatform): Promise<StoredToken> {
-  const token = (await loadTokens())[platform];
+async function requireMetaToken(ownerId: string, platform: MetaPlatform): Promise<StoredToken> {
+  const token = (await loadTokens(ownerId))[platform];
   if (!token) throw new Error(`${platform} is not connected. Start OAuth first.`);
   const requiredScopes = platform === "facebook"
     ? ["pages_show_list", "pages_read_engagement", "pages_manage_posts"]
@@ -171,11 +171,12 @@ async function publishInstagramContainer(
 }
 
 export async function publishFacebookVideo(
+  ownerId: string,
   text: string | undefined,
   videoUrl: string,
   pageId?: string,
 ): Promise<PublishedPost> {
-  const token = await requireMetaToken("facebook");
+  const token = await requireMetaToken(ownerId, "facebook");
   const page = pageForFacebook(token.pages ?? [], pageId);
   const { data } = await apiRequest<{ id?: string }>(facebookGraphVideo(`${page.id}/videos`), {
     method: "POST",
@@ -191,11 +192,12 @@ export async function publishFacebookVideo(
 }
 
 export async function publishInstagramReel(
+  ownerId: string,
   text: string | undefined,
   videoUrl: string,
   instagramAccountId?: string,
 ): Promise<PublishedPost> {
-  const token = await requireMetaToken("instagram");
+  const token = await requireMetaToken(ownerId, "instagram");
   const accountId = selectInstagramAccountId(instagramAccountId, token.accountId);
   const creationId = await createInstagramContainer(
     accountId,
@@ -208,6 +210,7 @@ export async function publishInstagramReel(
 }
 
 export async function publishInstagramCarousel(
+  ownerId: string,
   text: string | undefined,
   imageUrls: string[],
   instagramAccountId?: string,
@@ -215,7 +218,7 @@ export async function publishInstagramCarousel(
   if (imageUrls.length < 2 || imageUrls.length > 10) {
     throw new Error("An Instagram carousel must contain between 2 and 10 images.");
   }
-  const token = await requireMetaToken("instagram");
+  const token = await requireMetaToken(ownerId, "instagram");
   const accountId = selectInstagramAccountId(instagramAccountId, token.accountId);
   const children: string[] = [];
   for (const imageUrl of imageUrls) {
@@ -236,13 +239,14 @@ export async function publishInstagramCarousel(
 }
 
 export async function publishMeta(
+  ownerId: string,
   platform: MetaPlatform,
   text: string | undefined,
   imageUrl: string | undefined,
   pageId?: string,
   instagramAccountId?: string,
 ): Promise<PublishedPost> {
-  const token = (await loadTokens())[platform];
+  const token = (await loadTokens(ownerId))[platform];
   if (!token) throw new Error(`${platform} is not connected. Start OAuth first.`);
   const requiredScopes = platform === "facebook"
     ? ["pages_show_list", "pages_read_engagement", "pages_manage_posts"]

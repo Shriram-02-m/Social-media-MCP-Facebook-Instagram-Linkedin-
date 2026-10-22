@@ -7,6 +7,7 @@ import test from "node:test";
 const directory = await mkdtemp(join(tmpdir(), "social-media-mcp-token-test-"));
 process.env["SOCIAL_MCP_TOKEN_FILE"] = join(directory, "tokens.enc");
 process.env["SOCIAL_MCP_TOKEN_ENCRYPTION_KEY"] = "a".repeat(64);
+process.env["TOKEN_STORE_BACKEND"] = "local";
 process.env["LINKEDIN_CLIENT_ID"] = "test-client";
 process.env["LINKEDIN_CLIENT_SECRET"] = "test-client-secret";
 const tokenStore = await import("../src/auth/token-store.js");
@@ -14,8 +15,10 @@ const { linkedinTokenForUse } = await import("../src/platforms/linkedin.js");
 
 test.after(async () => rm(directory, { recursive: true, force: true }));
 
+const OWNER = "test-owner";
+
 test("LinkedIn refresh token renews and persists an expiring token without changing the local vault format", async () => {
-  await tokenStore.saveTokens({
+  await tokenStore.saveTokens(OWNER, {
     linkedin: {
       accessToken: "old-access-token",
       refreshToken: "old-refresh-token",
@@ -38,18 +41,18 @@ test("LinkedIn refresh token renews and persists an expiring token without chang
     });
   };
   try {
-    const refreshed = await linkedinTokenForUse();
+    const refreshed = await linkedinTokenForUse(OWNER);
     assert.equal(refreshed.accessToken, "new-access-token");
     assert.equal(refreshed.refreshToken, "new-refresh-token");
     assert.ok(refreshed.expiresAt && refreshed.expiresAt > Date.now());
-    assert.equal((await tokenStore.loadTokens()).linkedin?.accessToken, "new-access-token");
+    assert.equal((await tokenStore.loadTokens(OWNER)).linkedin?.accessToken, "new-access-token");
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
 test("expired LinkedIn tokens without a provider refresh token require reauthorization", async () => {
-  await tokenStore.saveTokens({
+  await tokenStore.saveTokens(OWNER, {
     linkedin: {
       accessToken: "expired-access-token",
       expiresAt: Date.now() - 1,
@@ -57,5 +60,5 @@ test("expired LinkedIn tokens without a provider refresh token require reauthori
       connectedAt: Date.now() - 10_000,
     },
   });
-  await assert.rejects(linkedinTokenForUse(), /has no refresh token\. Reauthorize LinkedIn/);
+  await assert.rejects(linkedinTokenForUse(OWNER), /has no refresh token\. Reauthorize LinkedIn/);
 });

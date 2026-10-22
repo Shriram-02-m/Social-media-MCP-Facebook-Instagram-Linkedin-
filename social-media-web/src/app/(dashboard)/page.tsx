@@ -1,4 +1,5 @@
 import { CalendarClock, CheckCircle2, CircleAlert, Send } from "lucide-react";
+import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -9,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { scheduledPostStatus } from "@/lib/backend";
+import { requireAdmin } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -19,17 +21,23 @@ const PLATFORM_LABELS: Record<string, string> = {
 };
 
 export default async function OverviewPage() {
-  const posts = await scheduledPostStatus();
+  const session = await requireAdmin();
+  const posts = await scheduledPostStatus(session.user.id);
 
   const scheduled = posts.filter((post) => post.status === "scheduled").length;
   const published = posts.filter((post) => post.status === "published").length;
   const failed = posts.filter((post) => post.status === "failed").length;
 
-  const stats = [
-    { label: "Scheduled", value: scheduled, icon: CalendarClock },
-    { label: "Published", value: published, icon: CheckCircle2 },
-    { label: "Failed", value: failed, icon: CircleAlert },
-    { label: "Total", value: posts.length, icon: Send },
+  const stats: {
+    label: string;
+    value: number;
+    icon: typeof CalendarClock;
+    href?: string;
+  }[] = [
+    { label: "Scheduled", value: scheduled, icon: CalendarClock, href: "/queue" },
+    { label: "Published", value: published, icon: CheckCircle2, href: "/history" },
+    { label: "Failed", value: failed, icon: CircleAlert, href: "/history" },
+    { label: "Total", value: posts.length, icon: Send, href: "/history" },
   ];
 
   const upcoming = posts
@@ -47,17 +55,33 @@ export default async function OverviewPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <Card key={stat.label}>
-            <CardHeader className="flex flex-row items-center justify-between gap-2">
-              <CardDescription>{stat.label}</CardDescription>
-              <stat.icon className="size-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <span className="text-3xl font-semibold">{stat.value}</span>
-            </CardContent>
-          </Card>
-        ))}
+        {stats.map((stat) => {
+          const contents = (
+            <>
+              <CardHeader className="flex flex-row items-center justify-between gap-2">
+                <CardDescription>{stat.label}</CardDescription>
+                <stat.icon className="size-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <span className="text-3xl font-semibold">{stat.value}</span>
+              </CardContent>
+            </>
+          );
+
+          if (stat.href) {
+            return (
+              <Link
+                key={stat.label}
+                href={stat.href}
+                className="cursor-pointer rounded-xl outline-none transition-colors hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <Card className="h-full">{contents}</Card>
+              </Link>
+            );
+          }
+
+          return <Card key={stat.label}>{contents}</Card>;
+        })}
       </div>
 
       <Card>

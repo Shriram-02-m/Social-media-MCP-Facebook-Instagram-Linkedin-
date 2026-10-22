@@ -38,7 +38,7 @@ test("worker endpoint authenticates requests and scheduler disables its timer in
 test("scheduled cancellation only updates unclaimed jobs", async () => {
   const scheduler = await readFile(new URL("../src/scheduler.ts", import.meta.url), "utf8");
   assert.match(scheduler, /export async function cancelScheduledPost/);
-  assert.match(scheduler, /WHERE id = \$1 AND status = 'scheduled'/);
+  assert.match(scheduler, /WHERE id = \$1 AND user_id = \$2 AND status = 'scheduled'/);
   assert.match(scheduler, /failure_stage = COALESCE\(failure_stage, 'publishing'\)/);
 });
 

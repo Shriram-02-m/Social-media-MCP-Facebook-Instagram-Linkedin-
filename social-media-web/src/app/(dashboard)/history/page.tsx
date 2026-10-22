@@ -9,7 +9,7 @@ export default function HistoryPage() {
           Published, failed, and cancelled posts.
         </p>
       </div>
-      <PostsList statuses={["published", "failed", "cancelled"]} />
+      <PostsList statuses={["published", "cancelled", "failed"]} showFilters />
     </>
   );
 }

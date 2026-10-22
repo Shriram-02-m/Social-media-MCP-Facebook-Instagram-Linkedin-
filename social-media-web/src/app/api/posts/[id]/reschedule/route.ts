@@ -16,7 +16,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireApiSession();
+    const session = await requireApiSession();
     const { id } = await params;
 
     const json = await request.json().catch(() => null);
@@ -25,7 +25,7 @@ export async function POST(
       throw new ApiError(parsed.error.issues[0]?.message ?? "Choose a new date and time.");
     }
 
-    const post = (await scheduledPostStatus()).find((item) => item.id === id);
+    const post = (await scheduledPostStatus(session.user.id)).find((item) => item.id === id);
     if (!post) throw new ApiError("That post was not found.", 404);
     if (!canRescheduleScheduledPost(post.status)) {
       throw new ApiError(
@@ -33,7 +33,7 @@ export async function POST(
       );
     }
 
-    const rescheduled = await rescheduleScheduledPost(id, parsed.data.scheduledAt);
+    const rescheduled = await rescheduleScheduledPost(session.user.id, id, parsed.data.scheduledAt);
     return Response.json({ rescheduled });
   } catch (error) {
     return apiErrorResponse(error);

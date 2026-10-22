@@ -10,11 +10,11 @@ const schema = z.object({
 
 export async function POST(request: Request) {
   try {
-    await requireApiSession();
+    const session = await requireApiSession();
     const body = await request.json().catch(() => null);
     const parsed = schema.safeParse(body);
     if (!parsed.success) throw new ApiError("Invalid request.");
-    const status = await waitForAuthorization(parsed.data.sessionId, parsed.data.timeoutSeconds);
+    const status = await waitForAuthorization(parsed.data.sessionId, parsed.data.timeoutSeconds, session.user.id);
     return Response.json({ status });
   } catch (error) {
     return apiErrorResponse(error);

@@ -1,8 +1,10 @@
 import { CalendarPanel, type CalendarPost } from "./calendar-panel";
 import { scheduledPostStatus } from "@/lib/backend";
+import { requireAdmin } from "@/lib/session";
 
 export default async function CalendarPage() {
-  const posts = await scheduledPostStatus();
+  const session = await requireAdmin();
+  const posts = await scheduledPostStatus(session.user.id);
 
   const entries: CalendarPost[] = posts
     .filter((post) => post.status !== "cancelled")

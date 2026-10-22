@@ -50,6 +50,10 @@ export const config = {
   facebookPageId: value("META_FACEBOOK_PAGE_ID"),
   linkedinAuthorUrn: value("LINKEDIN_AUTHOR_URN"),
   databaseUrl: value("DATABASE_URL"),
+  // Identity used by the single-user stdio MCP server and by rows created before
+  // multi-user support existed. The web app always passes the authenticated
+  // better-auth user id instead of this fallback.
+  ownerUserId: value("MCP_OWNER_USER_ID", "local-owner"),
   databasePoolMax,
   databaseConnectionTimeoutMs,
   databaseIdleTimeoutMs,

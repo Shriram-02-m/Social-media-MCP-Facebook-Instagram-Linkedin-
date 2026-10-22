@@ -13,10 +13,12 @@ const restHeaders = {
   "Linkedin-Version": config.linkedinApiVersion,
   "X-Restli-Protocol-Version": "2.0.0",
 };
-let refreshInFlight: Promise<StoredToken> | undefined;
+// Refresh deduplication is tracked per user so concurrent refreshes for different
+// accounts never share or leak a token.
+const refreshInFlight = new Map<string, Promise<StoredToken>>();
 
-export async function linkedinTokenForUse(): Promise<StoredToken> {
-  const vault = await loadTokens();
+export async function linkedinTokenForUse(ownerId: string): Promise<StoredToken> {
+  const vault = await loadTokens(ownerId);
   const current = vault.linkedin;
   if (!current) throw new Error("LinkedIn is not connected. Start OAuth first.");
   if (current.expiresAt === undefined || current.expiresAt > Date.now() + 60_000) return current;
@@ -26,10 +28,11 @@ export async function linkedinTokenForUse(): Promise<StoredToken> {
   if (!config.linkedinClientId || !config.linkedinClientSecret) {
     throw new Error("LinkedIn token refresh requires LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET.");
   }
-  if (refreshInFlight) return refreshInFlight;
+  const inFlight = refreshInFlight.get(ownerId);
+  if (inFlight) return inFlight;
 
-  refreshInFlight = (async () => {
-    const latestVault = await loadTokens();
+  const refresh = (async () => {
+    const latestVault = await loadTokens(ownerId);
     const latest = latestVault.linkedin;
     if (!latest) throw new Error("LinkedIn is not connected. Start OAuth first.");
     if (latest.expiresAt === undefined || latest.expiresAt > Date.now() + 60_000) return latest;
@@ -55,14 +58,14 @@ export async function linkedinTokenForUse(): Promise<StoredToken> {
       ...(data.refresh_token ? { refreshToken: data.refresh_token } : {}),
       expiresAt: Date.now() + data.expires_in * 1000,
     };
-    await saveTokens({ ...latestVault, linkedin: refreshed });
+    await saveTokens(ownerId, { ...latestVault, linkedin: refreshed });
     return refreshed;
-  })();
-  try {
-    return await refreshInFlight;
-  } finally {
-    refreshInFlight = undefined;
-  }
+  })().finally(() => {
+    refreshInFlight.delete(ownerId);
+  });
+
+  refreshInFlight.set(ownerId, refresh);
+  return refresh;
 }
 
 export function normalizeLinkedInScopes(scopes: string[]): string[] {
@@ -77,8 +80,8 @@ function authorUrn(input?: string, accountId?: string): string {
   return author;
 }
 
-export async function linkedinConnectionStatus(): Promise<Record<string, unknown>> {
-  const token = (await loadTokens()).linkedin;
+export async function linkedinConnectionStatus(ownerId: string): Promise<Record<string, unknown>> {
+  const token = (await loadTokens(ownerId)).linkedin;
   if (!token) return { platform: "linkedin", connected: false, reason: "Authorize this LinkedIn app first." };
   const scopes = normalizeLinkedInScopes(token.scopes);
   try {
@@ -100,8 +103,8 @@ export async function linkedinConnectionStatus(): Promise<Record<string, unknown
   }
 }
 
-export async function linkedinAccountInfo(author?: string): Promise<Record<string, unknown>> {
-  const token = await linkedinTokenForUse();
+export async function linkedinAccountInfo(ownerId: string, author?: string): Promise<Record<string, unknown>> {
+  const token = await linkedinTokenForUse(ownerId);
   const { data } = await apiRequest<LinkedInProfile>("https://api.linkedin.com/v2/userinfo", { accessToken: token.accessToken });
   const scopes = normalizeLinkedInScopes(token.scopes);
   return {
@@ -113,8 +116,8 @@ export async function linkedinAccountInfo(author?: string): Promise<Record<strin
   };
 }
 
-export async function readLinkedInPosts(count: number, author?: string): Promise<LinkedInPost[]> {
-  const token = await linkedinTokenForUse();
+export async function readLinkedInPosts(ownerId: string, count: number, author?: string): Promise<LinkedInPost[]> {
+  const token = await linkedinTokenForUse(ownerId);
   const selectedAuthor = authorUrn(author, token.accountId);
   const readScope = selectedAuthor.startsWith("urn:li:organization:") ? "r_organization_social" : "r_member_social";
   if (!normalizeLinkedInScopes(token.scopes).includes(readScope)) {
@@ -258,6 +261,7 @@ async function uploadVideo(
 }
 
 async function publishLinkedInInternal(
+  ownerId: string,
   text: string | undefined,
   imagePath: string | undefined,
   requestedAuthor: string | undefined,
@@ -265,7 +269,7 @@ async function publishLinkedInInternal(
   document?: { bytes: Buffer; contentType: string; title: string },
   video?: { bytes: Buffer; contentType: string },
 ): Promise<PublishedPost> {
-  const token = await linkedinTokenForUse();
+  const token = await linkedinTokenForUse(ownerId);
   const author = authorUrn(requestedAuthor, token.accountId);
   const writeScope = author.startsWith("urn:li:organization:") ? "w_organization_social" : "w_member_social";
   if (!normalizeLinkedInScopes(token.scopes).includes(writeScope)) {
@@ -300,34 +304,37 @@ async function publishLinkedInInternal(
   return { platform: "linkedin", id: confirmedId(response), confirmed: true };
 }
 
-export async function publishLinkedIn(text?: string, imagePath?: string, requestedAuthor?: string): Promise<PublishedPost> {
-  return publishLinkedInInternal(text, imagePath, requestedAuthor);
+export async function publishLinkedIn(ownerId: string, text?: string, imagePath?: string, requestedAuthor?: string): Promise<PublishedPost> {
+  return publishLinkedInInternal(ownerId, text, imagePath, requestedAuthor);
 }
 
 export async function publishLinkedInWithImage(
+  ownerId: string,
   text: string | undefined,
   bytes: Buffer,
   contentType: string,
   requestedAuthor?: string,
 ): Promise<PublishedPost> {
-  return publishLinkedInInternal(text, undefined, requestedAuthor, { bytes, contentType });
+  return publishLinkedInInternal(ownerId, text, undefined, requestedAuthor, { bytes, contentType });
 }
 
 export async function publishLinkedInWithDocument(
+  ownerId: string,
   text: string | undefined,
   bytes: Buffer,
   contentType: string,
   title: string,
   requestedAuthor?: string,
 ): Promise<PublishedPost> {
-  return publishLinkedInInternal(text, undefined, requestedAuthor, undefined, { bytes, contentType, title });
+  return publishLinkedInInternal(ownerId, text, undefined, requestedAuthor, undefined, { bytes, contentType, title });
 }
 
 export async function publishLinkedInWithVideo(
+  ownerId: string,
   text: string | undefined,
   bytes: Buffer,
   contentType: string,
   requestedAuthor?: string,
 ): Promise<PublishedPost> {
-  return publishLinkedInInternal(text, undefined, requestedAuthor, undefined, undefined, { bytes, contentType });
+  return publishLinkedInInternal(ownerId, text, undefined, requestedAuthor, undefined, undefined, { bytes, contentType });
 }
