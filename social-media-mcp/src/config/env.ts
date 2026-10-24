@@ -24,6 +24,11 @@ const databaseIdleTimeoutMs = integer("DATABASE_IDLE_TIMEOUT_MS", "30000", 1);
 const tokenStoreBackend = value("TOKEN_STORE_BACKEND", "local");
 const scheduledImageStorage = value("SCHEDULED_IMAGE_STORAGE", "local");
 const schedulerMode = value("SCHEDULER_MODE", "local");
+// How browser OAuth callbacks are handled. `local` (default) keeps the
+// localhost/ngrok listener and in-memory sessions; `cloud` persists sessions in
+// PostgreSQL and receives callbacks on the public worker routes. This is
+// independent of SCHEDULER_MODE, TOKEN_STORE_BACKEND, and SCHEDULED_IMAGE_STORAGE.
+const oauthCallbackMode = value("OAUTH_CALLBACK_MODE", "local");
 
 export const config = {
   metaAppId: value("META_APP_ID"),
@@ -37,6 +42,8 @@ export const config = {
   linkedinApiVersion: value("LINKEDIN_API_VERSION", "202609"),
   linkedinScopes: value("LINKEDIN_SCOPES", "openid profile w_member_social").split(/\s+/).filter(Boolean),
   redirectBaseUrl: value("OAUTH_REDIRECT_BASE_URL", defaultLocalBaseUrl).replace(/\/+$/, ""),
+  oauthFrontendBaseUrl: value("OAUTH_FRONTEND_BASE_URL").replace(/\/+$/, ""),
+  oauthCallbackMode,
   imagePublicBaseUrl: value("IMAGE_PUBLIC_BASE_URL", value("OAUTH_REDIRECT_BASE_URL", defaultLocalBaseUrl)).replace(/\/+$/, ""),
   imageServerPort,
   scheduleImageTimeoutMs: integer("SCHEDULE_IMAGE_TIMEOUT_MS", "10000", 1),
@@ -81,6 +88,9 @@ if (config.scheduledImageStorage !== "local" && config.scheduledImageStorage !==
 }
 if (config.schedulerMode !== "local" && config.schedulerMode !== "cloud" && config.schedulerMode !== "disabled") {
   throw new Error("SCHEDULER_MODE must be local, cloud, or disabled.");
+}
+if (config.oauthCallbackMode !== "local" && config.oauthCallbackMode !== "cloud") {
+  throw new Error("OAUTH_CALLBACK_MODE must be either local or cloud.");
 }
 if (config.tokenStoreBackend === "supabase" && (!config.databaseUrl || !config.cloudTokenEncryptionKey)) {
   throw new Error("TOKEN_STORE_BACKEND=supabase requires DATABASE_URL and CLOUD_TOKEN_ENCRYPTION_KEY.");

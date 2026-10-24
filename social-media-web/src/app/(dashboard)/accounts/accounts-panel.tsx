@@ -66,6 +66,28 @@ export function AccountsPanel() {
     load();
   }, [load]);
 
+  // The provider redirects the OAuth tab back to a fixed /accounts page. Surface
+  // the coarse result and refresh the connection list even if the original tab's
+  // polling already finished.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauth = params.get("oauth");
+    if (!oauth) return;
+    const platform = params.get("platform");
+    const label = platform && platform in PLATFORM_LABELS
+      ? PLATFORM_LABELS[platform as PlatformId]
+      : "Social account";
+    if (oauth === "connected") toast.success(`${label} connected.`);
+    else if (oauth === "cancelled") toast.error(`${label} connection was cancelled.`);
+    else if (oauth === "expired") toast.error(`${label} connection request expired. Try again.`);
+    else toast.error(`${label} connection failed. Try again.`);
+    const clean = new URL(window.location.href);
+    clean.searchParams.delete("oauth");
+    clean.searchParams.delete("platform");
+    window.history.replaceState({}, "", `${clean.pathname}${clean.search}${clean.hash}`);
+    load();
+  }, [load]);
+
   const reconnect = useCallback(
     async (platform: PlatformId) => {
       setBusy(platform);
@@ -123,7 +145,7 @@ export function AccountsPanel() {
             finalError ?? `Authorization ended as "${finalStatus}".`,
           );
         } else {
-          setMessage("Authorization did not finish. Check the callback tunnel is running.");
+          setMessage("Authorization did not finish in time. Approve the sign-in in the opened tab, or try again.");
         }
         await load();
       } catch (error) {
@@ -147,9 +169,9 @@ export function AccountsPanel() {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
-        Reconnecting opens the provider sign-in in a new tab and waits for the OAuth
-        callback. The callback tunnel (OAUTH_REDIRECT_BASE_URL) must be reachable while
-        you approve.
+        Reconnecting opens the provider sign-in in a new tab. Approve the requested
+        permissions there; this page updates automatically and you can refresh the
+        connection list if it does not.
       </p>
       {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
 

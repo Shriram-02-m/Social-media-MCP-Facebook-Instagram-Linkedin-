@@ -10,6 +10,7 @@ const migrationNames = [
   "005_linkedin_documents.sql",
   "006_scheduled_post_media.sql",
   "007_multi_user.sql",
+  "008_oauth_sessions.sql",
 ];
 
 let migrations: Promise<void> | undefined;

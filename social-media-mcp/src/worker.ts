@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { closeDatabasePool } from "./database.js";
 import { config } from "./config/env.js";
+import { handleOAuthCallback } from "./auth/oauth-callback.js";
+import { isOAuthCallbackPath } from "./auth/oauth-sessions.js";
 import { processDueJobs } from "./scheduler.js";
 
 let activeWorkerRun: Promise<void> | undefined;
@@ -55,6 +57,17 @@ export function startWorkerServer(): ReturnType<typeof createServer> {
   const server = createServer((request, response) => {
     if (request.method === "GET" && request.url === "/health") {
       respond(response, 200, { status: "ok" });
+      return;
+    }
+    if (request.method === "GET" && isOAuthCallbackPath(request.url)) {
+      void handleOAuthCallback(request, response).catch(() => {
+        if (response.headersSent) {
+          response.end();
+          return;
+        }
+        response.writeHead(500, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" });
+        response.end("OAuth callback failed.");
+      });
       return;
     }
     if (request.method !== "POST" || request.url !== "/worker/run") {

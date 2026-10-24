@@ -29,3 +29,20 @@ services:
         sync: false
       - key: LINKEDIN_CLIENT_SECRET
         sync: false
+      # Public HTML/HTTPS OAuth callbacks (Facebook, Instagram, LinkedIn).
+      - key: OAUTH_CALLBACK_MODE
+        value: cloud
+      - key: OAUTH_REDIRECT_BASE_URL
+        value: https://social-media-cloud-worker.onrender.com
+      # Deployed Vercel frontend origin. Set this in the Render dashboard once the
+      # production frontend URL is known; the callback redirects to /accounts there.
+      - key: OAUTH_FRONTEND_BASE_URL
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: INSTAGRAM_APP_ID
+        sync: false
+      - key: INSTAGRAM_APP_SECRET
+        sync: false

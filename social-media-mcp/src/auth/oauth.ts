@@ -5,26 +5,17 @@ import { apiRequest } from "../utils/http.js";
 import { config } from "../config/env.js";
 import { loadTokens, saveTokens } from "./token-store.js";
 import type { MetaPage, MetaPlatform, Platform, StoredToken } from "../platforms/types.js";
+import {
+  InMemoryOAuthSessionStore,
+  PostgresOAuthSessionStore,
+  authorizationLifetimeMs,
+  claimFailureResult,
+  expectedPlatformsForCallbackPath,
+  type AuthorizationSessionStatus,
+  type OAuthSessionStore,
+} from "./oauth-sessions.js";
 
-interface PendingAuthorization {
-  platform: Platform;
-  userId: string;
-  sessionId: string;
-  expiresAt: number;
-  timer: NodeJS.Timeout;
-  status: "pending" | "connected" | "cancelled" | "failed" | "expired";
-  error?: string;
-  completedAt?: number;
-  waiters: Set<(status: AuthorizationSessionStatus) => void>;
-}
-
-export interface AuthorizationSessionStatus {
-  sessionId: string;
-  platform: Platform;
-  status: PendingAuthorization["status"];
-  expiresAt: number;
-  error?: string;
-}
+export type { AuthorizationSessionStatus, OAuthSessionStore } from "./oauth-sessions.js";
 
 interface MetaPermissions {
   data?: Array<{ permission: string; status: string }>;
@@ -60,47 +51,49 @@ interface InstagramTokenResponse {
   }>;
 }
 
-const pending = new Map<string, PendingAuthorization>();
-const sessions = new Map<string, PendingAuthorization>();
+export type OAuthCallbackOutcome =
+  | { result: "connected"; platform: Platform; sessionId: string }
+  | { result: "cancelled" | "failed" | "expired"; platform?: Platform; sessionId?: string };
+
+export interface OAuthCallbackDependencies {
+  store: OAuthSessionStore;
+  finish: (platform: Platform, userId: string, code: string, redirectUri: string) => Promise<void>;
+}
+
 const scheduledMedia = new Map<string, { imagePath: string; contentType: string }>();
+const inMemoryOAuthSessionStore = new InMemoryOAuthSessionStore();
+const postgresOAuthSessionStore = new PostgresOAuthSessionStore();
 let callbackServer: ReturnType<typeof createServer> | undefined;
 let callbackServerPromise: Promise<void> | undefined;
-
-const authorizationLifetimeMs = 15 * 60 * 1000;
-const sessionRetentionMs = 24 * 60 * 60 * 1000;
 
 export function instagramPermissionScopes(permissions: string | string[] | undefined): string[] {
   if (Array.isArray(permissions)) return permissions.flatMap((permission) => permission.split(/[,\s]+/)).filter(Boolean);
   return permissions?.split(/[,\s]+/).filter(Boolean) ?? [];
 }
 
-function callbackUrl(platform: Platform): string {
+// The exact callback URL registered with each provider. It is derived from the
+// configured base URL (an ngrok tunnel locally, the Render worker in cloud mode)
+// and is persisted with the authorization session so the token exchange reuses
+// byte-identical `redirect_uri` values.
+export function oauthCallbackUrl(platform: Platform): string {
   return `${config.redirectBaseUrl}/oauth/${platform === "linkedin" ? "linkedin" : "meta"}/callback`;
+}
+
+// Store selected by OAUTH_CALLBACK_MODE. Local mode keeps the original in-memory
+// behavior; cloud mode persists sessions in PostgreSQL.
+export function oauthSessionStore(): OAuthSessionStore {
+  return config.oauthCallbackMode === "cloud" ? postgresOAuthSessionStore : inMemoryOAuthSessionStore;
+}
+
+// The public worker always completes callbacks against PostgreSQL, even if it is
+// started without OAUTH_CALLBACK_MODE so an existing deployment cannot break.
+export function oauthPostgresSessionStore(): OAuthSessionStore {
+  return postgresOAuthSessionStore;
 }
 
 function html(response: ServerResponse, message: string, status = 200): void {
   response.writeHead(status, { "content-type": "text/html; charset=utf-8" });
   response.end(`<!doctype html><html><body><p>${message}</p><p>You may close this tab.</p></body></html>`);
-}
-
-function sessionStatus(sessionId: string, session: PendingAuthorization): AuthorizationSessionStatus {
-  return {
-    sessionId,
-    platform: session.platform,
-    status: session.status,
-    expiresAt: session.expiresAt,
-    ...(session.error ? { error: session.error } : {}),
-  };
-}
-
-function completeSession(session: PendingAuthorization, status: PendingAuthorization["status"], error?: string): void {
-  session.status = status;
-  if (error) session.error = error;
-  else delete session.error;
-  session.completedAt = Date.now();
-  const result = sessionStatus(session.sessionId, session);
-  for (const resolve of session.waiters) resolve(result);
-  session.waiters.clear();
 }
 
 function safeErrorMessage(error: unknown): string {
@@ -110,14 +103,11 @@ function safeErrorMessage(error: unknown): string {
     .slice(0, 700);
 }
 
-function pruneSessions(): void {
-  const cutoff = Date.now() - sessionRetentionMs;
-  for (const [sessionId, session] of sessions) {
-    if (session.completedAt !== undefined && session.completedAt < cutoff) sessions.delete(sessionId);
-  }
+function requireClientSecret(name: string, secret: string, provider: string): void {
+  if (!secret) throw new Error(`Set ${name} before completing the ${provider} authorization.`);
 }
 
-function handleCallback(request: IncomingMessage, response: ServerResponse): void {
+async function handleCallback(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const url = new URL(request.url ?? "/", `http://localhost:${config.imageServerPort}`);
   const mediaMatch = /^\/scheduled-media\/([a-f0-9]{64})$/.exec(url.pathname);
   if (mediaMatch && (request.method === "GET" || request.method === "HEAD")) {
@@ -140,51 +130,24 @@ function handleCallback(request: IncomingMessage, response: ServerResponse): voi
     );
     return;
   }
-  if (url.pathname !== "/oauth/meta/callback" && url.pathname !== "/oauth/linkedin/callback") {
+  const expectedPlatforms = expectedPlatformsForCallbackPath(url.pathname);
+  if (!expectedPlatforms) {
     html(response, "This OAuth callback route does not exist.", 404);
     return;
   }
-  const isLinkedIn = url.pathname === "/oauth/linkedin/callback";
-  const state = url.searchParams.get("state");
-  const authorization = state ? pending.get(state) : undefined;
-  if (!authorization || (authorization.platform === "linkedin") !== isLinkedIn) {
-    html(response, "This authorization request is expired or invalid.", 400);
-    return;
-  }
-  clearTimeout(authorization.timer);
-  pending.delete(state!);
-  const code = url.searchParams.get("code");
-  const providerError = url.searchParams.get("error_description")
-    ?? url.searchParams.get("error_reason")
-    ?? url.searchParams.get("error");
-  if (providerError) {
-    completeSession(authorization, "cancelled", "The provider authorization was cancelled or denied.");
+  const outcome = await processOAuthCallback(url.searchParams, expectedPlatforms, {
+    store: inMemoryOAuthSessionStore,
+    finish: finishAuthorization,
+  });
+  if (outcome.result === "connected") {
+    html(response, "Authorization completed. Return to the MCP client and check the connection status.");
+  } else if (outcome.result === "cancelled") {
     html(response, "Authorization was cancelled or denied. Return to the MCP client to start a new request.", 400);
-    return;
+  } else if (outcome.result === "expired") {
+    html(response, "This authorization request is expired or invalid.", 400);
+  } else {
+    html(response, "Authorization could not be completed. Return to the MCP client for status and error details.", 400);
   }
-  if (!code) {
-    completeSession(authorization, "failed", "The provider callback did not include an authorization code.");
-    html(response, "Authorization failed because the provider did not return a code.", 400);
-    return;
-  }
-  void (async () => {
-    if (authorization.platform === "linkedin") {
-      await finishLinkedInAuthorization(authorization.userId, code, callbackUrl("linkedin"));
-    } else if (authorization.platform === "instagram") {
-      await finishInstagramAuthorization(authorization.userId, code, callbackUrl("instagram"));
-    } else {
-      await finishMetaAuthorization(authorization.userId, code, callbackUrl(authorization.platform), authorization.platform);
-    }
-  })().then(
-    () => {
-      completeSession(authorization, "connected");
-      html(response, "Authorization completed. Return to the MCP client and check the connection status.");
-    },
-    (error: unknown) => {
-      completeSession(authorization, "failed", safeErrorMessage(error));
-      html(response, "Authorization could not be completed. Return to the MCP client for status and error details.", 500);
-    },
-  );
 }
 
 export async function registerScheduledMedia(
@@ -204,7 +167,16 @@ export function unregisterScheduledMedia(mediaToken: string): void {
 async function ensureCallbackServer(): Promise<void> {
   if (callbackServer?.listening) return;
   if (callbackServerPromise) return callbackServerPromise;
-  const server = createServer(handleCallback);
+  const server = createServer((request, response) => {
+    void handleCallback(request, response).catch(() => {
+      if (response.headersSent) {
+        response.end();
+        return;
+      }
+      response.writeHead(500, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" });
+      response.end("OAuth callback failed.");
+    });
+  });
   callbackServer = server;
   callbackServerPromise = new Promise<void>((resolve, reject) => {
     const onError = (error: NodeJS.ErrnoException) => {
@@ -225,74 +197,76 @@ async function ensureCallbackServer(): Promise<void> {
   return callbackServerPromise;
 }
 
-function addPending(platform: Platform, userId: string): { state: string; sessionId: string; session: PendingAuthorization } {
-  pruneSessions();
-  const state = randomBytes(32).toString("hex");
-  const sessionId = randomBytes(16).toString("hex");
-  const expiresAt = Date.now() + authorizationLifetimeMs;
-  let session: PendingAuthorization;
-  const timer = setTimeout(() => {
-    pending.delete(state);
-    completeSession(session, "expired", "The authorization request expired before the provider callback arrived.");
-  }, authorizationLifetimeMs);
-  session = {
-    platform,
-    userId,
-    sessionId,
-    expiresAt,
-    timer,
-    status: "pending",
-    waiters: new Set(),
-  };
-  session.timer.unref();
-  pending.set(state, session);
-  sessions.set(sessionId, session);
-  return { state, sessionId, session };
-}
+// Shared callback core used by both the local listener and the public worker
+// callback handler. It claims the state atomically, handles provider
+// cancellation, exchanges the code, and records the terminal status. It never
+// logs or returns the state, code, tokens, or client secrets.
+export async function processOAuthCallback(
+  searchParams: URLSearchParams,
+  expectedPlatforms: readonly Platform[],
+  dependencies: OAuthCallbackDependencies,
+): Promise<OAuthCallbackOutcome> {
+  const state = searchParams.get("state");
+  if (!state) return { result: "failed" };
 
-function requireOwnedSession(sessionId: string, userId: string): PendingAuthorization {
-  const session = sessions.get(sessionId);
-  if (!session || session.userId !== userId) {
-    throw new Error("Authorization session not found or expired. Start a new authorization request.");
+  const claim = await dependencies.store.claim(state, expectedPlatforms);
+  if (!claim.claimed) return { result: claimFailureResult(claim.reason) };
+  const session = claim.session;
+
+  const providerError = searchParams.get("error_description")
+    ?? searchParams.get("error_reason")
+    ?? searchParams.get("error");
+  if (providerError) {
+    await dependencies.store.updateStatus(session.sessionId, "cancelled", "The provider authorization was cancelled or denied.");
+    return { result: "cancelled", platform: session.platform, sessionId: session.sessionId };
   }
-  return session;
+
+  const code = searchParams.get("code");
+  if (!code) {
+    await dependencies.store.updateStatus(session.sessionId, "failed", "The provider callback did not include an authorization code.");
+    return { result: "failed", platform: session.platform, sessionId: session.sessionId };
+  }
+
+  try {
+    await dependencies.finish(session.platform, session.userId, code, session.redirectUri);
+    await dependencies.store.updateStatus(session.sessionId, "connected");
+    return { result: "connected", platform: session.platform, sessionId: session.sessionId };
+  } catch (error) {
+    await dependencies.store.updateStatus(session.sessionId, "failed", safeErrorMessage(error));
+    return { result: "failed", platform: session.platform, sessionId: session.sessionId };
+  }
 }
 
-export function getAuthorizationStatus(sessionId: string, userId: string): AuthorizationSessionStatus {
-  const session = requireOwnedSession(sessionId, userId);
-  return sessionStatus(sessionId, session);
+export async function getAuthorizationStatus(sessionId: string, userId: string): Promise<AuthorizationSessionStatus> {
+  return oauthSessionStore().getStatus(sessionId, userId);
 }
 
-export function waitForAuthorization(
+export async function waitForAuthorization(
   sessionId: string,
   timeoutSeconds: number,
   userId: string,
 ): Promise<AuthorizationSessionStatus> {
-  const session = requireOwnedSession(sessionId, userId);
-  if (session.status !== "pending" || timeoutSeconds === 0) return Promise.resolve(sessionStatus(sessionId, session));
-  return new Promise((resolve) => {
-    let timer: NodeJS.Timeout;
-    const finish = (status: AuthorizationSessionStatus) => {
-      clearTimeout(timer);
-      session.waiters.delete(finish);
-      resolve(status);
-    };
-    timer = setTimeout(() => finish(sessionStatus(sessionId, session)), timeoutSeconds * 1000);
-    session.waiters.add(finish);
-  });
+  return oauthSessionStore().waitForStatus(sessionId, userId, timeoutSeconds);
 }
 
-function validateAuthorizationConfiguration(platform: Platform): void {
-  if (platform === "linkedin" && (!config.linkedinClientId || !config.linkedinClientSecret)) {
-    throw new Error("Set LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET before connecting LinkedIn.");
+export function validateAuthorizationConfiguration(platform: Platform): void {
+  const cloud = config.oauthCallbackMode === "cloud";
+  if (platform === "linkedin") {
+    if (!config.linkedinClientId) throw new Error("Set LINKEDIN_CLIENT_ID before connecting LinkedIn.");
+    if (!cloud && !config.linkedinClientSecret) throw new Error("Set LINKEDIN_CLIENT_SECRET before connecting LinkedIn.");
   }
-  if (platform === "facebook" && (!config.metaAppId || !config.metaAppSecret)) {
-    throw new Error("Set META_APP_ID and META_APP_SECRET before connecting Facebook.");
+  if (platform === "facebook") {
+    if (!config.metaAppId) throw new Error("Set META_APP_ID before connecting Facebook.");
+    if (!cloud && !config.metaAppSecret) throw new Error("Set META_APP_SECRET before connecting Facebook.");
   }
-  if (platform === "instagram" && (!config.instagramAppId || !config.instagramAppSecret)) {
-    throw new Error("Set INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET before connecting Instagram.");
+  if (platform === "instagram") {
+    if (!config.instagramAppId) throw new Error("Set INSTAGRAM_APP_ID before connecting Instagram.");
+    if (!cloud && !config.instagramAppSecret) throw new Error("Set INSTAGRAM_APP_SECRET before connecting Instagram.");
   }
-  const redirectUri = callbackUrl(platform);
+  const redirectUri = oauthCallbackUrl(platform);
+  if (cloud && !redirectUri.startsWith("https://")) {
+    throw new Error("OAUTH_CALLBACK_MODE=cloud requires OAUTH_REDIRECT_BASE_URL to be a public HTTPS base URL (for example the deployed worker URL).");
+  }
   if (platform === "linkedin" && !redirectUri.startsWith("https://")) {
     throw new Error("LinkedIn requires an HTTPS callback URL. Set OAUTH_REDIRECT_BASE_URL to an HTTPS tunnel URL and register the matching callback in your LinkedIn app.");
   }
@@ -307,9 +281,14 @@ export async function beginAuthorization(platform: Platform, userId: string): Pr
   expiresAt: number;
 }> {
   validateAuthorizationConfiguration(platform);
-  await ensureCallbackServer();
-  const redirectUri = callbackUrl(platform);
-  const { state, sessionId, session } = addPending(platform, userId);
+  const redirectUri = oauthCallbackUrl(platform);
+  // Only local development needs the localhost listener. A cloud worker or
+  // Vercel request must not bind a local port to receive the callback.
+  if (config.oauthCallbackMode !== "cloud") await ensureCallbackServer();
+  const state = randomBytes(32).toString("hex");
+  const sessionId = randomBytes(16).toString("hex");
+  const expiresAt = Date.now() + authorizationLifetimeMs;
+  await oauthSessionStore().create({ sessionId, state, userId, platform, redirectUri, expiresAt });
   if (platform === "linkedin") {
     const url = new URL("https://www.linkedin.com/oauth/v2/authorization");
     url.search = new URLSearchParams({
@@ -319,7 +298,7 @@ export async function beginAuthorization(platform: Platform, userId: string): Pr
       state,
       scope: config.linkedinScopes.join(" "),
     }).toString();
-    return { authorizationUrl: url.toString(), sessionId, expiresAt: session.expiresAt };
+    return { authorizationUrl: url.toString(), sessionId, expiresAt };
   }
   if (platform === "instagram") {
     const url = new URL("https://www.instagram.com/oauth/authorize");
@@ -331,7 +310,7 @@ export async function beginAuthorization(platform: Platform, userId: string): Pr
       scope: config.instagramScopes.join(","),
       enable_fb_login: "false",
     }).toString();
-    return { authorizationUrl: url.toString(), sessionId, expiresAt: session.expiresAt };
+    return { authorizationUrl: url.toString(), sessionId, expiresAt };
   }
   const url = new URL(`https://www.facebook.com/${config.metaGraphVersion}/dialog/oauth`);
   url.search = new URLSearchParams({
@@ -341,7 +320,30 @@ export async function beginAuthorization(platform: Platform, userId: string): Pr
     response_type: "code",
     scope: ["pages_show_list", "pages_read_engagement", "pages_manage_posts"].join(","),
   }).toString();
-  return { authorizationUrl: url.toString(), sessionId, expiresAt: session.expiresAt };
+  return { authorizationUrl: url.toString(), sessionId, expiresAt };
+}
+
+// Dispatches to the correct provider exchange. The platform stored in the
+// authorization session decides which credentials and token slot are used, so a
+// Facebook authorization can never overwrite an Instagram token.
+export async function finishAuthorization(
+  platform: Platform,
+  userId: string,
+  code: string,
+  redirectUri: string,
+): Promise<void> {
+  if (platform === "linkedin") {
+    requireClientSecret("LINKEDIN_CLIENT_SECRET", config.linkedinClientSecret, "LinkedIn");
+    await finishLinkedInAuthorization(userId, code, redirectUri);
+    return;
+  }
+  if (platform === "instagram") {
+    requireClientSecret("INSTAGRAM_APP_SECRET", config.instagramAppSecret, "Instagram");
+    await finishInstagramAuthorization(userId, code, redirectUri);
+    return;
+  }
+  requireClientSecret("META_APP_SECRET", config.metaAppSecret, "Facebook");
+  await finishMetaAuthorization(userId, code, redirectUri, platform);
 }
 
 async function finishInstagramAuthorization(userId: string, code: string, redirectUri: string): Promise<void> {

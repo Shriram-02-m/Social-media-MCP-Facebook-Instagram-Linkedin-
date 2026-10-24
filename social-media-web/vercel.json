@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "installCommand": "npm ci && cd ../social-media-mcp && npm ci",
+  "buildCommand": "cd ../social-media-mcp && npm run build && cd ../social-media-web && npm run build"
+}

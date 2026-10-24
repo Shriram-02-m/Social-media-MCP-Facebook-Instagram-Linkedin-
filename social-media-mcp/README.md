@@ -7,7 +7,7 @@ An independent Node.js/TypeScript MCP server for Instagram professional accounts
 - Node.js 20+ and npm.
 - A Meta developer app for Facebook, an Instagram app configured for Instagram Login, and a LinkedIn developer app.
 - A local image file when creating a scheduled post; the selected local or cloud storage backend handles delivery.
-- A public HTTPS callback/tunnel URL only when completing OAuth locally. Cloud scheduled delivery does not depend on ngrok.
+- A public HTTPS callback URL when completing OAuth. Use a local ngrok tunnel in `local` mode or the deployed Render worker in `cloud` mode. Cloud scheduled delivery does not depend on ngrok.
 
 Install and build from this directory:
 
@@ -23,7 +23,7 @@ Put the generated 64-character hex key in `SOCIAL_MCP_TOKEN_ENCRYPTION_KEY`. The
 
 Set `DATABASE_URL` to your Supabase PostgreSQL connection string. Use the direct connection when IPv6 is available, or the Supabase session pooler for IPv4-only environments; URL-encode special characters in the password and require TLS (`sslmode=require`). The scheduler uses a bounded `pg` connection pool and never prints the connection string. Run `npm run db:check` to test `SELECT NOW()` without displaying credentials.
 
-Scheduled-post records and delivery state are stored in the Supabase `public.scheduled_posts` table. `npm run db:migrate` applies the repeatable migrations `001`-`003` and `005`; they preserve rows, add constraints and cloud object references, add optional LinkedIn document columns and the `application/pdf` Storage MIME type, and create the server-only token table and private Storage bucket. Migration `004` is intentionally manual because it requires a real, deployed Render URL and secrets in Supabase Vault. The app uses an atomic `FOR UPDATE SKIP LOCKED` claim so concurrent processes do not take the same due job.
+Scheduled-post records and delivery state are stored in the Supabase `public.scheduled_posts` table. `npm run db:migrate` applies the repeatable migrations `001`-`003` and `005`-`008`; they preserve rows, add constraints and cloud object references, add optional LinkedIn document columns and the `application/pdf` Storage MIME type, create the server-only token table and private Storage bucket, add multi-user ownership, and create the server-only `oauth_authorization_sessions` table used by cloud OAuth callbacks. Migration `004` is intentionally manual because it requires a real, deployed Render URL and secrets in Supabase Vault. The app uses an atomic `FOR UPDATE SKIP LOCKED` claim so concurrent processes do not take the same due job.
 
 By default, `SCHEDULER_MODE=local` uses a `setInterval` loop in the MCP process and local images/tokens, so the MCP process, local image server, and ngrok must stay running. The opt-in cloud configuration and deployment steps are described below. Code being present is not evidence that your Render service or Supabase Cron has been deployed.
 
@@ -31,7 +31,7 @@ By default, `SCHEDULER_MODE=local` uses a `setInterval` loop in the MCP process 
 
 1. Set `DATABASE_URL` in the private `.env` using the connection URI from Supabase **Project Settings → Database**. Do not commit `.env`.
 2. Check connectivity: `npm run db:check`.
-3. Run `npm run db:migrate`, then `npm run build` and `npm test`. Migrations `001`-`003` and `005` are safe to rerun; the app also applies them when its scheduler starts.
+3. Run `npm run db:migrate`, then `npm run build` and `npm test`. Migrations `001`-`003` and `005`-`008` are safe to rerun; the app also applies them when its scheduler starts.
 4. Start or restart the MCP server. Existing scheduled-post rows are not copied from another database automatically.
 
 Pool settings are `DATABASE_POOL_MAX` (default `5`), `DATABASE_CONNECTION_TIMEOUT_MS` (default `10000`), and `DATABASE_IDLE_TIMEOUT_MS` (default `30000`).
@@ -55,7 +55,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'
 
 Use the 64-character hex value for `CLOUD_TOKEN_ENCRYPTION_KEY`; use the second value as `WORKER_TRIGGER_SECRET`. Keep the latter identical in Render and Supabase Vault. Never put the service-role key or either secret in source control, client applications, or logs.
 
-1. Set the cloud variables in the local MCP server environment, then run `npm run db:migrate`. Migrations `001`-`003` and `005` are repeatable; they preserve scheduled rows, add the cloud object-path and optional LinkedIn document columns, add the encrypted `oauth_tokens` table, and create the private image bucket. The cloud migration refuses to use a bucket named `social-media-images` if it is public. The database connection needs permission to apply these migrations.
+1. Set the cloud variables in the local MCP server environment, then run `npm run db:migrate`. Migrations `001`-`003` and `005`-`008` are repeatable; they preserve scheduled rows, add the cloud object-path and optional LinkedIn document columns, add the encrypted `oauth_tokens` table, add multi-user ownership, create the server-only `oauth_authorization_sessions` table, and create the private image bucket. The cloud migration refuses to use a bucket named `social-media-images` if it is public. The database connection needs permission to apply these migrations.
 2. Stop any currently running local MCP scheduler before migrating pending jobs. Run `npm run tokens:migrate` while the local encrypted vault and `SOCIAL_MCP_TOKEN_ENCRYPTION_KEY` are still available. It inserts encrypted token records and refuses to overwrite existing cloud token rows unless explicitly invoked with `npm run tokens:migrate -- --overwrite`. The local vault is never removed or modified. LinkedIn refresh is attempted only when LinkedIn issued a refresh token; expired or revoked Meta tokens and tokens without a provider refresh token require provider reauthorization.
 3. Run `npm run images:migrate` on the computer that has the original scheduled image files. It uploads scheduled jobs and retryable image-validation failures, stores their cloud object paths, and leaves both the local files and database `image_path` values intact. Run this before enabling cloud Cron. Jobs whose source files are missing are reported as errors and need manual repair or rescheduling.
 4. Configure the MCP process for cloud job creation and management:
@@ -70,12 +70,28 @@ New scheduled images are uploaded at scheduling time. Keep using a local image f
 
 #### Deploy the Render Node worker
 
-1. Push the project to GitHub and create a Render Blueprint from `render.yaml`, or create a paid Node web service with the same build/start/health settings. The blueprint uses a paid Starter web service so it does not sleep between Cron requests.
-2. Set these private Render environment variables: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CLOUD_TOKEN_ENCRYPTION_KEY`, and `WORKER_TRIGGER_SECRET`. Also set `LINKEDIN_CLIENT_ID` and `LINKEDIN_CLIENT_SECRET` if you want the worker to refresh LinkedIn tokens that include a refresh token. Set the Render service to use the values of `SCHEDULER_MODE=cloud`, `TOKEN_STORE_BACKEND=supabase`, and `SCHEDULED_IMAGE_STORAGE=supabase` from the blueprint.
+1. Push the project to GitHub and create a Render Blueprint from `render.yaml`, or create a Node web service with the same build/start/health settings. The checked-in blueprint uses `plan: free`. A free instance sleeps after inactivity, which is fine for the one-minute Cron trigger (the next request wakes it) but adds cold-start latency to OAuth callbacks; a paid always-on instance is advisable if you need callbacks to be consistently fast. Do not assume the plan was changed automatically.
+2. Set these private Render environment variables: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CLOUD_TOKEN_ENCRYPTION_KEY`, and `WORKER_TRIGGER_SECRET`. Also set `OAUTH_CALLBACK_MODE=cloud`, `OAUTH_REDIRECT_BASE_URL` (the public Render HTTPS base URL), `OAUTH_FRONTEND_BASE_URL` (the deployed Vercel origin), `META_APP_ID`, `META_APP_SECRET`, `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `LINKEDIN_CLIENT_ID`, and `LINKEDIN_CLIENT_SECRET` so the worker can complete Facebook, Instagram, and LinkedIn callbacks and refresh LinkedIn tokens. Set the Render service to use the values of `SCHEDULER_MODE=cloud`, `TOKEN_STORE_BACKEND=supabase`, and `SCHEDULED_IMAGE_STORAGE=supabase` from the blueprint.
 3. Confirm `https://<render-service>/health` returns `{"status":"ok"}`. The worker has no local timer; `POST /worker/run` requires `Authorization: Bearer <WORKER_TRIGGER_SECRET>` and returns `202` after accepting a processing run. Its logs include run/job IDs and statuses, never tokens or signed image URLs.
 4. In Supabase Dashboard → Vault, add secrets named `social_worker_url` (the Render HTTPS base URL) and `social_worker_secret` (the same random value as Render's `WORKER_TRIGGER_SECRET`). Enable Supabase Vault, `pg_cron`, and `pg_net` if not already enabled.
 5. Only after the Render service is deployed and both Vault secrets exist, run `migrations/004_supabase_cron.sql` in the Supabase SQL Editor. It schedules a one-minute HTTPS trigger and is safe to rerun. It deliberately fails rather than installing a job with a placeholder endpoint or missing secret.
 6. Verify in Supabase Cron that `social-media-cloud-worker` runs every minute; inspect `cron.job_run_details`, the recent HTTP statuses in `net._http_response`, and the Render service logs. A `202` confirms the run was accepted, not that a post was published. Verify a test post end-to-end with a future schedule and authorized test content before relying on production publishing. Disable the job with `SELECT cron.unschedule(jobid) FROM cron.job WHERE jobname = 'social-media-cloud-worker';`.
+
+#### Cloud OAuth callbacks (Facebook, Instagram, LinkedIn)
+
+`OAUTH_CALLBACK_MODE` selects how browser OAuth is completed and is independent of scheduler, token-store, and image-storage modes; it defaults to `local`.
+
+- `local` (default): the MCP process and the same Node process's HTTP listener on `IMAGE_SERVER_PORT` (with an ngrok tunnel) receive callbacks, and authorization sessions live in process memory. Restarting the process invalidates pending authorizations.
+- `cloud`: the frontend starts OAuth, the backend persists the state, session id, user id, platform, exact redirect URI, status, and expiry in the `public.oauth_authorization_sessions` table, and the public Render worker receives the callback. No local listener is started from a Vercel request, and pending state survives restarts and multiple instances. The callback claims the state with a single atomic conditional `UPDATE`, rejects unknown, expired, already-used, and wrong-platform states, and stores only the SHA-256 digest of the state value. OAuth codes, access tokens, refresh tokens, client secrets, and raw provider errors are never written to the browser response or to logs.
+
+Set the same `OAUTH_CALLBACK_MODE=cloud`, `OAUTH_REDIRECT_BASE_URL`, and `OAUTH_FRONTEND_BASE_URL` on Render **and** Vercel, then register the public callback URLs in the provider dashboards:
+
+- Facebook and Instagram: `https://social-media-cloud-worker.onrender.com/oauth/meta/callback`
+- LinkedIn: `https://social-media-cloud-worker.onrender.com/oauth/linkedin/callback`
+
+Vercel needs only the public client IDs (`META_APP_ID`, `INSTAGRAM_APP_ID`, `LINKEDIN_CLIENT_ID`), `DATABASE_URL`, `OAUTH_CALLBACK_MODE=cloud`, `OAUTH_REDIRECT_BASE_URL`, and `OAUTH_FRONTEND_BASE_URL`. Never put provider client secrets, `CLOUD_TOKEN_ENCRYPTION_KEY`, or `WORKER_TRIGGER_SECRET` on Vercel. The frontend redirect target is fixed to `<OAUTH_FRONTEND_BASE_URL>/accounts`, so a callback can never be turned into an open redirect. If `OAUTH_FRONTEND_BASE_URL` is unset, the worker renders a static result page instead of redirecting.
+
+`social-media-web/vercel.json` builds the backend first (`npm run build` in `social-media-mcp`) so the generated `dist/` that the frontend imports exists before `next build`; both `package-lock.json` files are respected. Set the Vercel project **Root Directory** to `social-media-web`.
 
 The worker atomically claims at most 10 due posts per invocation. Stale `publishing` jobs become failed after 30 minutes and are **not** automatically requeued because the provider outcome could be uncertain. `social_retry_scheduled_post` only permits retry after recorded pre-publish token or image validation failure; for publishing failures, check the platform first and create a replacement only after confirming no post exists. LinkedIn tokens with a provider-issued refresh token are refreshed before expiry; without one, reauthorize. Meta long-lived/Page token expiry is checked and requires reauthorization if expired. `social_cancel_scheduled_post` can cancel only jobs still in `scheduled` status. Images are retained in Storage after publishing so existing result records remain auditable; no automatic retention deletion is configured.
 
@@ -133,7 +149,7 @@ For **local mode**, the MCP process must also remain running at scheduled times.
 
 ## Facebook App Setup
 
-Create a Meta app in the [Meta for Developers dashboard](https://developers.facebook.com/apps/), configure Facebook Login, and add the exact HTTPS callback URL `https://YOUR-NGROK-HOST/oauth/meta/callback` to its valid OAuth redirect URIs. Also add the tunnel hostname (without `https://` or a path) to the Facebook app's **App Domains**. The tunnel must forward requests to the configured `IMAGE_SERVER_PORT`. Copy the app ID and secret to `META_APP_ID` and `META_APP_SECRET`. These credentials are used for Facebook only.
+Create a Meta app in the [Meta for Developers dashboard](https://developers.facebook.com/apps/), configure Facebook Login, and add the exact HTTPS callback URL `https://YOUR-NGROK-HOST/oauth/meta/callback` (for cloud mode, `https://social-media-cloud-worker.onrender.com/oauth/meta/callback`) to its valid OAuth redirect URIs. Also add the tunnel hostname (without `https://` or a path) to the Facebook app's **App Domains**. The tunnel must forward requests to the configured `IMAGE_SERVER_PORT`. Copy the app ID and secret to `META_APP_ID` and `META_APP_SECRET`. These credentials are used for Facebook only.
 
 Facebook Page posting requires a Page access token and a Page task that permits content creation. The server requests `pages_show_list`, `pages_read_engagement`, and `pages_manage_posts`. `pages_manage_posts` depends on the other two permissions.
 
@@ -141,7 +157,7 @@ Facebook Page posting requires a Page access token and a Page task that permits 
 
 This server uses **Instagram API with Instagram Login** for Instagram, independently of the Facebook app. In the Meta developer dashboard, configure the app's Instagram product/API setup with Instagram Login and Business Login settings. Add the app's Instagram App ID and App Secret to `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET` (not the `META_APP_*` fields).
 
-Set `OAUTH_REDIRECT_BASE_URL` and `IMAGE_PUBLIC_BASE_URL` to your public HTTPS tunnel URL and forward it to the configured `IMAGE_SERVER_PORT`. Add the exact callback URL `https://YOUR-NGROK-HOST/oauth/meta/callback` to the Instagram app's OAuth redirect URIs. Instagram Login needs HTTPS; plain localhost is not sufficient. The Instagram account must be a **professional Business or Creator account**, but it does not need to be linked to a Facebook Page.
+Set `OAUTH_REDIRECT_BASE_URL` and `IMAGE_PUBLIC_BASE_URL` to your public HTTPS tunnel URL and forward it to the configured `IMAGE_SERVER_PORT`. Add the exact callback URL `https://YOUR-NGROK-HOST/oauth/meta/callback` (for cloud mode, `https://social-media-cloud-worker.onrender.com/oauth/meta/callback`) to the Instagram app's OAuth redirect URIs. Instagram Login needs HTTPS; plain localhost is not sufficient. The Instagram account must be a **professional Business or Creator account**, but it does not need to be linked to a Facebook Page.
 
 The server requests `instagram_business_basic` for account/media access and `instagram_business_content_publish` for publishing. Instagram image posts require a publicly reachable HTTPS image URL; text-only Instagram posts are not supported. Meta may require app review and Advanced Access when serving accounts beyond the app's own or managed accounts. This Instagram Login integration does not use Facebook Page tokens or permissions.
 
@@ -151,7 +167,7 @@ In development mode, Meta generally limits app use to app-role users and test as
 
 ## LinkedIn App Setup
 
-Create an app in the [LinkedIn Developer Portal](https://www.linkedin.com/developers/apps), associate it with a LinkedIn Page, and add the exact HTTPS redirect URL `https://YOUR-NGROK-HOST/oauth/linkedin/callback`.
+Create an app in the [LinkedIn Developer Portal](https://www.linkedin.com/developers/apps), associate it with a LinkedIn Page, and add the exact HTTPS redirect URL `https://YOUR-NGROK-HOST/oauth/linkedin/callback` (for cloud mode, `https://social-media-cloud-worker.onrender.com/oauth/linkedin/callback`).
 
 Set `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`, and `OAUTH_REDIRECT_BASE_URL=https://YOUR-NGROK-HOST`. Forward that HTTPS tunnel to `http://localhost:IMAGE_SERVER_PORT` (replace with the configured numeric port). The app's Auth tab must allow each requested scope. The default `LINKEDIN_SCOPES` is `openid profile w_member_social`.
 
@@ -202,6 +218,9 @@ For a multi-platform request, each target is attempted independently. One platfo
 `npm test` exercises offline validation; `npm run typecheck` checks strict TypeScript. `npm run build` prepares the configured OpenCode command. No real post is needed to test the MCP handshake or dry-run.
 
 - OAuth callback errors: check the exact registered redirect URI and `OAUTH_REDIRECT_BASE_URL`. LinkedIn requires HTTPS; tunnel it to the configured `IMAGE_SERVER_PORT`.
+- Cloud OAuth callback 404: the worker commit is missing the `/oauth/*/callback` routes or Render is running a branch other than `dev`. Confirm `GET /health` returns `{"status":"ok"}` and redeploy the current commit.
+- Cloud callback redirects to `/accounts?oauth=failed`: the state was unknown, expired, already used, or presented on the wrong platform route, or the token exchange failed. Check the authorization-session status and the worker logs; never log or share OAuth codes, state values, or tokens.
+- Cloud callback redirects to `/accounts?oauth=connected` but the account still shows disconnected: verify the token was saved for the same user id and that `TOKEN_STORE_BACKEND`, `DATABASE_URL`, and `CLOUD_TOKEN_ENCRYPTION_KEY` match between the worker and the deployment that reads the status.
 - Local image route connection refused: confirm the MCP process is running and `IMAGE_SERVER_PORT` matches the port passed to `ngrok http`.
 - Local route returns 404: the scheduled image token is missing from the running process or the tunnel is aimed at the wrong local application/port. Restart the MCP server with pending jobs loaded, and verify the ngrok target.
 - Public route returns 404 while the local route is healthy: the ngrok tunnel may be stopped, forwarding to the wrong port, or using an outdated hostname. Update `IMAGE_PUBLIC_BASE_URL` (and OAuth URL when needed), restart the MCP server, and rerun `ngrok http` against `IMAGE_SERVER_PORT`.
