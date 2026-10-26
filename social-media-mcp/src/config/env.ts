@@ -1,6 +1,23 @@
 import { fileURLToPath } from "node:url";
+import os from "node:os";
 import path from "node:path";
 import dotenv from "dotenv";
+
+// Directory for local-only state (developer token vault, scheduled-media files).
+// `USERPROFILE`/`HOME` are unset inside serverless runtimes; falling back to the
+// OS temp directory keeps the path absolute there so local-mode code never
+// attempts a relative mkdir like `.social-media-mcp` (ENOENT). Production must
+// use the cloud backends (`TOKEN_STORE_BACKEND=supabase` /
+// `SCHEDULED_IMAGE_STORAGE=supabase`) instead of this local fallback.
+function localStateDirectory(): string {
+  const configured = process.env["USERPROFILE"] || process.env["HOME"];
+  if (configured) return configured;
+  try {
+    return os.homedir() || os.tmpdir();
+  } catch {
+    return os.tmpdir();
+  }
+}
 
 dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.env") });
 
@@ -76,7 +93,7 @@ export const config = {
   tokenEncryptionKey: value("SOCIAL_MCP_TOKEN_ENCRYPTION_KEY"),
   tokenFile: value(
     "SOCIAL_MCP_TOKEN_FILE",
-    path.join(process.env["USERPROFILE"] ?? process.env["HOME"] ?? ".", ".social-media-mcp", "tokens.enc"),
+    path.join(localStateDirectory(), ".social-media-mcp", "tokens.enc"),
   ),
 };
 
