@@ -86,6 +86,11 @@ export const config = {
   supabaseStorageBucket: "social-media-images",
   tokenStoreBackend,
   cloudTokenEncryptionKey: value("CLOUD_TOKEN_ENCRYPTION_KEY"),
+  // Encrypts user-owned Developer App secrets (AES-256-GCM). It is validated on
+  // use rather than at startup so a deployment can add the key without breaking
+  // existing shared-credential users. Required in every runtime that encrypts or
+  // decrypts an app secret (the web API on Vercel and the cloud worker on Render).
+  appCredentialEncryptionKey: value("APP_CREDENTIAL_ENCRYPTION_KEY"),
   scheduledImageStorage,
   schedulerMode,
   workerPort: integer("PORT", "10000", 1),

@@ -217,6 +217,69 @@ test("migration 008 creates an idempotent, RLS-protected OAuth session table", a
   assert.doesNotMatch(sql, /\bDROP\s+TABLE\b|\bDELETE\s+FROM\b/i);
 });
 
+test("callback forwards the credential fingerprint recorded at authorization start", async () => {
+  const store = new InMemoryOAuthSessionStore();
+  await store.create(sessionInput({
+    sessionId: "fp",
+    state: "fp-state",
+    userId: "henry",
+    appCredentialFingerprint: "fingerprint-abc",
+  }));
+  let received: string | undefined = "sentinel";
+
+  const outcome = await processOAuthCallback(
+    new URLSearchParams({ state: "fp-state", code: "code-1" }),
+    ["linkedin"],
+    {
+      store,
+      finish: async (_platform, _userId, _code, _redirectUri, fingerprint) => {
+        received = fingerprint;
+      },
+    },
+  );
+
+  assert.equal(outcome.result, "connected");
+  assert.equal(received, "fingerprint-abc");
+});
+
+test("callback passes no fingerprint for a legacy session without one", async () => {
+  const store = new InMemoryOAuthSessionStore();
+  await store.create(sessionInput({ sessionId: "legacy", state: "legacy-state", userId: "iris" }));
+  let received: string | undefined = "sentinel";
+
+  const outcome = await processOAuthCallback(
+    new URLSearchParams({ state: "legacy-state", code: "code-2" }),
+    ["linkedin"],
+    {
+      store,
+      finish: async (_platform, _userId, _code, _redirectUri, fingerprint) => {
+        received = fingerprint;
+      },
+    },
+  );
+
+  assert.equal(outcome.result, "connected");
+  assert.equal(received, undefined);
+});
+
+test("migration 009 adds user-owned app credentials and pins the session fingerprint", async () => {
+  const sql = await readFile(new URL("../migrations/009_user_app_credentials.sql", import.meta.url), "utf8");
+
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS public\.oauth_app_credentials/i);
+  assert.match(sql, /provider TEXT NOT NULL CHECK \(provider IN \('instagram', 'facebook', 'linkedin'\)\)/i);
+  assert.match(sql, /client_id TEXT NOT NULL/i);
+  assert.match(sql, /client_secret_ciphertext JSONB NOT NULL/i);
+  assert.match(sql, /PRIMARY KEY \(user_id, provider\)/i);
+  assert.match(sql, /created_at TIMESTAMPTZ NOT NULL DEFAULT NOW\(\)/i);
+  assert.match(sql, /updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW\(\)/i);
+  assert.match(sql, /ENABLE ROW LEVEL SECURITY/i);
+  assert.match(sql, /REVOKE ALL ON TABLE public\.oauth_app_credentials/i);
+  assert.match(sql, /GRANT ALL ON TABLE public\.oauth_app_credentials TO service_role/i);
+  assert.match(sql, /ALTER TABLE public\.oauth_authorization_sessions[\s\S]*ADD COLUMN IF NOT EXISTS app_credential_fingerprint TEXT/i);
+  // Additive only: existing tokens, posts, and sessions are never removed.
+  assert.doesNotMatch(sql, /\bDROP\s+TABLE\b|\bDELETE\s+FROM\b|\bDROP\s+COLUMN\b/i);
+});
+
 test("worker registers the public OAuth callback routes without changing worker auth", async () => {
   const worker = await readFile(new URL("../src/worker.ts", import.meta.url), "utf8");
   assert.match(worker, /isOAuthCallbackPath\(request\.url\)/);

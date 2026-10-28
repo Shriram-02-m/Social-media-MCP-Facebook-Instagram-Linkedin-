@@ -62,3 +62,62 @@ test("expired LinkedIn tokens without a provider refresh token require reauthori
   });
   await assert.rejects(linkedinTokenForUse(OWNER), /has no refresh token\. Reauthorize LinkedIn/);
 });
+
+test("refresh uses the user-owned LinkedIn app credentials when resolved", async () => {
+  await tokenStore.saveTokens(OWNER, {
+    linkedin: {
+      accessToken: "user-owned-old",
+      refreshToken: "user-owned-refresh",
+      expiresAt: Date.now() - 1,
+      scopes: ["w_member_social"],
+      connectedAt: Date.now() - 10_000,
+    },
+  });
+  const resolver = async (userId: string) => {
+    assert.equal(userId, OWNER);
+    return {
+      provider: "linkedin" as const,
+      source: "user" as const,
+      clientId: "user-app-id",
+      clientSecret: "user-app-secret",
+      fingerprint: "f".repeat(64),
+    };
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    assert.equal(String(input), "https://www.linkedin.com/oauth/v2/accessToken");
+    const body = String(init?.body);
+    assert.match(body, /grant_type=refresh_token/);
+    assert.match(body, /refresh_token=user-owned-refresh/);
+    // The refresh must carry the issuing app's own id and secret.
+    assert.match(body, /client_id=user-app-id/);
+    assert.match(body, /client_secret=user-app-secret/);
+    return Response.json({ access_token: "user-owned-new", expires_in: 3600 });
+  };
+  try {
+    const refreshed = await linkedinTokenForUse(OWNER, resolver);
+    assert.equal(refreshed.accessToken, "user-owned-new");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("refresh surfaces an actionable error when the resolved app is incomplete", async () => {
+  await tokenStore.saveTokens(OWNER, {
+    linkedin: {
+      accessToken: "incomplete-old",
+      refreshToken: "incomplete-refresh",
+      expiresAt: Date.now() - 1,
+      scopes: ["w_member_social"],
+      connectedAt: Date.now() - 10_000,
+    },
+  });
+  const resolver = async () => ({
+    provider: "linkedin" as const,
+    source: "shared" as const,
+    clientId: "",
+    clientSecret: "",
+    fingerprint: "0".repeat(64),
+  });
+  await assert.rejects(linkedinTokenForUse(OWNER, resolver), /Configure them in Developer App Settings/);
+});

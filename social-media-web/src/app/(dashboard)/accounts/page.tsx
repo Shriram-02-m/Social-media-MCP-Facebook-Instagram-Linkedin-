@@ -1,4 +1,5 @@
 import { AccountsPanel } from "./accounts-panel";
+import { DeveloperAppSettings } from "./developer-app-settings";
 
 export default function AccountsPage() {
   return (
@@ -10,6 +11,7 @@ export default function AccountsPage() {
         </p>
       </div>
       <AccountsPanel />
+      <DeveloperAppSettings />
     </>
   );
 }

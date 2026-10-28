@@ -26,6 +26,16 @@ export {
   waitForAuthorization,
 } from "../../../../social-media-mcp/dist/auth/oauth.js";
 
+export {
+  appCredentialStatuses,
+  saveAppCredentials,
+  deleteAppCredentials,
+  validateAppCredentialInput,
+  userAppCredentialsActive,
+} from "../../../../social-media-mcp/dist/auth/app-credentials.js";
+
+export type { AppCredentialStatus } from "../../../../social-media-mcp/dist/auth/app-credentials.js";
+
 export { databasePool, closeDatabasePool } from "../../../../social-media-mcp/dist/database.js";
 
 export { config } from "../../../../social-media-mcp/dist/config/env.js";

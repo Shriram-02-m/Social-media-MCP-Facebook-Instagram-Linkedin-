@@ -11,6 +11,7 @@ const migrationNames = [
   "006_scheduled_post_media.sql",
   "007_multi_user.sql",
   "008_oauth_sessions.sql",
+  "009_user_app_credentials.sql",
 ];
 
 let migrations: Promise<void> | undefined;

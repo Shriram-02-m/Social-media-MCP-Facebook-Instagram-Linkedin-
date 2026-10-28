@@ -20,6 +20,23 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Environment
+
+Copy `.env.example` to `.env.local` and fill in the values. In addition to the
+auth variables, the OAuth/worker modules read `DATABASE_URL`,
+`OAUTH_CALLBACK_MODE=cloud`, `OAUTH_REDIRECT_BASE_URL`, `OAUTH_FRONTEND_BASE_URL`,
+and the public `META_APP_ID` / `INSTAGRAM_APP_ID` / `LINKEDIN_CLIENT_ID` values from
+the Vercel environment.
+
+`APP_CREDENTIAL_ENCRYPTION_KEY` is also required on Vercel: `POST /api/credentials`
+encrypts each signed-in user's Developer App secret before it is stored. Use the
+same 64-character hex value as the Render worker, generate it with
+`node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`,
+and never expose it through `NEXT_PUBLIC_*`, a client bundle, an API response, or
+logs. Users can save, update, and delete their Facebook, Instagram, and LinkedIn
+app credentials from **Accounts → Developer App Settings**; deleting them never
+disconnects an account or cancels a scheduled post.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

@@ -23,6 +23,11 @@ services:
         sync: false
       - key: CLOUD_TOKEN_ENCRYPTION_KEY
         sync: false
+      # Encrypts/decrypts user-owned Developer App secrets. Must match the value on
+      # Vercel (which encrypts on save); the worker decrypts during the OAuth code
+      # exchange and LinkedIn token refresh.
+      - key: APP_CREDENTIAL_ENCRYPTION_KEY
+        sync: false
       - key: WORKER_TRIGGER_SECRET
         sync: false
       - key: LINKEDIN_CLIENT_ID

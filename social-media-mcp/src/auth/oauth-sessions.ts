@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { databasePool } from "../database.js";
+import { ensureDatabaseMigrations } from "../database-migrations.js";
 import type { Platform } from "../platforms/types.js";
 
 // Authorization sessions exist for the brief window between starting a provider
@@ -26,6 +27,9 @@ export interface CreateOAuthSessionInput {
   platform: Platform;
   redirectUri: string;
   expiresAt: number;
+  // Fingerprint of the Developer App credentials used to build the consent URL.
+  // Optional so sessions created before the feature keep working.
+  appCredentialFingerprint?: string;
 }
 
 export interface ClaimedOAuthSession {
@@ -34,6 +38,7 @@ export interface ClaimedOAuthSession {
   platform: Platform;
   redirectUri: string;
   expiresAt: number;
+  appCredentialFingerprint?: string;
 }
 
 export type OAuthClaimFailure = "unknown" | "expired" | "used" | "wrong_platform";
@@ -123,6 +128,7 @@ interface MemoryRecord {
   createdAt: number;
   expiresAt: number;
   completedAt?: number;
+  appCredentialFingerprint?: string;
 }
 
 function isTerminal(status: OAuthStoredStatus): boolean {
@@ -161,6 +167,7 @@ export class InMemoryOAuthSessionStore implements OAuthSessionStore {
       status: "pending",
       createdAt: Date.now(),
       expiresAt: input.expiresAt,
+      ...(input.appCredentialFingerprint ? { appCredentialFingerprint: input.appCredentialFingerprint } : {}),
     };
     this.byState.set(record.state, record);
     this.byId.set(record.sessionId, record);
@@ -197,6 +204,7 @@ export class InMemoryOAuthSessionStore implements OAuthSessionStore {
         platform: record.platform,
         redirectUri: record.redirectUri,
         expiresAt: record.expiresAt,
+        ...(record.appCredentialFingerprint ? { appCredentialFingerprint: record.appCredentialFingerprint } : {}),
       },
     };
   }
@@ -302,10 +310,14 @@ function delay(milliseconds: number): Promise<void> {
 
 export class PostgresOAuthSessionStore implements OAuthSessionStore {
   async create(input: CreateOAuthSessionInput): Promise<void> {
+    // Ensure migration 009 (which adds app_credential_fingerprint) has run before
+    // writing the session. The runner is idempotent and memoized, so this adds a
+    // single check on the first session after a deploy.
+    await ensureDatabaseMigrations();
     await databasePool().query(
       `INSERT INTO public.oauth_authorization_sessions
-         (session_id, state_hash, user_id, platform, redirect_uri, status, expires_at)
-       VALUES ($1, $2, $3, $4, $5, 'pending', $6)`,
+         (session_id, state_hash, user_id, platform, redirect_uri, status, expires_at, app_credential_fingerprint)
+       VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7)`,
       [
         input.sessionId,
         hashOAuthState(input.state),
@@ -313,6 +325,7 @@ export class PostgresOAuthSessionStore implements OAuthSessionStore {
         input.platform,
         input.redirectUri,
         new Date(input.expiresAt),
+        input.appCredentialFingerprint ?? null,
       ],
     );
   }
@@ -327,6 +340,7 @@ export class PostgresOAuthSessionStore implements OAuthSessionStore {
       platform: Platform;
       redirect_uri: string;
       expires_at: Date;
+      app_credential_fingerprint: string | null;
     }>(
       `UPDATE public.oauth_authorization_sessions
           SET status = 'processing', claimed_at = NOW()
@@ -334,7 +348,7 @@ export class PostgresOAuthSessionStore implements OAuthSessionStore {
           AND status = 'pending'
           AND expires_at > NOW()
           AND platform = ANY($2::text[])
-        RETURNING session_id, user_id, platform, redirect_uri, expires_at`,
+        RETURNING session_id, user_id, platform, redirect_uri, expires_at, app_credential_fingerprint`,
       [stateHash, [...expectedPlatforms]],
     );
     const row = rows[0];
@@ -347,6 +361,7 @@ export class PostgresOAuthSessionStore implements OAuthSessionStore {
           platform: row.platform,
           redirectUri: row.redirect_uri,
           expiresAt: row.expires_at.getTime(),
+          ...(row.app_credential_fingerprint ? { appCredentialFingerprint: row.app_credential_fingerprint } : {}),
         },
       };
     }

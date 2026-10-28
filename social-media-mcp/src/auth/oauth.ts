@@ -4,6 +4,11 @@ import { readFile } from "node:fs/promises";
 import { apiRequest } from "../utils/http.js";
 import { config } from "../config/env.js";
 import { loadTokens, saveTokens } from "./token-store.js";
+import {
+  assertAppCredentialFingerprint,
+  resolveAppCredentials,
+  type ResolvedAppCredentials,
+} from "./app-credentials.js";
 import type { MetaPage, MetaPlatform, Platform, StoredToken } from "../platforms/types.js";
 import {
   InMemoryOAuthSessionStore,
@@ -57,7 +62,13 @@ export type OAuthCallbackOutcome =
 
 export interface OAuthCallbackDependencies {
   store: OAuthSessionStore;
-  finish: (platform: Platform, userId: string, code: string, redirectUri: string) => Promise<void>;
+  finish: (
+    platform: Platform,
+    userId: string,
+    code: string,
+    redirectUri: string,
+    appCredentialFingerprint?: string,
+  ) => Promise<void>;
 }
 
 const scheduledMedia = new Map<string, { imagePath: string; contentType: string }>();
@@ -103,8 +114,12 @@ function safeErrorMessage(error: unknown): string {
     .slice(0, 700);
 }
 
-function requireClientSecret(name: string, secret: string, provider: string): void {
-  if (!secret) throw new Error(`Set ${name} before completing the ${provider} authorization.`);
+function requireClientSecret(credentials: ResolvedAppCredentials, provider: string): void {
+  if (credentials.clientSecret) return;
+  if (credentials.source === "user") {
+    throw new Error(`Your saved ${provider} app secret could not be read on this server. Re-save it in Developer App Settings, or check APP_CREDENTIAL_ENCRYPTION_KEY.`);
+  }
+  throw new Error(`Set the shared ${provider} app secret environment variable before completing this authorization.`);
 }
 
 async function handleCallback(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -135,8 +150,12 @@ async function handleCallback(request: IncomingMessage, response: ServerResponse
     html(response, "This OAuth callback route does not exist.", 404);
     return;
   }
+  // Claim from the same store the session was created in. `beginAuthorization`
+  // persists sessions in PostgreSQL when OAUTH_CALLBACK_MODE=cloud, so a local
+  // listener receiving tunneled callbacks in that mode must claim from the
+  // Postgres store too; claiming from process memory would always fail.
   const outcome = await processOAuthCallback(url.searchParams, expectedPlatforms, {
-    store: inMemoryOAuthSessionStore,
+    store: oauthSessionStore(),
     finish: finishAuthorization,
   });
   if (outcome.result === "connected") {
@@ -228,7 +247,7 @@ export async function processOAuthCallback(
   }
 
   try {
-    await dependencies.finish(session.platform, session.userId, code, session.redirectUri);
+    await dependencies.finish(session.platform, session.userId, code, session.redirectUri, session.appCredentialFingerprint);
     await dependencies.store.updateStatus(session.sessionId, "connected");
     return { result: "connected", platform: session.platform, sessionId: session.sessionId };
   } catch (error) {
@@ -249,19 +268,25 @@ export async function waitForAuthorization(
   return oauthSessionStore().waitForStatus(sessionId, userId, timeoutSeconds);
 }
 
-export function validateAuthorizationConfiguration(platform: Platform): void {
+function appLabel(platform: Platform): string {
+  if (platform === "facebook") return "Facebook";
+  if (platform === "instagram") return "Instagram";
+  return "LinkedIn";
+}
+
+export function validateAuthorizationConfiguration(platform: Platform, credentials: ResolvedAppCredentials): void {
   const cloud = config.oauthCallbackMode === "cloud";
-  if (platform === "linkedin") {
-    if (!config.linkedinClientId) throw new Error("Set LINKEDIN_CLIENT_ID before connecting LinkedIn.");
-    if (!cloud && !config.linkedinClientSecret) throw new Error("Set LINKEDIN_CLIENT_SECRET before connecting LinkedIn.");
+  if (!credentials.clientId) {
+    throw new Error(credentials.source === "user"
+      ? `Your saved ${appLabel(platform)} app/client ID is missing. Re-save it in Developer App Settings.`
+      : `Set the shared ${appLabel(platform)} app/client ID before connecting.`);
   }
-  if (platform === "facebook") {
-    if (!config.metaAppId) throw new Error("Set META_APP_ID before connecting Facebook.");
-    if (!cloud && !config.metaAppSecret) throw new Error("Set META_APP_SECRET before connecting Facebook.");
-  }
-  if (platform === "instagram") {
-    if (!config.instagramAppId) throw new Error("Set INSTAGRAM_APP_ID before connecting Instagram.");
-    if (!cloud && !config.instagramAppSecret) throw new Error("Set INSTAGRAM_APP_SECRET before connecting Instagram.");
+  // In cloud mode the secret is only needed by the worker that runs the code
+  // exchange, never by the request that builds the consent URL.
+  if (!cloud && !credentials.clientSecret) {
+    throw new Error(credentials.source === "user"
+      ? `Your saved ${appLabel(platform)} app secret is not available on this server. Re-save it in Developer App Settings.`
+      : `Set the shared ${appLabel(platform)} app secret before connecting.`);
   }
   const redirectUri = oauthCallbackUrl(platform);
   if (cloud && !redirectUri.startsWith("https://")) {
@@ -280,7 +305,14 @@ export async function beginAuthorization(platform: Platform, userId: string): Pr
   sessionId: string;
   expiresAt: number;
 }> {
-  validateAuthorizationConfiguration(platform);
+  // Build the consent URL with the user's own Developer App when configured,
+  // otherwise the shared environment app. The secret is only decrypted when this
+  // process also runs the token exchange (local mode); a cloud request needs only
+  // the public client id and the version fingerprint.
+  const credentials = await resolveAppCredentials(userId, platform, {
+    includeSecret: config.oauthCallbackMode !== "cloud",
+  });
+  validateAuthorizationConfiguration(platform, credentials);
   const redirectUri = oauthCallbackUrl(platform);
   // Only local development needs the localhost listener. A cloud worker or
   // Vercel request must not bind a local port to receive the callback.
@@ -288,12 +320,20 @@ export async function beginAuthorization(platform: Platform, userId: string): Pr
   const state = randomBytes(32).toString("hex");
   const sessionId = randomBytes(16).toString("hex");
   const expiresAt = Date.now() + authorizationLifetimeMs;
-  await oauthSessionStore().create({ sessionId, state, userId, platform, redirectUri, expiresAt });
+  await oauthSessionStore().create({
+    sessionId,
+    state,
+    userId,
+    platform,
+    redirectUri,
+    expiresAt,
+    appCredentialFingerprint: credentials.fingerprint,
+  });
   if (platform === "linkedin") {
     const url = new URL("https://www.linkedin.com/oauth/v2/authorization");
     url.search = new URLSearchParams({
       response_type: "code",
-      client_id: config.linkedinClientId,
+      client_id: credentials.clientId,
       redirect_uri: redirectUri,
       state,
       scope: config.linkedinScopes.join(" "),
@@ -303,7 +343,7 @@ export async function beginAuthorization(platform: Platform, userId: string): Pr
   if (platform === "instagram") {
     const url = new URL("https://www.instagram.com/oauth/authorize");
     url.search = new URLSearchParams({
-      client_id: config.instagramAppId,
+      client_id: credentials.clientId,
       redirect_uri: redirectUri,
       state,
       response_type: "code",
@@ -314,7 +354,7 @@ export async function beginAuthorization(platform: Platform, userId: string): Pr
   }
   const url = new URL(`https://www.facebook.com/${config.metaGraphVersion}/dialog/oauth`);
   url.search = new URLSearchParams({
-    client_id: config.metaAppId,
+    client_id: credentials.clientId,
     redirect_uri: redirectUri,
     state,
     response_type: "code",
@@ -325,31 +365,42 @@ export async function beginAuthorization(platform: Platform, userId: string): Pr
 
 // Dispatches to the correct provider exchange. The platform stored in the
 // authorization session decides which credentials and token slot are used, so a
-// Facebook authorization can never overwrite an Instagram token.
+// Facebook authorization can never overwrite an Instagram token. The optional
+// fingerprint is the credential version recorded when the flow started; a
+// mismatch means the user edited their app mid-flow, so the exchange is refused
+// rather than run against a different app.
 export async function finishAuthorization(
   platform: Platform,
   userId: string,
   code: string,
   redirectUri: string,
+  appCredentialFingerprint?: string,
 ): Promise<void> {
+  const credentials = await resolveAppCredentials(userId, platform);
+  assertAppCredentialFingerprint(appCredentialFingerprint, credentials.fingerprint);
   if (platform === "linkedin") {
-    requireClientSecret("LINKEDIN_CLIENT_SECRET", config.linkedinClientSecret, "LinkedIn");
-    await finishLinkedInAuthorization(userId, code, redirectUri);
+    requireClientSecret(credentials, "LinkedIn");
+    await finishLinkedInAuthorization(userId, code, redirectUri, credentials);
     return;
   }
   if (platform === "instagram") {
-    requireClientSecret("INSTAGRAM_APP_SECRET", config.instagramAppSecret, "Instagram");
-    await finishInstagramAuthorization(userId, code, redirectUri);
+    requireClientSecret(credentials, "Instagram");
+    await finishInstagramAuthorization(userId, code, redirectUri, credentials);
     return;
   }
-  requireClientSecret("META_APP_SECRET", config.metaAppSecret, "Facebook");
-  await finishMetaAuthorization(userId, code, redirectUri, platform);
+  requireClientSecret(credentials, "Facebook");
+  await finishMetaAuthorization(userId, code, redirectUri, platform, credentials);
 }
 
-async function finishInstagramAuthorization(userId: string, code: string, redirectUri: string): Promise<void> {
+async function finishInstagramAuthorization(
+  userId: string,
+  code: string,
+  redirectUri: string,
+  credentials: ResolvedAppCredentials,
+): Promise<void> {
   const form = new FormData();
-  form.set("client_id", config.instagramAppId);
-  form.set("client_secret", config.instagramAppSecret);
+  form.set("client_id", credentials.clientId);
+  form.set("client_secret", credentials.clientSecret ?? "");
   form.set("grant_type", "authorization_code");
   form.set("redirect_uri", redirectUri);
   form.set("code", code);
@@ -365,7 +416,7 @@ async function finishInstagramAuthorization(userId: string, code: string, redire
   const longTokenUrl = new URL("https://graph.instagram.com/access_token");
   longTokenUrl.search = new URLSearchParams({
     grant_type: "ig_exchange_token",
-    client_secret: config.instagramAppSecret,
+    client_secret: credentials.clientSecret ?? "",
     access_token: shortToken.access_token,
   }).toString();
   const { data: longToken } = await apiRequest<TokenResponse>(longTokenUrl);
@@ -387,13 +438,19 @@ async function finishInstagramAuthorization(userId: string, code: string, redire
   await saveTokens(userId, vault);
 }
 
-async function finishMetaAuthorization(userId: string, code: string, redirectUri: string, platform: MetaPlatform): Promise<void> {
-  const shortToken = await exchangeMetaCode(code, redirectUri);
+async function finishMetaAuthorization(
+  userId: string,
+  code: string,
+  redirectUri: string,
+  platform: MetaPlatform,
+  credentials: ResolvedAppCredentials,
+): Promise<void> {
+  const shortToken = await exchangeMetaCode(code, redirectUri, credentials);
   const tokenUrl = new URL(`https://graph.facebook.com/${config.metaGraphVersion}/oauth/access_token`);
   tokenUrl.search = new URLSearchParams({
     grant_type: "fb_exchange_token",
-    client_id: config.metaAppId,
-    client_secret: config.metaAppSecret,
+    client_id: credentials.clientId,
+    client_secret: credentials.clientSecret ?? "",
     fb_exchange_token: shortToken,
   }).toString();
   const { data: longToken } = await apiRequest<TokenResponse>(tokenUrl);
@@ -441,11 +498,15 @@ async function finishMetaAuthorization(userId: string, code: string, redirectUri
   await saveTokens(userId, vault);
 }
 
-async function exchangeMetaCode(code: string, redirectUri: string): Promise<string> {
+async function exchangeMetaCode(
+  code: string,
+  redirectUri: string,
+  credentials: ResolvedAppCredentials,
+): Promise<string> {
   const url = new URL(`https://graph.facebook.com/${config.metaGraphVersion}/oauth/access_token`);
   url.search = new URLSearchParams({
-    client_id: config.metaAppId,
-    client_secret: config.metaAppSecret,
+    client_id: credentials.clientId,
+    client_secret: credentials.clientSecret ?? "",
     redirect_uri: redirectUri,
     code,
   }).toString();
@@ -453,12 +514,17 @@ async function exchangeMetaCode(code: string, redirectUri: string): Promise<stri
   return data.access_token;
 }
 
-async function finishLinkedInAuthorization(userId: string, code: string, redirectUri: string): Promise<void> {
+async function finishLinkedInAuthorization(
+  userId: string,
+  code: string,
+  redirectUri: string,
+  credentials: ResolvedAppCredentials,
+): Promise<void> {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
-    client_id: config.linkedinClientId,
-    client_secret: config.linkedinClientSecret,
+    client_id: credentials.clientId,
+    client_secret: credentials.clientSecret ?? "",
     redirect_uri: redirectUri,
   });
   const { data: token } = await apiRequest<TokenResponse>("https://www.linkedin.com/oauth/v2/accessToken", {

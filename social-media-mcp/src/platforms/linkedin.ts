@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { config } from "../config/env.js";
 import { loadTokens, saveTokens } from "../auth/token-store.js";
+import { resolveAppCredentials, type ResolvedAppCredentials } from "../auth/app-credentials.js";
 import { apiRequest } from "../utils/http.js";
 import { validateLinkedInAuthorUrn } from "../utils/validation.js";
 import type { LinkedInPost, PublishedPost, StoredToken } from "./types.js";
@@ -17,7 +18,13 @@ const restHeaders = {
 // accounts never share or leak a token.
 const refreshInFlight = new Map<string, Promise<StoredToken>>();
 
-export async function linkedinTokenForUse(ownerId: string): Promise<StoredToken> {
+export async function linkedinTokenForUse(
+  ownerId: string,
+  // Resolves the LinkedIn app credentials for the user. Injectable so tests can
+  // exercise the refresh path with user-owned credentials without a database.
+  resolveCredentials: (userId: string) => Promise<ResolvedAppCredentials> =
+    (userId) => resolveAppCredentials(userId, "linkedin"),
+): Promise<StoredToken> {
   const vault = await loadTokens(ownerId);
   const current = vault.linkedin;
   if (!current) throw new Error("LinkedIn is not connected. Start OAuth first.");
@@ -25,8 +32,11 @@ export async function linkedinTokenForUse(ownerId: string): Promise<StoredToken>
   if (!current.refreshToken) {
     throw new Error("LinkedIn access token is expired or about to expire and has no refresh token. Reauthorize LinkedIn.");
   }
-  if (!config.linkedinClientId || !config.linkedinClientSecret) {
-    throw new Error("LinkedIn token refresh requires LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET.");
+  // Refresh must use the LinkedIn app that issued the refresh token. A user who
+  // configured their own app gets that app; everyone else keeps the shared app.
+  const credentials = await resolveCredentials(ownerId);
+  if (!credentials.clientId || !credentials.clientSecret) {
+    throw new Error("LinkedIn token refresh requires the LinkedIn app client ID and secret. Configure them in Developer App Settings, or set LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET for the shared app.");
   }
   const inFlight = refreshInFlight.get(ownerId);
   if (inFlight) return inFlight;
@@ -39,16 +49,23 @@ export async function linkedinTokenForUse(ownerId: string): Promise<StoredToken>
     if (!latest.refreshToken) {
       throw new Error("LinkedIn access token is expired and has no refresh token. Reauthorize LinkedIn.");
     }
-    const { data } = await apiRequest<LinkedInTokenResponse>("https://www.linkedin.com/oauth/v2/accessToken", {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "refresh_token",
-        refresh_token: latest.refreshToken,
-        client_id: config.linkedinClientId,
-        client_secret: config.linkedinClientSecret,
-      }),
-    });
+    let data: LinkedInTokenResponse;
+    try {
+      ({ data } = await apiRequest<LinkedInTokenResponse>("https://www.linkedin.com/oauth/v2/accessToken", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          refresh_token: latest.refreshToken,
+          client_id: credentials.clientId,
+          client_secret: credentials.clientSecret ?? "",
+        }),
+      }));
+    } catch (error) {
+      // Changing the app after connecting invalidates the refresh token's issuer.
+      // Surface an actionable message instead of silently trying another app.
+      throw new Error(`LinkedIn token refresh failed. If you changed your LinkedIn app credentials after connecting, reconnect LinkedIn. ${error instanceof Error ? error.message : "Unknown error."}`);
+    }
     if (!data.access_token || !data.expires_in || data.expires_in <= 0) {
       throw new Error("LinkedIn refresh did not return a valid access token and expiry. Reauthorize LinkedIn.");
     }
