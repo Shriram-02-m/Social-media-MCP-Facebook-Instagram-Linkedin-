@@ -1,6 +1,6 @@
 # Unified Social Media MCP
 
-An independent Node.js/TypeScript MCP server for Instagram professional accounts, Facebook Pages, and LinkedIn members or organizations. It uses official APIs, provider OAuth, encrypted local token storage, and dry-run-first publishing.
+An independent Node.js/TypeScript MCP server for Instagram professional accounts, Facebook Pages, and LinkedIn members or organizations. It uses official APIs, provider OAuth, encrypted local token storage, and dry-run-first publishing. The same tools are also served over remote Streamable HTTP from the Render worker for Claude.ai and Claude Code; see the Remote MCP section below.
 
 ## Requirements
 
@@ -23,7 +23,7 @@ Put the generated 64-character hex key in `SOCIAL_MCP_TOKEN_ENCRYPTION_KEY`. The
 
 Set `DATABASE_URL` to your Supabase PostgreSQL connection string. Use the direct connection when IPv6 is available, or the Supabase session pooler for IPv4-only environments; URL-encode special characters in the password and require TLS (`sslmode=require`). The scheduler uses a bounded `pg` connection pool and never prints the connection string. Run `npm run db:check` to test `SELECT NOW()` without displaying credentials.
 
-Scheduled-post records and delivery state are stored in the Supabase `public.scheduled_posts` table. `npm run db:migrate` applies the repeatable migrations `001`-`003` and `005`-`009`; they preserve rows, add constraints and cloud object references, add optional LinkedIn document columns and the `application/pdf` Storage MIME type, create the server-only token table and private Storage bucket, add multi-user ownership, create the server-only `oauth_authorization_sessions` table used by cloud OAuth callbacks, and create the user-owned `oauth_app_credentials` table for Developer App Settings. Migration `004` is intentionally manual because it requires a real, deployed Render URL and secrets in Supabase Vault. The app uses an atomic `FOR UPDATE SKIP LOCKED` claim so concurrent processes do not take the same due job.
+Scheduled-post records and delivery state are stored in the Supabase `public.scheduled_posts` table. `npm run db:migrate` applies the repeatable migrations `001`-`003` and `005`-`010`; they preserve rows, add constraints and cloud object references, add optional LinkedIn document columns and the `application/pdf` Storage MIME type, create the server-only token table and private Storage bucket, add multi-user ownership, create the server-only `oauth_authorization_sessions` table used by cloud OAuth callbacks, create the user-owned `oauth_app_credentials` table for Developer App Settings, and create the remote MCP OAuth tables used by Claude. Migration `004` is intentionally manual because it requires a real, deployed Render URL and secrets in Supabase Vault. The app uses an atomic `FOR UPDATE SKIP LOCKED` claim so concurrent processes do not take the same due job.
 
 By default, `SCHEDULER_MODE=local` uses a `setInterval` loop in the MCP process and local images/tokens, so the MCP process, local image server, and ngrok must stay running. The opt-in cloud configuration and deployment steps are described below. Code being present is not evidence that your Render service or Supabase Cron has been deployed.
 
@@ -31,7 +31,7 @@ By default, `SCHEDULER_MODE=local` uses a `setInterval` loop in the MCP process 
 
 1. Set `DATABASE_URL` in the private `.env` using the connection URI from Supabase **Project Settings → Database**. Do not commit `.env`.
 2. Check connectivity: `npm run db:check`.
-3. Run `npm run db:migrate`, then `npm run build` and `npm test`. Migrations `001`-`003` and `005`-`009` are safe to rerun; the app also applies them when its scheduler starts.
+3. Run `npm run db:migrate`, then `npm run build` and `npm test`. Migrations `001`-`003` and `005`-`010` are safe to rerun; the app also applies them when its scheduler starts.
 4. Start or restart the MCP server. Existing scheduled-post rows are not copied from another database automatically.
 
 Pool settings are `DATABASE_POOL_MAX` (default `5`), `DATABASE_CONNECTION_TIMEOUT_MS` (default `10000`), and `DATABASE_IDLE_TIMEOUT_MS` (default `30000`).
@@ -55,7 +55,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'
 
 Use one 64-character hex value for `CLOUD_TOKEN_ENCRYPTION_KEY` and a second, independent 64-character hex value for `APP_CREDENTIAL_ENCRYPTION_KEY`; use the base64url value as `WORKER_TRIGGER_SECRET`. Keep `APP_CREDENTIAL_ENCRYPTION_KEY` identical on Render **and** Vercel, and keep `WORKER_TRIGGER_SECRET` identical in Render and Supabase Vault. Never put the service-role key or any secret in source control, client applications, or logs.
 
-1. Set the cloud variables in the local MCP server environment, then run `npm run db:migrate`. Migrations `001`-`003` and `005`-`009` are repeatable; they preserve scheduled rows, add the cloud object-path and optional LinkedIn document columns, add the encrypted `oauth_tokens` table, add multi-user ownership, create the server-only `oauth_authorization_sessions` table, create the user-owned `oauth_app_credentials` table, and create the private image bucket. The cloud migration refuses to use a bucket named `social-media-images` if it is public. The database connection needs permission to apply these migrations.
+1. Set the cloud variables in the local MCP server environment, then run `npm run db:migrate`. Migrations `001`-`003` and `005`-`010` are repeatable; they preserve scheduled rows, add the cloud object-path and optional LinkedIn document columns, add the encrypted `oauth_tokens` table, add multi-user ownership, create the server-only `oauth_authorization_sessions` table, create the user-owned `oauth_app_credentials` table, create the private image bucket, and create the remote MCP OAuth tables. The cloud migration refuses to use a bucket named `social-media-images` if it is public. The database connection needs permission to apply these migrations.
 2. Stop any currently running local MCP scheduler before migrating pending jobs. Run `npm run tokens:migrate` while the local encrypted vault and `SOCIAL_MCP_TOKEN_ENCRYPTION_KEY` are still available. It inserts encrypted token records and refuses to overwrite existing cloud token rows unless explicitly invoked with `npm run tokens:migrate -- --overwrite`. The local vault is never removed or modified. LinkedIn refresh is attempted only when LinkedIn issued a refresh token; expired or revoked Meta tokens and tokens without a provider refresh token require provider reauthorization.
 3. Run `npm run images:migrate` on the computer that has the original scheduled image files. It uploads scheduled jobs and retryable image-validation failures, stores their cloud object paths, and leaves both the local files and database `image_path` values intact. Run this before enabling cloud Cron. Jobs whose source files are missing are reported as errors and need manual repair or rescheduling.
 4. Configure the MCP process for cloud job creation and management:
@@ -91,6 +91,60 @@ Set the same `OAUTH_CALLBACK_MODE=cloud`, `OAUTH_REDIRECT_BASE_URL`, and `OAUTH_
 
 Vercel needs only the public client IDs (`META_APP_ID`, `INSTAGRAM_APP_ID`, `LINKEDIN_CLIENT_ID`), `DATABASE_URL`, `OAUTH_CALLBACK_MODE=cloud`, `OAUTH_REDIRECT_BASE_URL`, and `OAUTH_FRONTEND_BASE_URL`. It also needs `APP_CREDENTIAL_ENCRYPTION_KEY` because `POST /api/credentials` encrypts each user's Developer App secret before storing it (the credential-building path itself only reads the public client id). Never put provider client secrets, `CLOUD_TOKEN_ENCRYPTION_KEY`, or `WORKER_TRIGGER_SECRET` on Vercel. The frontend redirect target is fixed to `<OAUTH_FRONTEND_BASE_URL>/accounts`, so a callback can never be turned into an open redirect. If `OAUTH_FRONTEND_BASE_URL` is unset, the worker renders a static result page instead of redirecting.
 
+#### Remote MCP for Claude.ai and Claude Code (Streamable HTTP)
+
+The cloud worker exposes the same tools over a remote Streamable HTTP MCP endpoint so Claude can create, schedule, publish, reschedule, retry, cancel, and inspect posts without a local process. The stdio server and `MCP_OWNER_USER_ID` behavior are unchanged.
+
+- Endpoint: `https://social-media-cloud-worker.onrender.com/mcp`
+- Protected-resource metadata: `https://social-media-cloud-worker.onrender.com/.well-known/oauth-protected-resource/mcp`
+- Authorization-server metadata: `https://social-media-cloud-worker.onrender.com/.well-known/oauth-authorization-server`
+- Authorization flow: OAuth 2.1 authorization code with PKCE (`S256`) and Dynamic Client Registration. Claude's callback is `https://claude.ai/api/mcp/auth_callback`; Claude Code may use a loopback callback such as `http://localhost:3118/callback`.
+- Consent: the worker's `/oauth/authorize` validates the request and redirects to `<OAUTH_FRONTEND_BASE_URL>/mcp/authorize` on Vercel. The signed-in better-auth user approves or denies there. Vercel creates a one-time code bound to that user; the worker's `/oauth/token` exchanges it. Every MCP request is then bound to that user, so a connector can only read and change that user's own connected accounts and scheduled posts.
+- Storage: only SHA-256 digests of authorization codes, access tokens, refresh tokens, and client secrets are stored. Refresh tokens rotate, and reuse of an already-rotated token revokes the whole token family. Codes, tokens, client secrets, and signed media URLs are never logged.
+- Database: apply migration `010_mcp_oauth.sql` (`npm run db:migrate`) before enabling the connector.
+
+Set these on **Render** and the matching public values on **Vercel**:
+
+```dotenv
+MCP_PUBLIC_URL=https://social-media-cloud-worker.onrender.com/mcp
+MCP_OAUTH_SCOPE=mcp
+MCP_ALLOWED_REDIRECT_ORIGINS=https://claude.ai,https://claude.com
+MCP_ALLOW_LOOPBACK_REDIRECTS=true
+```
+
+`MCP_PUBLIC_URL` is also the RFC 8707 resource indicator bound into access tokens, so it must match the connector URL exactly. Keep `MCP_OAUTH_SCOPE` and the redirect-origin allowlist identical on both services. `MCP_AUTHORIZATION_CODE_TTL_SECONDS`, `MCP_ACCESS_TOKEN_TTL_SECONDS`, and `MCP_REFRESH_TOKEN_TTL_SECONDS` are optional (defaults `300`, `3600`, and `2592000`). The worker reads `SCHEDULE_SIGNED_URL_TTL_SECONDS` (optional, default `86400`, max `604800`) for the publish-time signed URL. The Vercel deployment also needs `OAUTH_CALLBACK_MODE=cloud`, `OAUTH_REDIRECT_BASE_URL` (the Render origin), `OAUTH_FRONTEND_BASE_URL` (the Vercel origin), and `DATABASE_URL`. If you enable remote media uploads (`POST /api/media/upload`), Vercel also needs `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`; keep the service-role key server-side and never expose it through `NEXT_PUBLIC_*`, the browser, or an API response. Do not put provider client secrets, `CLOUD_TOKEN_ENCRYPTION_KEY`, or `WORKER_TRIGGER_SECRET` on Vercel.
+
+To add the connector in Claude.ai:
+
+1. Open **Settings → Connectors → Add custom connector**.
+2. Enter the name `Social Media` and the URL `https://social-media-cloud-worker.onrender.com/mcp`.
+3. Leave the optional OAuth client ID and client secret blank so Claude uses Dynamic Client Registration.
+4. Click **Connect**. Claude opens the Vercel consent page; sign in with the account whose social accounts you want to use and click **Approve**.
+5. Confirm the connector is listed as connected, then ask Claude to list the available social tools or to check connection status. The tool names and inputs are the same as the stdio server.
+
+For Claude Code:
+
+```powershell
+claude mcp add --transport http social-media https://social-media-cloud-worker.onrender.com/mcp
+claude mcp list
+```
+
+Run `/mcp` in Claude Code and complete the browser authorization if prompted. The loopback callback only works while `MCP_ALLOW_LOOPBACK_REDIRECTS=true`; set it to `false` to require HTTPS callbacks.
+
+**Remote media.** A Render worker cannot read paths on the computer running Claude, and the published MCP specification has no client-to-server file-upload primitive: tools receive JSON arguments, not image bytes or a browser file handle. Claude.ai therefore cannot attach an uploaded image directly to a remote tool.
+
+The durable remote media reference is a **permanent private-storage object path**, not a URL. Upload the file through the authenticated web endpoint `POST /api/media/upload` (multipart `file` field). It validates the image, video, or PDF, stores it under a per-user prefix in the private `social-media-images` bucket, and returns `storagePath`. Pass that as `imageStoragePath`, `media[].storagePath`, or `documentStoragePath` when scheduling. The scheduling row stores only that path (plus content type/title metadata); an expiring signed URL is never persisted.
+
+At publish time the worker downloads the object with the server-side service-role key. It creates a fresh signed URL only for platforms that require a public HTTPS URL (Instagram/Facebook), with a lifetime controlled by `SCHEDULE_SIGNED_URL_TTL_SECONDS` (default `86400`; it only needs to outlive the platform's fetch). Platforms with direct upload (LinkedIn) receive the bytes directly. Every retry re-downloads the same original object, so a post scheduled hours or days ahead is unaffected by any earlier URL expiry. Public HTTPS `imageUrl`, `media[].url`, and `documentUrl` inputs are still accepted; they are downloaded immediately, validated, and stored privately at scheduling time.
+
+The remote endpoint rejects `imagePath`, `media[].path`, and `documentPath` before any filesystem access; those fields remain available to the local stdio server. The upload endpoint keeps `SUPABASE_SERVICE_ROLE_KEY` server-side and never returns a storage credential. The vetted remote fetcher accepts HTTPS only, rejects embedded credentials and private/loopback/reserved addresses, re-validates every redirect, enforces the configured byte limits and timeouts, and checks the returned MIME type and file signature.
+
+**Operational notes.**
+
+- The Render blueprint still uses `plan: free`. A sleeping free instance adds cold-start latency to OAuth discovery, consent, and token exchange; use a paid always-on instance for dependable Claude connections. Cold starts can also make the first connection attempt time out, in which case retry after the service wakes.
+- Connecting Claude does not connect Instagram, Facebook, or LinkedIn. Each user must still complete the provider OAuth flow on the Vercel **Accounts** page.
+- Verify the deployment before relying on it: `GET /health` returns `{"status":"ok"}`, the protected-resource metadata advertises the `/mcp` resource, an unauthenticated `POST /mcp` returns `401` with a `WWW-Authenticate` header, and a real Claude connector completes consent and lists tools. Code being present is not proof that the Render/Vercel deployment or the database migration is live.
+
 #### Developer App Settings (user-owned OAuth apps)
 
 Each signed-in user can connect through their own Meta, Instagram, and LinkedIn apps from the **Accounts → Developer App Settings** section. This lets a user publish through their own app instead of the deployment's shared app.
@@ -111,7 +165,7 @@ The worker atomically claims at most 10 due posts per invocation. Stale `publish
 #### Remaining operational checks and limits
 
 - The local token vault and image files are not deleted by migration. Keep a protected backup and rotate the cloud encryption key only with a planned decrypt/re-encrypt procedure.
-- Private Storage is accessed with the server-only service-role key; the worker creates one-hour signed URLs for Meta and validates them before publishing. Never expose the service-role key to a browser or frontend.
+- Private Storage is accessed with the server-only service-role key; the worker downloads the stored object path at publish time and creates a fresh signed URL (default 24 hours, `SCHEDULE_SIGNED_URL_TTL_SECONDS`) for Meta, validating it before publishing. Signed URLs are never stored in PostgreSQL. Never expose the service-role key to a browser or frontend.
 - Provider API restrictions, token expiration/revocation, insufficient scopes, rate limits, and social-platform outages can still prevent delivery. Add/verify provider reauthorization in the deployment environment when a token expires.
 - Pending local image rows that could not be migrated must be resolved before Cron is enabled. The original `image_path` is retained for rollback, but a cloud worker uses `image_storage_path`.
 - Supabase Cron and Render deployment cannot be activated from this code workspace. Cloud operation must be confirmed in the Render dashboard, Supabase Cron run history, and an authorized test publication.

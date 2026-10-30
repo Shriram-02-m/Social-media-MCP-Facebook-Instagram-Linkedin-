@@ -6,6 +6,7 @@ import { deleteScheduledImage, uploadScheduledImage } from "../src/storage/sched
 
 interface PendingImage {
   id: string;
+  user_id: string;
   image_path: string;
   content_type: string;
 }
@@ -13,7 +14,7 @@ interface PendingImage {
 async function main(): Promise<void> {
   await ensureDatabaseMigrations();
   const { rows } = await databasePool().query<PendingImage>(
-    `SELECT id, image_path, content_type
+    `SELECT id, user_id, image_path, content_type
      FROM public.scheduled_posts
     WHERE image_storage_path IS NULL
       AND (status = 'scheduled' OR (status = 'failed' AND failure_stage = 'image_validation'))
@@ -26,7 +27,7 @@ async function main(): Promise<void> {
       const image = await readFile(row.image_path);
       const extension = row.content_type === "image/png" ? ".png"
         : row.content_type === "image/gif" ? ".gif" : ".jpg";
-      const objectPath = await uploadScheduledImage(image, row.content_type, extension);
+      const objectPath = await uploadScheduledImage(image, row.content_type, extension, row.user_id);
       const client: PoolClient = await databasePool().connect();
       try {
         const result = await client.query(

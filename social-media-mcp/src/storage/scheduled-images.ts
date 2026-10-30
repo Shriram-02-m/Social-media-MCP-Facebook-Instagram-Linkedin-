@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { config } from "../config/env.js";
 import type { ScheduledImageValidation } from "../utils/scheduled-image.js";
 
@@ -86,6 +86,55 @@ async function responseError(response: Response): Promise<never> {
   throw new Error(`Supabase Storage request failed with HTTP ${response.status}.`);
 }
 
+// --- Per-user storage namespacing -------------------------------------------
+//
+// Every object lives under `scheduled/<owner-segment>/<random><ext>`. The
+// owner-segment is derived from the authenticated user id so one user's media
+// can never collide with, or be resolved as, another user's object. The bucket
+// stays private and is only reachable with the service-role key, so the prefix
+// is defense in depth rather than the sole access control.
+//
+// A storage object path is a permanent reference: it is what scheduling rows
+// store, and the worker re-downloads it (and re-signs a fresh URL) at publish
+// time. A storage object path is never an expiring signed URL.
+
+export function storageOwnerSegment(ownerId: string): string {
+  const trimmed = ownerId.trim();
+  if (/^[A-Za-z0-9_-]{1,64}$/.test(trimmed)) return trimmed;
+  // Fall back to a stable, URL-safe digest for ids with unusual characters so
+  // the segment can never contain a path separator or resolve above `scheduled/`.
+  return createHash("sha256").update(trimmed || "anonymous").digest("hex").slice(0, 32);
+}
+
+export function storageOwnerPrefix(ownerId: string): string {
+  return `scheduled/${storageOwnerSegment(ownerId)}/`;
+}
+
+const storageFilePattern = /^[a-f0-9]{48}\.(?:jpg|jpeg|png|gif|mp4|mov|pdf)$/;
+
+export function isOwnedStorageObjectPath(objectPath: string, ownerId: string): boolean {
+  if (typeof objectPath !== "string") return false;
+  const prefix = storageOwnerPrefix(ownerId);
+  if (!objectPath.startsWith(prefix)) return false;
+  return storageFilePattern.test(objectPath.slice(prefix.length));
+}
+
+// Throws unless `objectPath` is a permanent private-storage reference created
+// for this exact user. Caller-supplied references (for example from the upload
+// API) are validated with this before they are ever persisted or downloaded,
+// which prevents a request from referencing another user's media or an
+// arbitrary/expiring URL.
+export function assertOwnedStorageObjectPath(objectPath: string, ownerId: string): string {
+  if (!isOwnedStorageObjectPath(objectPath, ownerId)) {
+    throw new Error("The media storage reference does not belong to this account.");
+  }
+  return objectPath;
+}
+
+export function scheduledObjectPath(ownerId: string, extension: string): string {
+  return `${storageOwnerPrefix(ownerId)}${randomBytes(24).toString("hex")}${extension.toLowerCase()}`;
+}
+
 interface UploadOptions {
   bytes: Buffer;
   contentType: string;
@@ -93,15 +142,16 @@ interface UploadOptions {
   kind: "image" | "document" | "video";
   allowed: Set<string>;
   maxBytes: number;
+  ownerId: string;
 }
 
-async function uploadObject({ bytes, contentType, extension, kind, allowed, maxBytes }: UploadOptions): Promise<string> {
+async function uploadObject({ bytes, contentType, extension, kind, allowed, maxBytes, ownerId }: UploadOptions): Promise<string> {
   if (!allowed.has(contentType)) throw new Error(`Unsupported scheduled ${kind} MIME type: ${contentType}.`);
   if (bytes.byteLength === 0 || bytes.byteLength > maxBytes) {
     throw new Error(`Scheduled ${kind} is empty or exceeds its configured maximum size.`);
   }
   if (!matchesSignature(bytes, contentType)) throw new Error(`Selected ${kind} data does not match ${contentType}.`);
-  const objectPath = `scheduled/${randomBytes(24).toString("hex")}${extension}`;
+  const objectPath = scheduledObjectPath(ownerId, extension);
   const body = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(body).set(bytes);
   const url = storageUrl(`${config.supabaseStorageBucket}/${objectPath}`);
@@ -146,6 +196,7 @@ export async function uploadScheduledImage(
   bytes: Buffer,
   contentType: string,
   extension: string,
+  ownerId: string,
 ): Promise<string> {
   return uploadObject({
     bytes,
@@ -154,6 +205,7 @@ export async function uploadScheduledImage(
     kind: "image",
     allowed: imageTypes,
     maxBytes: config.scheduleImageMaxBytes,
+    ownerId,
   });
 }
 
@@ -161,6 +213,7 @@ export async function uploadScheduledDocument(
   bytes: Buffer,
   contentType: string,
   extension: string,
+  ownerId: string,
 ): Promise<string> {
   return uploadObject({
     bytes,
@@ -169,6 +222,7 @@ export async function uploadScheduledDocument(
     kind: "document",
     allowed: documentTypes,
     maxBytes: config.scheduleDocumentMaxBytes,
+    ownerId,
   });
 }
 
@@ -176,6 +230,7 @@ export async function uploadScheduledVideo(
   bytes: Buffer,
   contentType: string,
   extension: string,
+  ownerId: string,
 ): Promise<string> {
   return uploadObject({
     bytes,
@@ -184,6 +239,7 @@ export async function uploadScheduledVideo(
     kind: "video",
     allowed: videoTypes,
     maxBytes: config.scheduleVideoMaxBytes,
+    ownerId,
   });
 }
 
@@ -260,11 +316,14 @@ export async function downloadScheduledVideo(objectPath: string): Promise<Stored
   });
 }
 
-export async function createScheduledImageUrl(objectPath: string): Promise<string> {
+export async function createScheduledImageUrl(
+  objectPath: string,
+  expiresInSeconds: number = config.scheduleSignedUrlTtlSeconds,
+): Promise<string> {
   const response = await fetch(storageUrl(`sign/${config.supabaseStorageBucket}/${objectPath}`), {
     method: "POST",
     headers: { ...storageHeaders(), "content-type": "application/json" },
-    body: JSON.stringify({ expiresIn: 3600 }),
+    body: JSON.stringify({ expiresIn: expiresInSeconds }),
     signal: AbortSignal.timeout(config.scheduleImageTimeoutMs),
   });
   if (!response.ok) await responseError(response);

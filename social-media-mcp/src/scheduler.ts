@@ -11,6 +11,7 @@ import { publishMeta, publishFacebookVideo, publishInstagramReel, publishInstagr
 import { linkedinTokenForUse, publishLinkedIn, publishLinkedInWithDocument, publishLinkedInWithImage, publishLinkedInWithVideo } from "./platforms/linkedin.js";
 import type { MetaPlatform, Platform, PublishedPost } from "./platforms/types.js";
 import {
+  assertOwnedStorageObjectPath,
   createScheduledImageUrl,
   deleteScheduledDocument,
   deleteScheduledImage,
@@ -40,17 +41,36 @@ export interface NewScheduledPost {
 }
 
 export interface NewScheduledDocument {
-  path: string;
+  // Local stdio callers pass a path; remote MCP callers pass already-fetched
+  // bytes so Render never needs access to the client's filesystem. Callers may
+  // also pass a permanent private-storage object path returned by the upload
+  // API, which is stored as-is and re-downloaded at publish time.
+  path?: string;
+  bytes?: Buffer;
+  contentType?: string;
   title?: string;
+  storagePath?: string;
+}
+
+export interface NewScheduledImage {
+  path?: string;
+  bytes?: Buffer;
+  contentType?: string;
+  extension?: string;
+  // Permanent object path in the private bucket. When present the scheduler
+  // records it directly instead of uploading bytes again.
+  storagePath?: string;
 }
 
 export type MediaType = "none" | "image" | "video" | "carousel" | "document";
 
 export interface NewScheduledMedia {
   kind: "image" | "video";
-  bytes: Buffer;
+  // Exactly one of `bytes` or `storagePath` is required.
+  bytes?: Buffer;
   contentType: string;
   extension: string;
+  storagePath?: string;
 }
 
 interface ScheduledMediaItem {
@@ -85,6 +105,16 @@ export function normalizeRescheduledTime(scheduledAt: string, now: number = Date
     throw new Error("The new schedule time must be in the future.");
   }
   return new Date(parsed).toISOString();
+}
+
+// Scheduling has no upper time horizon: a post may be queued hours, days, or
+// weeks ahead. Only "must be in the future" is enforced, because the media
+// reference is a permanent storage object path rather than an expiring URL.
+export function assertFutureScheduleTime(scheduledAt: string, now: number = Date.now()): void {
+  const scheduledTime = Date.parse(scheduledAt);
+  if (!Number.isFinite(scheduledTime) || scheduledTime <= now) {
+    throw new Error("Schedule time must be a valid future ISO-8601 timestamp.");
+  }
 }
 
 interface ScheduledPost extends NewScheduledPost {
@@ -287,11 +317,23 @@ async function saveJob(job: ScheduledPost): Promise<void> {
 }
 
 function contentTypeFor(imagePath: string): string {
-  const extension = path.extname(imagePath).toLowerCase();
-  if (extension === ".png") return "image/png";
-  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
-  if (extension === ".gif") return "image/gif";
+  return contentTypeForExtension(path.extname(imagePath).toLowerCase());
+}
+
+function contentTypeForExtension(extension: string): string {
+  const normalized = extension.toLowerCase();
+  if (normalized === ".png") return "image/png";
+  if (normalized === ".jpg" || normalized === ".jpeg") return "image/jpeg";
+  if (normalized === ".gif") return "image/gif";
   throw new Error("Scheduled images must be PNG, JPEG, or GIF files.");
+}
+
+// A caller-supplied permanent storage reference is only valid in the cloud
+// storage mode. Local mode has no Supabase bucket to resolve it against.
+function requireCloudStorageForReference(): void {
+  if (config.scheduledImageStorage !== "supabase") {
+    throw new Error("Storage object paths require SCHEDULED_IMAGE_STORAGE=supabase.");
+  }
 }
 
 async function registerPendingMedia(): Promise<void> {
@@ -817,18 +859,41 @@ export async function startScheduleRunner(): Promise<void> {
 export async function schedulePosts(
   ownerId: string,
   posts: NewScheduledPost[],
-  imagePath: string,
+  image: string | NewScheduledImage,
   document?: NewScheduledDocument,
 ): Promise<Array<Pick<ScheduledPost, "id" | "platform" | "scheduledAt" | "status">>> {
-  const sourceImagePath = path.resolve(imagePath);
-  const contentType = contentTypeFor(sourceImagePath);
+  const imageInput: NewScheduledImage = typeof image === "string" ? { path: image } : image;
+  if (imageInput.storagePath && (imageInput.path || imageInput.bytes)) {
+    throw new Error("Provide only one of imagePath, image bytes, or imageStoragePath.");
+  }
+  const sourceImagePath = imageInput.path ? path.resolve(imageInput.path) : undefined;
+  const imageStorageRef = imageInput.storagePath
+    ? assertOwnedStorageObjectPath(imageInput.storagePath, ownerId)
+    : undefined;
+  if (imageStorageRef) requireCloudStorageForReference();
+  const extension = (imageInput.extension
+    ?? (imageStorageRef
+      ? path.extname(imageStorageRef)
+      : sourceImagePath
+        ? path.extname(sourceImagePath)
+        : "")).toLowerCase();
+  const contentType = imageInput.contentType
+    ?? (imageStorageRef
+      ? contentTypeForExtension(extension)
+      : sourceImagePath
+        ? contentTypeFor(sourceImagePath)
+        : "");
+  if (!contentType || !extension) {
+    throw new Error("Scheduled image requires a path, bytes, or storage object path with a content type and extension.");
+  }
   const currentTime = Date.now();
   for (const post of posts) {
     if (config.scheduledImageStorage === "local" && post.platform !== "linkedin" && !config.imagePublicBaseUrl.startsWith("https://")) {
       throw new Error("Scheduled Instagram and Facebook image publishing requires IMAGE_PUBLIC_BASE_URL to be a public HTTPS tunnel URL.");
     }
-    const scheduledTime = Date.parse(post.scheduledAt);
-    if (!Number.isFinite(scheduledTime) || scheduledTime <= currentTime) {
+    try {
+      assertFutureScheduleTime(post.scheduledAt, currentTime);
+    } catch {
       throw new Error(`The ${post.platform} schedule must be a valid future ISO-8601 timestamp.`);
     }
     if (post.text.length > textLimits[post.platform]) {
@@ -844,49 +909,73 @@ export async function schedulePosts(
   }
 
   await ensureScheduleStore();
-  const image = await readFile(sourceImagePath);
-  if (!image.byteLength) throw new Error("The selected schedule image file is empty.");
-  if (image.byteLength > config.scheduleImageMaxBytes) {
-    throw new Error("Scheduled image exceeds SCHEDULE_IMAGE_MAX_BYTES.");
-  }
   let storedImagePath = "";
   let imageStoragePath: string | undefined;
-  if (config.scheduledImageStorage === "supabase") {
-    imageStoragePath = await uploadScheduledImage(image, contentType, path.extname(sourceImagePath).toLowerCase());
+  if (imageStorageRef) {
+    // Permanent private-storage reference from the upload API: record it as-is
+    // and let the worker download it at publish time. No expiring URL is stored.
+    imageStoragePath = imageStorageRef;
   } else {
-    await mkdir(mediaDirectory, { recursive: true });
-    storedImagePath = path.join(mediaDirectory, `${randomBytes(16).toString("hex")}${path.extname(sourceImagePath).toLowerCase()}`);
-    await writeFile(storedImagePath, image, { mode: 0o600, flag: "wx" });
+    const imageBytes = imageInput.bytes ?? (sourceImagePath ? await readFile(sourceImagePath) : undefined);
+    if (!imageBytes) throw new Error("The selected schedule image file is empty.");
+    if (!imageBytes.byteLength) throw new Error("The selected schedule image file is empty.");
+    if (imageBytes.byteLength > config.scheduleImageMaxBytes) {
+      throw new Error("Scheduled image exceeds SCHEDULE_IMAGE_MAX_BYTES.");
+    }
+    if (config.scheduledImageStorage === "supabase") {
+      imageStoragePath = await uploadScheduledImage(imageBytes, contentType, extension, ownerId);
+    } else {
+      await mkdir(mediaDirectory, { recursive: true });
+      storedImagePath = path.join(mediaDirectory, `${randomBytes(16).toString("hex")}${extension}`);
+      await writeFile(storedImagePath, imageBytes, { mode: 0o600, flag: "wx" });
+    }
   }
 
   let documentFields: Pick<ScheduledPost, "documentPath" | "documentStoragePath" | "documentContentType" | "documentTitle"> = {
     documentPath: "",
   };
   if (document) {
-    const sourceDocumentPath = path.resolve(document.path);
-    if (path.extname(sourceDocumentPath).toLowerCase() !== ".pdf") {
+    if (document.storagePath && (document.path || document.bytes)) {
+      throw new Error("Provide only one of documentPath, document bytes, or documentStoragePath.");
+    }
+    const sourceDocumentPath = document.path ? path.resolve(document.path) : undefined;
+    if (sourceDocumentPath && path.extname(sourceDocumentPath).toLowerCase() !== ".pdf") {
       throw new Error("Scheduled documents must be PDF files.");
     }
-    const documentBytes = await readFile(sourceDocumentPath);
-    if (!documentBytes.byteLength) throw new Error("The selected schedule document file is empty.");
-    if (documentBytes.byteLength > config.scheduleDocumentMaxBytes) {
-      throw new Error("Scheduled document exceeds SCHEDULE_DOCUMENT_MAX_BYTES.");
+    const documentStorageRef = document.storagePath
+      ? assertOwnedStorageObjectPath(document.storagePath, ownerId)
+      : undefined;
+    if (documentStorageRef) requireCloudStorageForReference();
+    const documentContentType = document.contentType ?? "application/pdf";
+    if (documentContentType !== "application/pdf") {
+      throw new Error("Scheduled documents must be PDF files.");
     }
-    if (!isPdf(documentBytes)) throw new Error("The selected schedule document is not a valid PDF file.");
-    const documentTitle = document.title?.trim() || path.basename(sourceDocumentPath, path.extname(sourceDocumentPath));
+    const documentTitle = document.title?.trim()
+      || (sourceDocumentPath ? path.basename(sourceDocumentPath, path.extname(sourceDocumentPath)) : "Document");
     let storedDocumentPath = "";
     let documentStoragePath: string | undefined;
-    if (config.scheduledImageStorage === "supabase") {
-      documentStoragePath = await uploadScheduledDocument(documentBytes, "application/pdf", ".pdf");
+    if (documentStorageRef) {
+      documentStoragePath = documentStorageRef;
     } else {
-      await mkdir(mediaDirectory, { recursive: true });
-      storedDocumentPath = path.join(mediaDirectory, `${randomBytes(16).toString("hex")}.pdf`);
-      await writeFile(storedDocumentPath, documentBytes, { mode: 0o600, flag: "wx" });
+      const documentBytes = document.bytes ?? (sourceDocumentPath ? await readFile(sourceDocumentPath) : undefined);
+      if (!documentBytes) throw new Error("The selected schedule document file is empty.");
+      if (!documentBytes.byteLength) throw new Error("The selected schedule document file is empty.");
+      if (documentBytes.byteLength > config.scheduleDocumentMaxBytes) {
+        throw new Error("Scheduled document exceeds SCHEDULE_DOCUMENT_MAX_BYTES.");
+      }
+      if (!isPdf(documentBytes)) throw new Error("The selected schedule document is not a valid PDF file.");
+      if (config.scheduledImageStorage === "supabase") {
+        documentStoragePath = await uploadScheduledDocument(documentBytes, documentContentType, ".pdf", ownerId);
+      } else {
+        await mkdir(mediaDirectory, { recursive: true });
+        storedDocumentPath = path.join(mediaDirectory, `${randomBytes(16).toString("hex")}.pdf`);
+        await writeFile(storedDocumentPath, documentBytes, { mode: 0o600, flag: "wx" });
+      }
     }
     documentFields = {
       documentPath: storedDocumentPath,
       ...(documentStoragePath ? { documentStoragePath } : {}),
-      documentContentType: "application/pdf",
+      documentContentType,
       documentTitle,
     };
   }
@@ -988,17 +1077,31 @@ function mediaTypeFor(media: NewScheduledMedia[]): MediaType {
   throw new Error("Scheduled media must be a single video or a set of images.");
 }
 
+function validateMediaTypeAndExtension(kind: "image" | "video", contentType: string, extension: string): void {
+  const normalizedExtension = extension.toLowerCase();
+  const allowed = extensionsByContentType[contentType];
+  if (kind === "image") {
+    if (!imageMediaContentTypes.has(contentType)) throw new Error(`Unsupported scheduled image MIME type: ${contentType}.`);
+    if (!allowed?.includes(normalizedExtension)) throw new Error(`Scheduled image extension ${normalizedExtension} does not match ${contentType}.`);
+  } else {
+    if (!videoMediaContentTypes.has(contentType)) throw new Error(`Unsupported scheduled video MIME type: ${contentType}.`);
+    if (!allowed?.includes(normalizedExtension)) throw new Error(`Scheduled video extension ${normalizedExtension} does not match ${contentType}.`);
+  }
+}
+
 function validateMediaInput(media: NewScheduledMedia): void {
-  const extension = media.extension.toLowerCase();
-  const allowed = extensionsByContentType[media.contentType];
+  if (media.storagePath && media.bytes) {
+    throw new Error("Provide only one of media bytes or mediaStoragePath for each media item.");
+  }
+  validateMediaTypeAndExtension(media.kind, media.contentType, media.extension);
+  // A permanent storage reference is validated (bytes, MIME type, signature) by
+  // the worker when it downloads the object at publish time.
+  if (media.storagePath) return;
+  if (!media.bytes) throw new Error("A scheduled media item requires bytes or a storage object path.");
   if (media.kind === "image") {
-    if (!imageMediaContentTypes.has(media.contentType)) throw new Error(`Unsupported scheduled image MIME type: ${media.contentType}.`);
-    if (!allowed?.includes(extension)) throw new Error(`Scheduled image extension ${extension} does not match ${media.contentType}.`);
     if (!media.bytes.byteLength) throw new Error("A scheduled image file is empty.");
     if (media.bytes.byteLength > config.scheduleImageMaxBytes) throw new Error("A scheduled image exceeds SCHEDULE_IMAGE_MAX_BYTES.");
   } else {
-    if (!videoMediaContentTypes.has(media.contentType)) throw new Error(`Unsupported scheduled video MIME type: ${media.contentType}.`);
-    if (!allowed?.includes(extension)) throw new Error(`Scheduled video extension ${extension} does not match ${media.contentType}.`);
     if (!media.bytes.byteLength) throw new Error("A scheduled video file is empty.");
     if (media.bytes.byteLength > config.scheduleVideoMaxBytes) throw new Error("A scheduled video exceeds SCHEDULE_VIDEO_MAX_BYTES.");
   }
@@ -1013,8 +1116,9 @@ export async function scheduleMediaPosts(
   if (!posts.length) throw new Error("Select at least one platform to schedule.");
   const currentTime = Date.now();
   for (const post of posts) {
-    const scheduledTime = Date.parse(post.scheduledAt);
-    if (!Number.isFinite(scheduledTime) || scheduledTime <= currentTime) {
+    try {
+      assertFutureScheduleTime(post.scheduledAt, currentTime);
+    } catch {
       throw new Error(`The ${post.platform} schedule must be a valid future ISO-8601 timestamp.`);
     }
     if (post.text.length > textLimits[post.platform]) {
@@ -1064,17 +1168,23 @@ export async function scheduleMediaPosts(
   try {
     for (let index = 0; index < media.length; index += 1) {
       const item = media[index]!;
-      if (config.scheduledImageStorage === "supabase") {
+      if (item.storagePath) {
+        requireCloudStorageForReference();
+        const storagePath = assertOwnedStorageObjectPath(item.storagePath, ownerId);
+        storedItems.push({ kind: item.kind, position: index, imageToken: "", imagePath: "", storagePath, contentType: item.contentType });
+      } else if (config.scheduledImageStorage === "supabase") {
+        const bytes = item.bytes!;
         const storagePath = item.kind === "video"
-          ? await uploadScheduledVideo(item.bytes, item.contentType, item.extension.toLowerCase())
-          : await uploadScheduledImage(item.bytes, item.contentType, item.extension.toLowerCase());
+          ? await uploadScheduledVideo(bytes, item.contentType, item.extension.toLowerCase(), ownerId)
+          : await uploadScheduledImage(bytes, item.contentType, item.extension.toLowerCase(), ownerId);
         storageObjects.push({ path: storagePath, kind: item.kind });
         storedItems.push({ kind: item.kind, position: index, imageToken: "", imagePath: "", storagePath, contentType: item.contentType });
       } else {
+        const bytes = item.bytes!;
         await mkdir(mediaDirectory, { recursive: true });
         const token = randomBytes(32).toString("hex");
         const filePath = path.join(mediaDirectory, `${randomBytes(16).toString("hex")}${item.extension.toLowerCase()}`);
-        await writeFile(filePath, item.bytes, { mode: 0o600, flag: "wx" });
+        await writeFile(filePath, bytes, { mode: 0o600, flag: "wx" });
         localFiles.push(filePath);
         await registerScheduledMedia(token, filePath, item.contentType);
         storedItems.push({ kind: item.kind, position: index, imageToken: token, imagePath: filePath, contentType: item.contentType });
@@ -1082,31 +1192,48 @@ export async function scheduleMediaPosts(
     }
 
     if (document) {
-      const sourceDocumentPath = path.resolve(document.path);
-      if (path.extname(sourceDocumentPath).toLowerCase() !== ".pdf") {
+      if (document.storagePath && (document.path || document.bytes)) {
+        throw new Error("Provide only one of documentPath, document bytes, or documentStoragePath.");
+      }
+      const sourceDocumentPath = document.path ? path.resolve(document.path) : undefined;
+      if (sourceDocumentPath && path.extname(sourceDocumentPath).toLowerCase() !== ".pdf") {
         throw new Error("Scheduled documents must be PDF files.");
       }
-      const documentBytes = await readFile(sourceDocumentPath);
-      if (!documentBytes.byteLength) throw new Error("The selected schedule document file is empty.");
-      if (documentBytes.byteLength > config.scheduleDocumentMaxBytes) {
-        throw new Error("Scheduled document exceeds SCHEDULE_DOCUMENT_MAX_BYTES.");
+      const documentStorageRef = document.storagePath
+        ? assertOwnedStorageObjectPath(document.storagePath, ownerId)
+        : undefined;
+      if (documentStorageRef) requireCloudStorageForReference();
+      const documentContentType = document.contentType ?? "application/pdf";
+      if (documentContentType !== "application/pdf") {
+        throw new Error("Scheduled documents must be PDF files.");
       }
-      if (!isPdf(documentBytes)) throw new Error("The selected schedule document is not a valid PDF file.");
-      const documentTitle = document.title?.trim() || path.basename(sourceDocumentPath, path.extname(sourceDocumentPath));
+      const documentTitle = document.title?.trim()
+        || (sourceDocumentPath ? path.basename(sourceDocumentPath, path.extname(sourceDocumentPath)) : "Document");
       let storedDocumentPath = "";
       let documentStoragePath: string | undefined;
-      if (config.scheduledImageStorage === "supabase") {
-        documentStoragePath = await uploadScheduledDocument(documentBytes, "application/pdf", ".pdf");
+      if (documentStorageRef) {
+        documentStoragePath = documentStorageRef;
       } else {
-        await mkdir(mediaDirectory, { recursive: true });
-        storedDocumentPath = path.join(mediaDirectory, `${randomBytes(16).toString("hex")}.pdf`);
-        await writeFile(storedDocumentPath, documentBytes, { mode: 0o600, flag: "wx" });
-        localFiles.push(storedDocumentPath);
+        const documentBytes = document.bytes ?? (sourceDocumentPath ? await readFile(sourceDocumentPath) : undefined);
+        if (!documentBytes) throw new Error("The selected schedule document file is empty.");
+        if (!documentBytes.byteLength) throw new Error("The selected schedule document file is empty.");
+        if (documentBytes.byteLength > config.scheduleDocumentMaxBytes) {
+          throw new Error("Scheduled document exceeds SCHEDULE_DOCUMENT_MAX_BYTES.");
+        }
+        if (!isPdf(documentBytes)) throw new Error("The selected schedule document is not a valid PDF file.");
+        if (config.scheduledImageStorage === "supabase") {
+          documentStoragePath = await uploadScheduledDocument(documentBytes, documentContentType, ".pdf", ownerId);
+        } else {
+          await mkdir(mediaDirectory, { recursive: true });
+          storedDocumentPath = path.join(mediaDirectory, `${randomBytes(16).toString("hex")}.pdf`);
+          await writeFile(storedDocumentPath, documentBytes, { mode: 0o600, flag: "wx" });
+          localFiles.push(storedDocumentPath);
+        }
       }
       documentFields = {
         documentPath: storedDocumentPath,
         ...(documentStoragePath ? { documentStoragePath } : {}),
-        documentContentType: "application/pdf",
+        documentContentType,
         documentTitle,
       };
     }

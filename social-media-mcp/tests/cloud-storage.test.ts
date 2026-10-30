@@ -26,16 +26,16 @@ async function withFetch(
 
 test("cloud image upload uses configured Supabase Storage and validates image bytes", async () => {
   await withFetch(async (input, init) => {
-    assert.match(String(input), /^https:\/\/example-project\.supabase\.co\/storage\/v1\/object\/social-media-images\/scheduled\/.+\.png$/);
+    assert.match(String(input), /^https:\/\/example-project\.supabase\.co\/storage\/v1\/object\/social-media-images\/scheduled\/user-1\/.+\.png$/);
     assert.equal((init?.headers as Record<string, string>)["authorization"], "Bearer test-service-role-key");
     assert.equal((init?.headers as Record<string, string>)["content-type"], "image/png");
     return new Response(null, { status: 200 });
   }, async () => {
-    const objectPath = await storage.uploadScheduledImage(png, "image/png", ".png");
-    assert.match(objectPath, /^scheduled\/[a-f0-9]+\.png$/);
+    const objectPath = await storage.uploadScheduledImage(png, "image/png", ".png", "user-1");
+    assert.match(objectPath, /^scheduled\/user-1\/[a-f0-9]{48}\.png$/);
   });
 
-  await assert.rejects(storage.uploadScheduledImage(Buffer.from("<html>"), "image/png", ".png"), /does not match image\/png/);
+  await assert.rejects(storage.uploadScheduledImage(Buffer.from("<html>"), "image/png", ".png", "user-1"), /does not match image\/png/);
 });
 
 test("cloud image validation checks private object and public signed URL response", async () => {
@@ -118,7 +118,7 @@ test("Storage uploads retry bounded temporary failures using the same object key
     assert.equal((init?.headers as Record<string, string>)["x-upsert"], "true");
     return new Response(null, { status: requests === 1 ? 503 : 200 });
   }, async () => {
-    await storage.uploadScheduledImage(png, "image/png", ".png");
+    await storage.uploadScheduledImage(png, "image/png", ".png", "user-1");
     assert.equal(requests, 2);
   });
 
@@ -127,7 +127,7 @@ test("Storage uploads retry bounded temporary failures using the same object key
     requests += 1;
     return new Response(null, { status: 429 });
   }, async () => {
-    await assert.rejects(storage.uploadScheduledImage(png, "image/png", ".png"), /HTTP 429/);
+    await assert.rejects(storage.uploadScheduledImage(png, "image/png", ".png", "user-1"), /HTTP 429/);
     assert.equal(requests, 3);
   });
 });
@@ -135,20 +135,20 @@ test("Storage uploads retry bounded temporary failures using the same object key
 test("cloud PDF upload stores application/pdf documents and rejects non-PDF data", async () => {
   const pdf = Buffer.from("%PDF-1.7\n%\xE2\xE3\xCF\xD3\n");
   await withFetch(async (input, init) => {
-    assert.match(String(input), /^https:\/\/example-project\.supabase\.co\/storage\/v1\/object\/social-media-images\/scheduled\/.+\.pdf$/);
+    assert.match(String(input), /^https:\/\/example-project\.supabase\.co\/storage\/v1\/object\/social-media-images\/scheduled\/user-1\/.+\.pdf$/);
     assert.equal((init?.headers as Record<string, string>)["content-type"], "application/pdf");
     return new Response(null, { status: 200 });
   }, async () => {
-    const objectPath = await storage.uploadScheduledDocument(pdf, "application/pdf", ".pdf");
-    assert.match(objectPath, /^scheduled\/[a-f0-9]+\.pdf$/);
+    const objectPath = await storage.uploadScheduledDocument(pdf, "application/pdf", ".pdf", "user-1");
+    assert.match(objectPath, /^scheduled\/user-1\/[a-f0-9]{48}\.pdf$/);
   });
 
   await assert.rejects(
-    storage.uploadScheduledDocument(Buffer.from("<html>"), "application/pdf", ".pdf"),
+    storage.uploadScheduledDocument(Buffer.from("<html>"), "application/pdf", ".pdf", "user-1"),
     /does not match application\/pdf/,
   );
   await assert.rejects(
-    storage.uploadScheduledDocument(pdf, "image/png", ".png"),
+    storage.uploadScheduledDocument(pdf, "image/png", ".png", "user-1"),
     /Unsupported scheduled document MIME type/,
   );
 });

@@ -40,9 +40,25 @@ services:
       - key: OAUTH_REDIRECT_BASE_URL
         value: https://social-media-cloud-worker.onrender.com
       # Deployed Vercel frontend origin. Set this in the Render dashboard once the
-      # production frontend URL is known; the callback redirects to /accounts there.
+      # production frontend URL is known; provider callbacks redirect to /accounts
+      # and the remote MCP consent flow redirects to /mcp/authorize there.
       - key: OAUTH_FRONTEND_BASE_URL
         sync: false
+      # Public Streamable HTTP MCP endpoint. It is also the RFC 8707 resource
+      # indicator bound into access tokens, so it must exactly match the URL
+      # configured in Claude. The Vercel deployment must use the same value.
+      - key: MCP_PUBLIC_URL
+        value: https://social-media-cloud-worker.onrender.com/mcp
+      - key: MCP_OAUTH_SCOPE
+        value: mcp
+      # Dynamic Client Registration may only register callbacks under these
+      # HTTPS origins. Keep the same list on Render and Vercel.
+      - key: MCP_ALLOWED_REDIRECT_ORIGINS
+        value: https://claude.ai,https://claude.com
+      # Allows Claude Code to register loopback HTTP callbacks such as
+      # http://localhost:3118/callback. Set to false to disable that flow.
+      - key: MCP_ALLOW_LOOPBACK_REDIRECTS
+        value: "true"
       - key: META_APP_ID
         sync: false
       - key: META_APP_SECRET

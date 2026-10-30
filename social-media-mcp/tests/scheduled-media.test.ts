@@ -92,16 +92,16 @@ test("isIsoBmffVideo and matchesMediaSignature accept MP4 headers and reject oth
 
 test("cloud video upload stores video/mp4 objects and rejects non-video data", async () => {
   await withFetch(async (input, init) => {
-    assert.match(String(input), /^https:\/\/example-project\.supabase\.co\/storage\/v1\/object\/social-media-images\/scheduled\/.+\.mp4$/);
+    assert.match(String(input), /^https:\/\/example-project\.supabase\.co\/storage\/v1\/object\/social-media-images\/scheduled\/user-1\/.+\.mp4$/);
     assert.equal((init?.headers as Record<string, string>)["content-type"], "video/mp4");
     return new Response(null, { status: 200 });
   }, async () => {
-    const objectPath = await storage.uploadScheduledVideo(mp4, "video/mp4", ".mp4");
-    assert.match(objectPath, /^scheduled\/[a-f0-9]+\.mp4$/);
+    const objectPath = await storage.uploadScheduledVideo(mp4, "video/mp4", ".mp4", "user-1");
+    assert.match(objectPath, /^scheduled\/user-1\/[a-f0-9]{48}\.mp4$/);
   });
 
-  await assert.rejects(storage.uploadScheduledVideo(Buffer.from("<html>"), "video/mp4", ".mp4"), /does not match video\/mp4/);
-  await assert.rejects(storage.uploadScheduledVideo(mp4, "image/png", ".png"), /Unsupported scheduled video MIME type/);
+  await assert.rejects(storage.uploadScheduledVideo(Buffer.from("<html>"), "video/mp4", ".mp4", "user-1"), /does not match video\/mp4/);
+  await assert.rejects(storage.uploadScheduledVideo(mp4, "image/png", ".png", "user-1"), /Unsupported scheduled video MIME type/);
 });
 
 test("cloud video validation reads the private object and validates the public signed URL", async () => {

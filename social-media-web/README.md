@@ -37,6 +37,33 @@ logs. Users can save, update, and delete their Facebook, Instagram, and LinkedIn
 app credentials from **Accounts → Developer App Settings**; deleting them never
 disconnects an account or cancels a scheduled post.
 
+## Authenticated media upload
+
+Remote MCP tools (for example the Claude.ai connector) receive JSON arguments,
+not uploaded files, so a local image, video, or PDF must first become a durable
+media reference. Signed-in users can upload one with `POST /api/media/upload`
+(multipart `file` field). The endpoint validates the type and signature, stores
+the file under a per-user prefix in the private `social-media-images` Supabase
+bucket, and returns:
+
+- `storagePath` — the permanent object path. Pass this as `imageStoragePath`,
+  `media[].storagePath`, or `documentStoragePath` when scheduling. It never
+  expires and is what PostgreSQL records.
+- `url` — a short-lived signed URL for an immediate publish only. Do not store
+  it.
+
+At publish time the worker downloads `storagePath` with the server-side
+service-role key and creates a fresh signed URL only for platforms that require
+a public HTTPS URL (Instagram/Facebook). Platforms with direct upload (LinkedIn)
+receive the bytes directly. Retries re-download the same original object, so a
+post scheduled days ahead is unaffected by any earlier URL's expiry.
+
+This route needs `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on the server.
+Keep the service-role key out of `NEXT_PUBLIC_*`, the browser, API responses, and
+logs. The bucket stays private; the response never contains a storage
+credential. `SCHEDULE_SIGNED_URL_TTL_SECONDS` (default `86400`) controls the
+publish-time signed URL lifetime.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

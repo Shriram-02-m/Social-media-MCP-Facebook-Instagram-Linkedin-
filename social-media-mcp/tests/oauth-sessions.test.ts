@@ -284,7 +284,8 @@ test("worker registers the public OAuth callback routes without changing worker 
   const worker = await readFile(new URL("../src/worker.ts", import.meta.url), "utf8");
   assert.match(worker, /isOAuthCallbackPath\(request\.url\)/);
   assert.match(worker, /handleOAuthCallback\(request, response\)/);
-  assert.match(worker, /request\.url !== "\/worker\/run"/);
+  assert.match(worker, /pathname === "\/worker\/run"/);
   assert.match(worker, /timingSafeEqual/);
-  assert.match(worker, /request\.url === "\/health"/);
+  assert.match(worker, /pathname === "\/health"/);
+  assert.match(worker, /pathname === "\/mcp"/);
 });

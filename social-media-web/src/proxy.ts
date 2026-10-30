@@ -22,9 +22,10 @@ export function proxy(request: NextRequest) {
       return Response.json({ error: "Authentication required." }, { status: 401 });
     }
     const url = request.nextUrl.clone();
+    const next = `${pathname}${request.nextUrl.search}`;
     url.pathname = "/login";
     url.search = "";
-    if (pathname !== "/") url.searchParams.set("next", pathname);
+    if (pathname !== "/" || request.nextUrl.search) url.searchParams.set("next", next);
     return NextResponse.redirect(url);
   }
 

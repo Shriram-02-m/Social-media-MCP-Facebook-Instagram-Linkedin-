@@ -22,11 +22,8 @@ export function platformImageRequirements(platform: Platform, imageUrl?: string,
   if (platform === "instagram" && !imageUrl) {
     issues.push("Instagram Graph API feed publishing requires an image URL; text-only posts are not supported.");
   }
-  if (platform === "linkedin" && imageUrl && !imagePath) {
-    issues.push("LinkedIn image posts require a local imagePath for the official image-upload flow.");
-  }
   if (platform === "linkedin" && imagePath && imageUrl) {
-    issues.push("LinkedIn uses imagePath; imageUrl is for Meta publishing.");
+    issues.push("LinkedIn uses either imagePath or imageUrl, not both.");
   }
   if (platform !== "linkedin" && imagePath) {
     issues.push("Meta publishing uses imageUrl; local image uploads are not implemented for this platform.");

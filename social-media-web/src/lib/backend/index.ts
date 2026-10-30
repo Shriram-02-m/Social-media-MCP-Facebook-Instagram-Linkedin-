@@ -36,6 +36,33 @@ export {
 
 export type { AppCredentialStatus } from "../../../../social-media-mcp/dist/auth/app-credentials.js";
 
+export {
+  McpOAuthError,
+  createMcpAuthorizationCode,
+  getMcpClient,
+  isAllowedMcpRedirectUri,
+  isRegisteredMcpRedirectUri,
+  mcpAuthorizationServerIssuer,
+  mcpAuthorizationServerMetadata,
+  mcpProtectedResourceMetadata,
+  normalizeMcpResource,
+  normalizeMcpScope,
+  validateMcpAuthorizationRequest,
+} from "../../../../social-media-mcp/dist/auth/mcp-oauth.js";
+
+export {
+  createScheduledImageUrl,
+  matchesMediaSignature,
+  uploadScheduledDocument,
+  uploadScheduledImage,
+  uploadScheduledVideo,
+} from "../../../../social-media-mcp/dist/storage/scheduled-images.js";
+
+export type {
+  McpAuthorizationValidation,
+  McpOAuthClient,
+} from "../../../../social-media-mcp/dist/auth/mcp-oauth.js";
+
 export { databasePool, closeDatabasePool } from "../../../../social-media-mcp/dist/database.js";
 
 export { config } from "../../../../social-media-mcp/dist/config/env.js";

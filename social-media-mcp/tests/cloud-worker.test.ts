@@ -29,7 +29,8 @@ test("worker endpoint authenticates requests and scheduler disables its timer in
   const worker = await readFile(new URL("../src/worker.ts", import.meta.url), "utf8");
   const scheduler = await readFile(new URL("../src/scheduler.ts", import.meta.url), "utf8");
   assert.match(worker, /timingSafeEqual/);
-  assert.match(worker, /request\.url !== "\/worker\/run"/);
+  assert.match(worker, /pathname === "\/worker\/run"/);
+  assert.match(worker, /pathname === "\/mcp"/);
   assert.match(worker, /processDueJobs\(\)/);
   assert.match(scheduler, /config\.schedulerMode !== "local"\) return/);
   assert.match(scheduler, /FOR UPDATE SKIP LOCKED/);
