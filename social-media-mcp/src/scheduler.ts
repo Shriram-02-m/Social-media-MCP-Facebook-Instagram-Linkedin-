@@ -1031,16 +1031,19 @@ export async function schedulePosts(
     }
     if (!commitAttempted && storedImagePath) await unlink(storedImagePath).catch(() => undefined);
     if (!commitAttempted && imageStoragePath) {
-      await deleteScheduledImage(imageStoragePath).catch((cleanupError: unknown) => {
-        console.error(JSON.stringify({
-          event: "scheduled_image_orphan_cleanup_failed",
-          error: safeError(cleanupError),
-        }));
-      });
+      // Reference-counted cleanup: the row inserts rolled back or never
+      // committed, but a caller-supplied storagePath (reused across
+      // submissions) can still be referenced by earlier active posts, so only
+      // unreferenced objects may be deleted.
+      await deleteUnreferencedStorageObjects([
+        { kind: "image", path: imageStoragePath },
+      ]).catch(() => undefined);
     }
     if (!commitAttempted && documentFields.documentPath) await unlink(documentFields.documentPath).catch(() => undefined);
     if (!commitAttempted && documentFields.documentStoragePath) {
-      await deleteScheduledDocument(documentFields.documentStoragePath).catch((cleanupError: unknown) => {
+      await deleteUnreferencedStorageObjects([
+        { kind: "document", path: documentFields.documentStoragePath },
+      ]).catch((cleanupError: unknown) => {
         console.error(JSON.stringify({
           event: "scheduled_document_orphan_cleanup_failed",
           error: safeError(cleanupError),
@@ -1319,11 +1322,21 @@ export async function scheduleMediaPosts(
         if (!item.storagePath) unregisterScheduledMedia(item.imageToken);
       }
       for (const file of localFiles) await unlink(file).catch(() => undefined);
-      for (const object of storageObjects) {
-        const cleanup = object.kind === "video" ? deleteScheduledVideo : deleteScheduledImage;
-        await cleanup(object.path).catch(() => undefined);
-      }
-      if (documentFields.documentStoragePath) await deleteScheduledDocument(documentFields.documentStoragePath).catch(() => undefined);
+      // Reference-counted cleanup: media objects uploaded by this call and a
+      // caller-supplied documentStoragePath are deleted only when no earlier
+      // active post still references them.
+      const cleanupCandidates: StorageObjectCandidate[] = [
+        ...storageObjects,
+        ...(documentFields.documentStoragePath
+          ? [{ kind: "document" as const, path: documentFields.documentStoragePath }]
+          : []),
+      ];
+      await deleteUnreferencedStorageObjects(cleanupCandidates).catch((cleanupError: unknown) => {
+        console.error(JSON.stringify({
+          event: "scheduled_shared_object_cleanup_skipped",
+          error: safeError(cleanupError),
+        }));
+      });
     }
     throw error;
   }
@@ -1425,6 +1438,103 @@ export async function retryScheduledPost(ownerId: string, jobId: string): Promis
   return result;
 }
 
+// --- Shared storage object safety --------------------------------------------
+//
+// One scheduled-media submission uploads ONE object that every platform row
+// shares (schedulePosts), and a storagePath from the upload API can also be
+// reused across submissions. Deleting such an object unconditionally breaks
+// the sibling posts with a Supabase "HTTP 400 Object not found" at publish
+// time. Every consumer-triggered deletion therefore goes through the
+// reference-counted helper below: an object is removed only when no row in
+// 'scheduled' or 'publishing' state still references it. Legacy flat paths
+// (stored before per-user namespacing) are handled identically — the check is
+// on the stored path string, and the ownership prefix is not re-derived here.
+
+export interface StorageObjectCandidate {
+  kind: "image" | "video" | "document";
+  path: string;
+}
+
+// Deduplicates candidates by path so the reference count and the deletion pass
+// each see every object exactly once.
+export function dedupeStorageCandidates(candidates: StorageObjectCandidate[]): StorageObjectCandidate[] {
+  const byPath = new Map<string, StorageObjectCandidate>();
+  for (const candidate of candidates) {
+    if (!candidate.path || byPath.has(candidate.path)) continue;
+    byPath.set(candidate.path, candidate);
+  }
+  return [...byPath.values()];
+}
+
+// Reference-counted cleanup. The check runs inside one transaction that takes
+// an advisory xact lock per path (in sorted order, so concurrent cleanups can
+// never deadlock), meaning a racing cancellation of the last remaining
+// referencing row commits before this decision is made. The locks are held
+// while the objects are deleted. When the references cannot be evaluated
+// (database error), deletion is skipped entirely: keeping an orphaned object
+// is always recoverable, deleting blindly breaks live posts.
+async function deleteUnreferencedStorageObjects(candidates: StorageObjectCandidate[]): Promise<void> {
+  const deduped = dedupeStorageCandidates(candidates);
+  if (!deduped.length) return;
+  let client: PoolClient | undefined;
+  try {
+    await ensureScheduleStore();
+    client = await databasePool().connect();
+    await client.query("BEGIN");
+    for (const candidate of [...deduped].sort((a, b) => a.path.localeCompare(b.path))) {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [candidate.path]);
+    }
+    const paths = deduped.map((candidate) => candidate.path);
+    const { rows } = await client.query<{ path: string }>(`
+      WITH refs AS (
+        SELECT post.id, post.status, post.image_storage_path AS path
+        FROM public.scheduled_posts AS post
+        WHERE post.image_storage_path = ANY($1::text[])
+        UNION ALL
+        SELECT post.id, post.status, post.document_storage_path AS path
+        FROM public.scheduled_posts AS post
+        WHERE post.document_storage_path = ANY($1::text[])
+        UNION ALL
+        SELECT media_ref.post_id AS id, post.status, media_ref.storage_path AS path
+        FROM public.scheduled_post_media AS media_ref
+        JOIN public.scheduled_posts AS post ON post.id = media_ref.post_id
+        WHERE media_ref.storage_path = ANY($1::text[])
+      )
+      SELECT DISTINCT refs.path
+      FROM refs
+      WHERE refs.path = ANY($1::text[])
+        AND refs.status IN ('scheduled', 'publishing')
+    `, [paths]);
+    const referenced = new Set(rows.map((row) => row.path));
+    const deletable = deduped.filter((candidate) => !referenced.has(candidate.path));
+    for (const candidate of deletable) {
+      const cleanup = candidate.kind === "video"
+        ? deleteScheduledVideo
+        : candidate.kind === "document"
+          ? deleteScheduledDocument
+          : deleteScheduledImage;
+      try {
+        await cleanup(candidate.path);
+      } catch (error) {
+        console.error(JSON.stringify({
+          event: "scheduled_object_delete_failed",
+          storagePath: candidate.path,
+          error: safeError(error),
+        }));
+      }
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client?.query("ROLLBACK").catch(() => undefined);
+    console.error(JSON.stringify({
+      event: "scheduled_shared_object_cleanup_skipped",
+      error: safeError(error),
+    }));
+  } finally {
+    client?.release();
+  }
+}
+
 export async function cancelScheduledPost(ownerId: string, jobId: string): Promise<{
   id: string;
   platform: Platform;
@@ -1452,7 +1562,7 @@ export async function cancelScheduledPost(ownerId: string, jobId: string): Promi
     "SELECT * FROM public.scheduled_post_media WHERE post_id = $1",
     [jobId],
   );
-  const storageObjects: Array<{ kind: "image" | "video"; path: string }> = [];
+  const storageObjects: StorageObjectCandidate[] = [];
   const localFiles: string[] = [];
   for (const item of mediaRows) {
     if (item.image_token) unregisterScheduledMedia(item.image_token);
@@ -1464,14 +1574,17 @@ export async function cancelScheduledPost(ownerId: string, jobId: string): Promi
   } else if (!row.image_storage_path && row.image_path && !mediaRows.some((item) => item.image_path === row.image_path)) {
     localFiles.push(row.image_path);
   }
-  for (const file of localFiles) await unlink(file).catch(() => undefined);
-  for (const object of storageObjects) {
-    const cleanup = object.kind === "video" ? deleteScheduledVideo : deleteScheduledImage;
-    await cleanup(object.path).catch(() => undefined);
-  }
   if (row.document_storage_path) {
-    await deleteScheduledDocument(row.document_storage_path).catch(() => undefined);
-  } else if (row.document_path) {
+    storageObjects.push({ kind: "document", path: row.document_storage_path });
+  }
+  for (const file of localFiles) await unlink(file).catch(() => undefined);
+  // Every storage object goes through the shared-reference check: sibling
+  // posts (Instagram/Facebook/LinkedIn share one uploaded object) keep the
+  // object; it is deleted only when this cancellation row was its last
+  // active reference. The row itself is already 'cancelled', so the query
+  // naturally excludes it from the reference count.
+  await deleteUnreferencedStorageObjects(storageObjects);
+  if (row.document_path && !row.document_storage_path) {
     await unlink(row.document_path).catch(() => undefined);
   }
   await databasePool().query(
