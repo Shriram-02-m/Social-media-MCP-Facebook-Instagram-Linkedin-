@@ -17,16 +17,25 @@ export function validateLinkedInAuthorUrn(value: string): string | undefined {
     : "LinkedIn author must be a person or organization URN.";
 }
 
-export function platformImageRequirements(platform: Platform, imageUrl?: string, imagePath?: string): string[] {
+export function platformImageRequirements(
+  platform: Platform,
+  imageUrl?: string,
+  imagePath?: string,
+  imageStoragePath?: string,
+): string[] {
   const issues: string[] = [];
-  if (platform === "instagram" && !imageUrl) {
-    issues.push("Instagram Graph API feed publishing requires an image URL; text-only posts are not supported.");
+  const hasImageReference = Boolean(imageUrl ?? imagePath ?? imageStoragePath);
+  if (platform === "instagram" && !hasImageReference) {
+    issues.push("Instagram Graph API feed publishing requires an image reference; text-only posts are not supported.");
+  }
+  if (imageStoragePath && (imageUrl || imagePath)) {
+    issues.push("Provide only one image reference: imageUrl, imagePath, or imageStoragePath.");
   }
   if (platform === "linkedin" && imagePath && imageUrl) {
     issues.push("LinkedIn uses either imagePath or imageUrl, not both.");
   }
   if (platform !== "linkedin" && imagePath) {
-    issues.push("Meta publishing uses imageUrl; local image uploads are not implemented for this platform.");
+    issues.push("Meta publishing uses imageUrl or a storage object path; local image uploads are not implemented for this platform.");
   }
   if (imageUrl) {
     const issue = validateImageUrl(imageUrl);
@@ -35,6 +44,12 @@ export function platformImageRequirements(platform: Platform, imageUrl?: string,
   return issues;
 }
 
-export function validatePostContent(text?: string, imageUrl?: string, imagePath?: string): string[] {
-  return text?.trim() || imageUrl || imagePath ? [] : ["Provide post text, an image URL, or an image path."];
+export function validatePostContent(
+  text?: string,
+  imageUrl?: string,
+  imagePath?: string,
+  imageStoragePath?: string,
+): string[] {
+  const hasContent = text?.trim() || imageUrl || imagePath || imageStoragePath;
+  return hasContent ? [] : ["Provide post text, an image URL, an image path, or an imageStoragePath."];
 }

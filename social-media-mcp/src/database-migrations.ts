@@ -13,6 +13,7 @@ const migrationNames = [
   "008_oauth_sessions.sql",
   "009_user_app_credentials.sql",
   "010_mcp_oauth.sql",
+  "011_mcp_media_upload_intents.sql",
 ];
 
 let migrations: Promise<void> | undefined;

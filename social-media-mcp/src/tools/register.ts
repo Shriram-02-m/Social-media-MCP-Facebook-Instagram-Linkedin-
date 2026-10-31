@@ -16,6 +16,7 @@ import {
 import type { Platform } from "../platforms/types.js";
 import {
   cancelScheduledPost,
+  requireCloudStorageForReference,
   retryScheduledPost,
   scheduleMediaPosts,
   schedulePosts,
@@ -26,6 +27,8 @@ import {
 } from "../scheduler.js";
 import { explainError } from "../utils/http.js";
 import { fetchRemoteMedia } from "../utils/remote-media.js";
+import { assertOwnedStorageObjectPath, createScheduledImageUrl, downloadScheduledImage } from "../storage/scheduled-images.js";
+import { buildUploadInstructions, createMediaUploadIntent, contentTypeForFilename } from "../storage/upload-intents.js";
 import { platformImageRequirements, validateLinkedInAuthorUrn, validatePostContent } from "../utils/validation.js";
 import { rejectRemoteLocalPaths } from "./media-input.js";
 
@@ -167,15 +170,50 @@ export function registerTools(server: McpServer, options: RegisterToolsOptions =
     posts: platform === "linkedin" ? await readLinkedInPosts(userId, count, authorUrn) : await readMetaPosts(userId, platform, Math.min(count, 25)),
   })));
 
+  server.registerTool("social_upload_media_intent", {
+    description: remote
+      ? "Create a single-use, time-limited upload intent (up to 15 minutes) for an image, video, or PDF that will be stored privately in Supabase Storage under this account. Returns an HTTPS upload endpoint, a one-time bearer upload token, and a curl command. Run that command from an environment that can read the file bytes — in Claude.ai with code execution enabled, the chat attachment is available on a local sandbox path; in Claude Code the file is on disk. If you cannot upload bytes yourself, use the fallbackUrl and ask the user to upload the file in a browser, then continue with the storagePath they receive. Then pass the returned storagePath as imageStoragePath (social_publish) or media[].storagePath / documentStoragePath (social_schedule_media / social_schedule_posts)."
+      : "Create a single-use upload intent for an image, video, or PDF and upload it with the returned token to obtain a permanent storagePath for scheduling and publishing. Local stdio users can also pass file paths directly; storage paths are mainly useful for cloud runs.",
+    inputSchema: z.object({
+      kind: z.enum(["image", "video", "document"])
+        .describe("Media kind to upload: image (JPEG/PNG/GIF), video (MP4/MOV), or document (PDF, LinkedIn only)."),
+      filename: z.string().trim().max(255).optional()
+        .describe("Original file name for display only; the stored object key is always random. Used to infer the content type when contentType is omitted."),
+      contentType: z.string().trim().max(100).optional()
+        .describe("Exact MIME type: image/jpeg, image/png, image/gif, video/mp4, video/quicktime, or application/pdf."),
+      sizeBytes: z.number().int().min(1).optional()
+        .describe("Known file size in bytes. Checked against the kind limit up front; the actual upload size is re-validated server-side."),
+    }),
+  }, async ({ kind, filename, contentType, sizeBytes }) => safely(async () => {
+    // Ownership authority is the authenticated session user, never a caller
+    // supplied id. The intent, its upload token, and the stored object are all
+    // bound to this user.
+    const resolvedContentType = contentType?.toLowerCase()
+      ?? (filename ? contentTypeForFilename(filename) : undefined);
+    if (!resolvedContentType) {
+      throw new Error("Provide contentType or a filename whose extension identifies the media type.");
+    }
+    const intent = await createMediaUploadIntent({
+      userId,
+      kind,
+      contentType: resolvedContentType,
+      ...(filename !== undefined ? { filename } : {}),
+      ...(sizeBytes !== undefined ? { expectedBytes: sizeBytes } : {}),
+    });
+    return buildUploadInstructions(intent);
+  }));
+
   server.registerTool("social_publish", {
     description: remote
-      ? "Validate or publish to selected platforms. Dry-run is the default; real posts require dryRun=false and confirmPublish=true. Remote MCP clients must provide a public HTTPS imageUrl (LinkedIn downloads and validates it server-side). Local imagePath is not accepted in remote mode."
-      : "Validate or publish to selected platforms. Dry-run is the default; real posts require dryRun=false and confirmPublish=true. Meta accepts a public HTTPS imageUrl; LinkedIn accepts imageUrl (downloaded server-side) or a local imagePath in stdio mode.",
+      ? "Validate or publish to selected platforms. Dry-run is the default; real posts require dryRun=false and confirmPublish=true. Remote MCP clients provide a public HTTPS imageUrl or a permanent imageStoragePath from social_upload_media_intent or POST /api/media/upload (the server resolves or freshly signs it at publish time; signed URLs are never stored). Local imagePath is not accepted in remote mode."
+      : "Validate or publish to selected platforms. Dry-run is the default; real posts require dryRun=false and confirmPublish=true. Meta accepts a public HTTPS imageUrl or a permanent imageStoragePath; LinkedIn accepts imageUrl (downloaded server-side), imageStoragePath, or a local imagePath in stdio mode.",
     inputSchema: z.object({
       platforms: z.array(z.enum(["instagram", "facebook", "linkedin"])).min(1).max(3),
       text: z.string().max(3000).optional(),
       imageUrl: z.string().optional()
-        .describe("Public HTTPS image URL. Required for image posts from remote MCP clients."),
+        .describe("Public HTTPS image URL."),
+      imageStoragePath: z.string().min(1).optional()
+        .describe("Permanent private-storage object path returned by social_upload_media_intent or POST /api/media/upload. Validated to belong to the authenticated user; Meta gets a freshly signed URL only for the publish call, LinkedIn gets the re-downloaded bytes. Preferred over a public URL for remote clients."),
       imagePath: z.string().optional()
         .describe("Local image path. Available in stdio mode only; remote MCP clients are rejected."),
       pageId: z.string().optional(),
@@ -188,11 +226,17 @@ export function registerTools(server: McpServer, options: RegisterToolsOptions =
     // Reject remote local paths before validation, fetching, or any filesystem read.
     rejectRemoteLocalPaths(remote, { imagePath: input.imagePath });
     const platforms = [...new Set(input.platforms)];
-    const contentIssues = validatePostContent(input.text, input.imageUrl, input.imagePath);
+    const contentIssues = validatePostContent(input.text, input.imageUrl, input.imagePath, input.imageStoragePath);
+    // A caller-supplied storage path is only ever trusted after this ownership
+    // check: it must live under this user's private-storage prefix.
+    if (input.imageStoragePath) {
+      requireCloudStorageForReference();
+      assertOwnedStorageObjectPath(input.imageStoragePath, userId);
+    }
     const results = await Promise.all(platforms.map(async (platform) => {
       const issues = [
         ...contentIssues,
-        ...platformImageRequirements(platform, input.imageUrl, input.imagePath),
+        ...platformImageRequirements(platform, input.imageUrl, input.imagePath, input.imageStoragePath),
         ...(platform === "linkedin" && input.authorUrn
           ? [validateLinkedInAuthorUrn(input.authorUrn)].filter((issue): issue is string => Boolean(issue))
           : []),
@@ -217,6 +261,10 @@ export function registerTools(server: McpServer, options: RegisterToolsOptions =
         if (platform === "linkedin") {
           if (input.imagePath) {
             post = await publishLinkedIn(userId, input.text, input.imagePath, input.authorUrn);
+          } else if (input.imageStoragePath) {
+            // Direct byte upload from the private bucket; no signed URL exists.
+            const image = await downloadScheduledImage(input.imageStoragePath);
+            post = await publishLinkedInWithImage(userId, input.text, image.bytes, image.contentType, input.authorUrn);
           } else if (input.imageUrl) {
             const image = await fetchRemoteImage(input.imageUrl);
             post = await publishLinkedInWithImage(userId, input.text, image.bytes, image.contentType, input.authorUrn);
@@ -224,7 +272,12 @@ export function registerTools(server: McpServer, options: RegisterToolsOptions =
             post = await publishLinkedIn(userId, input.text, undefined, input.authorUrn);
           }
         } else {
-          post = await publishMeta(userId, platform, input.text, input.imageUrl, input.pageId, input.instagramAccountId);
+          // Meta requires a fetchable HTTPS URL at publish time. Create a fresh
+          // short-lived signed URL only inside this call; it is never persisted.
+          const publishImageUrl = input.imageStoragePath
+            ? await createScheduledImageUrl(input.imageStoragePath)
+            : input.imageUrl;
+          post = await publishMeta(userId, platform, input.text, publishImageUrl, input.pageId, input.instagramAccountId);
         }
         return { platform, success: true, published: post.confirmed, post };
       } catch (error) {

@@ -330,7 +330,9 @@ function contentTypeForExtension(extension: string): string {
 
 // A caller-supplied permanent storage reference is only valid in the cloud
 // storage mode. Local mode has no Supabase bucket to resolve it against.
-function requireCloudStorageForReference(): void {
+// Exported for the tool layer (social_publish imageStoragePath support uses the
+// same guard as scheduling).
+export function requireCloudStorageForReference(): void {
   if (config.scheduledImageStorage !== "supabase") {
     throw new Error("Storage object paths require SCHEDULED_IMAGE_STORAGE=supabase.");
   }

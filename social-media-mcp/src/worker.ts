@@ -21,6 +21,7 @@ import {
 } from "./auth/mcp-oauth.js";
 import { mcpAuthGate, mcpHandler } from "./mcp/handler.js";
 import { HttpBodyTooLargeError, sendWebResponse, toWebRequest } from "./mcp/http-adapter.js";
+import { mediaUploadBodyLimit, mediaUploadResponse } from "./media/upload-endpoint.js";
 import { processDueJobs } from "./scheduler.js";
 
 let activeWorkerRun: Promise<void> | undefined;
@@ -399,6 +400,17 @@ async function handleWorkerRun(request: IncomingMessage, response: ServerRespons
   respond(response, 202, { accepted: true, runId });
 }
 
+async function handleMediaUpload(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  if (request.method !== "POST") {
+    request.resume();
+    methodNotAllowed(response, "POST");
+    return;
+  }
+  const webRequest = await readWebRequest(request, mediaUploadBodyLimit);
+  const webResponse = await mediaUploadResponse(webRequest);
+  await sendWebResponse(response, webResponse);
+}
+
 async function route(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
   if (request.method === "GET" && pathname === "/health") {
@@ -435,6 +447,10 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   }
   if (pathname === "/worker/run") {
     await handleWorkerRun(request, response);
+    return;
+  }
+  if (pathname === "/media/upload" || pathname === "/media/upload/") {
+    await handleMediaUpload(request, response);
     return;
   }
   request.resume();

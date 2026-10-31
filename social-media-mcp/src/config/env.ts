@@ -38,6 +38,13 @@ const defaultLocalBaseUrl = `http://localhost:${imageServerPort}`;
 const databasePoolMax = integer("DATABASE_POOL_MAX", "5", 1);
 const databaseConnectionTimeoutMs = integer("DATABASE_CONNECTION_TIMEOUT_MS", "10000", 1);
 const databaseIdleTimeoutMs = integer("DATABASE_IDLE_TIMEOUT_MS", "30000", 1);
+// Lifetime of a single-use MCP media upload intent and its upload token. It
+// only has to outlive a curl upload, not a scheduled post; the returned
+// reference is a permanent object path, never an expiring URL.
+const mediaUploadIntentTtlSeconds = integer("MCP_UPLOAD_INTENT_TTL_SECONDS", "900", 60);
+// Maximum upload intents one authenticated user may request per rolling
+// 10-minute window (per cloud-worker process).
+const mediaUploadIntentRateLimit = integer("MCP_UPLOAD_INTENT_RATE_LIMIT", "20", 1);
 const tokenStoreBackend = value("TOKEN_STORE_BACKEND", "local");
 const scheduledImageStorage = value("SCHEDULED_IMAGE_STORAGE", "local");
 const schedulerMode = value("SCHEDULER_MODE", "local");
@@ -96,6 +103,8 @@ export const config = {
   // fetch of the media; the worker always re-signs a fresh URL from the
   // permanent object path, so this TTL never affects a still-scheduled post.
   scheduleSignedUrlTtlSeconds: integer("SCHEDULE_SIGNED_URL_TTL_SECONDS", "86400", 60),
+  mediaUploadIntentTtlSeconds,
+  mediaUploadIntentRateLimit,
   facebookPageId: value("META_FACEBOOK_PAGE_ID"),
   linkedinAuthorUrn: value("LINKEDIN_AUTHOR_URN"),
   databaseUrl: value("DATABASE_URL"),
@@ -207,4 +216,10 @@ if (config.scheduleImageRetryBaseDelayMs > 300000 || config.scheduleImageRetryMa
 }
 if (config.scheduleSignedUrlTtlSeconds > 604800) {
   throw new Error("SCHEDULE_SIGNED_URL_TTL_SECONDS must not exceed 604800 (seven days).");
+}
+if (mediaUploadIntentTtlSeconds > 3600) {
+  throw new Error("MCP_UPLOAD_INTENT_TTL_SECONDS must not exceed 3600 (one hour).");
+}
+if (mediaUploadIntentRateLimit > 200) {
+  throw new Error("MCP_UPLOAD_INTENT_RATE_LIMIT must not exceed 200 intents per 10-minute window.");
 }

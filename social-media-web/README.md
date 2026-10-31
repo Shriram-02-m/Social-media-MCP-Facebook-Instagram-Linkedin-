@@ -41,16 +41,24 @@ disconnects an account or cancels a scheduled post.
 
 Remote MCP tools (for example the Claude.ai connector) receive JSON arguments,
 not uploaded files, so a local image, video, or PDF must first become a durable
-media reference. Signed-in users can upload one with `POST /api/media/upload`
-(multipart `file` field). The endpoint validates the type and signature, stores
+media reference. Signed-in users can upload one from the **Media** page (which
+posts to `POST /api/media/upload`, multipart `file` field). The endpoint
+validates the type and signature, stores
 the file under a per-user prefix in the private `social-media-images` Supabase
 bucket, and returns:
 
 - `storagePath` — the permanent object path. Pass this as `imageStoragePath`,
-  `media[].storagePath`, or `documentStoragePath` when scheduling. It never
+  `media[].storagePath`, or `documentStoragePath` when scheduling (or to
+  `social_publish.imageStoragePath` for immediate publishing). It never
   expires and is what PostgreSQL records.
 - `url` — a short-lived signed URL for an immediate publish only. Do not store
   it.
+
+This page is also the browser fallback for Claude.ai: the MCP spec has no
+client→server file-upload primitive, so when the in-chat upload tool
+(`social_upload_media_intent` on the MCP server) cannot run in the model's
+environment, the user uploads here and pastes the returned `storagePath` into
+the Claude conversation.
 
 At publish time the worker downloads `storagePath` with the server-side
 service-role key and creates a fresh signed URL only for platforms that require

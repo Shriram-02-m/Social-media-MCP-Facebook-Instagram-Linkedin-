@@ -30,12 +30,28 @@ test("validates LinkedIn author URNs", () => {
 
 test("enforces platform image requirements and accepts non-empty text", () => {
   assert.deepEqual(platformImageRequirements("instagram"), [
-    "Instagram Graph API feed publishing requires an image URL; text-only posts are not supported.",
+    "Instagram Graph API feed publishing requires an image reference; text-only posts are not supported.",
   ]);
   assert.deepEqual(platformImageRequirements("linkedin", "https://example.com/a.jpg"), []);
   assert.deepEqual(platformImageRequirements("linkedin", "https://example.com/a.jpg", "C:\\a.jpg"), [
     "LinkedIn uses either imagePath or imageUrl, not both.",
   ]);
   assert.deepEqual(validatePostContent("A test caption"), []);
-  assert.deepEqual(validatePostContent(), ["Provide post text, an image URL, or an image path."]);
+  assert.deepEqual(validatePostContent(), [
+    "Provide post text, an image URL, an image path, or an imageStoragePath.",
+  ]);
+});
+
+test("permanent storage object paths satisfy platform image requirements exclusively", () => {
+  assert.deepEqual(platformImageRequirements("instagram", undefined, undefined, "scheduled/owner/a.jpg"), []);
+  assert.deepEqual(platformImageRequirements("facebook", undefined, undefined, "scheduled/owner/a.jpg"), []);
+  assert.deepEqual(platformImageRequirements("linkedin", undefined, undefined, "scheduled/owner/a.jpg"), []);
+  assert.deepEqual(platformImageRequirements("instagram", "https://example.com/a.jpg", undefined, "scheduled/owner/a.jpg"), [
+    "Provide only one image reference: imageUrl, imagePath, or imageStoragePath.",
+  ]);
+  assert.deepEqual(platformImageRequirements("facebook", undefined, "C:\\a.jpg", "scheduled/owner/a.jpg"), [
+    "Provide only one image reference: imageUrl, imagePath, or imageStoragePath.",
+    "Meta publishing uses imageUrl or a storage object path; local image uploads are not implemented for this platform.",
+  ]);
+  assert.deepEqual(validatePostContent(undefined, undefined, undefined, "scheduled/owner/a.jpg"), []);
 });

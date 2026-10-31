@@ -3,6 +3,7 @@
 import {
   CalendarDays,
   History,
+  Image as ImageIcon,
   LayoutDashboard,
   Link2,
   ListChecks,
@@ -26,6 +27,7 @@ import {
 const NAV_ITEMS = [
   { title: "Overview", href: "/", icon: LayoutDashboard },
   { title: "Composer", href: "/compose", icon: PenSquare },
+  { title: "Media", href: "/media", icon: ImageIcon },
   { title: "Calendar", href: "/calendar", icon: CalendarDays },
   { title: "Queue", href: "/queue", icon: ListChecks },
   { title: "History", href: "/history", icon: History },
