@@ -45,6 +45,11 @@ const mediaUploadIntentTtlSeconds = integer("MCP_UPLOAD_INTENT_TTL_SECONDS", "90
 // Maximum upload intents one authenticated user may request per rolling
 // 10-minute window (per cloud-worker process).
 const mediaUploadIntentRateLimit = integer("MCP_UPLOAD_INTENT_RATE_LIMIT", "20", 1);
+// Failed /media/upload attempts (bad tokens, bad bytes, rejected uploads) one
+// client address may produce inside the penalty window before the endpoint
+// answers 429 outright. In-memory per cloud-worker process: hardening noise
+// control, not the security boundary — tokens are single-use and 256-bit.
+const mediaUploadAttemptLimit = integer("MEDIA_UPLOAD_ATTEMPT_LIMIT", "30", 1);
 const tokenStoreBackend = value("TOKEN_STORE_BACKEND", "local");
 const scheduledImageStorage = value("SCHEDULED_IMAGE_STORAGE", "local");
 const schedulerMode = value("SCHEDULER_MODE", "local");
@@ -105,6 +110,7 @@ export const config = {
   scheduleSignedUrlTtlSeconds: integer("SCHEDULE_SIGNED_URL_TTL_SECONDS", "86400", 60),
   mediaUploadIntentTtlSeconds,
   mediaUploadIntentRateLimit,
+  mediaUploadAttemptLimit,
   facebookPageId: value("META_FACEBOOK_PAGE_ID"),
   linkedinAuthorUrn: value("LINKEDIN_AUTHOR_URN"),
   databaseUrl: value("DATABASE_URL"),

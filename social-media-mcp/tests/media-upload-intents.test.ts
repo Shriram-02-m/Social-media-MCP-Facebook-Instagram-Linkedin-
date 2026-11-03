@@ -26,6 +26,20 @@ test("media upload intents migration is additive, hashes tokens, and locks acces
   assert.match(migrations, /"011_mcp_media_upload_intents\.sql"/);
 });
 
+test("rate-hit history migration is additive, user-scoped, and locked to the service role", async () => {
+  const migration = await readFile(new URL("../migrations/012_mcp_intent_rate_limit.sql", import.meta.url), "utf8");
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.mcp_media_intent_rate_hits \(/);
+  assert.match(migration, /user_id TEXT NOT NULL/);
+  assert.match(migration, /hit_at TIMESTAMPTZ NOT NULL DEFAULT NOW\(\)/);
+  assert.match(migration, /CREATE INDEX IF NOT EXISTS mcp_media_intent_rate_hits_window_idx/);
+  assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(migration, /REVOKE ALL ON TABLE public\.mcp_media_intent_rate_hits FROM PUBLIC, anon, authenticated/);
+  assert.match(migration, /GRANT ALL ON TABLE public\.mcp_media_intent_rate_hits TO service_role/);
+  assert.doesNotMatch(migration, /\bDROP\s+TABLE\b|\bDELETE\s+FROM\b/i, "migrations never delete data or drop tables");
+  const migrations = await readFile(new URL("../src/database-migrations.ts", import.meta.url), "utf8");
+  assert.match(migrations, /"012_mcp_intent_rate_limit\.sql"/);
+});
+
 // --- Pure validation helpers --------------------------------------------------
 
 test("filenames are display-only and cannot traverse or shape a storage key", () => {
@@ -193,4 +207,65 @@ test("the intent tool result explains the Claude.ai reality and the browser fall
   assert.match(intentsSource, /code execution/, "instructions must describe the sandbox requirement honestly");
   assert.match(intentsSource, /fallback upload/, "instructions must offer the browser fallback");
   assert.match(intentsSource, /not an MCP access token/);
+});
+
+// --- Durable intent rate limiting (migration 012 + database check) ------------
+
+test("intent rate limiting spans processes via the database and fails open on database errors", async () => {
+  const intentsSource = await readFile(new URL("../src/storage/upload-intents.ts", import.meta.url), "utf8");
+  const inMemoryIndex = intentsSource.indexOf("intentRateLimiter.allow(userId)");
+  const databaseIndex = intentsSource.indexOf("recordMediaIntentRateHit(userId)");
+  assert.ok(inMemoryIndex >= 0, "the in-process window remains the always-available guard");
+  assert.ok(databaseIndex > inMemoryIndex, "the durable database window is consulted after the in-process check");
+  assert.match(intentsSource, /mcp_media_intent_rate_hits/);
+  assert.match(intentsSource, /hit_at > NOW\(\) - make_interval\(secs => \$2\)/);
+  assert.match(intentsSource, /media_upload_intent_rate_limit_database_unavailable/,
+    "a database error must fail open instead of blocking uploads");
+});
+
+// --- Expired-upload cleanup through the reference-counted helper --------------
+
+test("expired uploads are cleaned up through the reference-counted storage helper", async () => {
+  const intentsSource = await readFile(new URL("../src/storage/upload-intents.ts", import.meta.url), "utf8");
+  assert.match(intentsSource, /await deleteUnreferencedStorageObjects\(candidates\)/,
+    "sweeping never deletes an object without the shared reference check");
+  const selectIndex = intentsSource.indexOf("SELECT id, storage_path, kind");
+  const cleanupIndex = intentsSource.indexOf("deleteUnreferencedStorageObjects(candidates)");
+  const rowIndex = intentsSource.indexOf("storage_path IS NULL OR id = ANY($2::text[])");
+  assert.ok(selectIndex >= 0 && cleanupIndex > selectIndex, "candidates are read before the reference-counted delete");
+  assert.ok(rowIndex > cleanupIndex, "rows whose object survived the sweep are kept for retry");
+  const sharedStorage = await readFile(new URL("../src/scheduler.ts", import.meta.url), "utf8");
+  assert.match(sharedStorage, /export async function deleteUnreferencedStorageObjects/,
+    "the sweeper reuses the exact reference-counted deletion helper");
+  assert.match(sharedStorage, /export interface StorageCleanupResult/);
+});
+
+// --- Failed-attempt throttling (HTTP 429) --------------------------------------
+
+test("failed-attempt penalty box blocks after the limit and slides with the window", () => {
+  const box = intents.createSlidingWindowPenaltyBox({ maxAttempts: 3, windowMs: 1000 });
+  assert.equal(box.blocked("ip-a", 0), false);
+  box.record("ip-a", 0);
+  box.record("ip-a", 10);
+  box.record("ip-a", 20);
+  assert.equal(box.blocked("ip-a", 30), true);
+  assert.equal(box.blocked("ip-a", 40), true, "blocking consults the recorded history without adding a hit");
+  assert.equal(box.blocked("ip-b", 40), false, "blocks are per client address");
+  assert.equal(box.blocked("ip-a", 1050), false, "the penalty window has slid past all recorded failures");
+});
+
+test("the upload endpoint throttles failed attempts before any claim and records every rejection", async () => {
+  const source = await readFile(new URL("../src/media/upload-endpoint.ts", import.meta.url), "utf8");
+  assert.match(source, /Too many failed upload attempts/);
+  assert.match(source, /media_upload_throttled/);
+  assert.match(source, /windowMs: 600_000/);
+  const blockedIndex = source.indexOf("attemptPenalty.blocked(clientKey)");
+  const claimIndex = source.indexOf("claimPendingMediaUploadIntent(token)");
+  const arrayBufferIndex = source.indexOf("request.arrayBuffer()");
+  assert.ok(blockedIndex >= 0 && blockedIndex < claimIndex, "throttling rejects requests before any intent claim");
+  assert.ok(claimIndex < arrayBufferIndex, "the single-use claim still precedes byte transfer");
+  const recordCalls = source.match(/attemptPenalty\.record\(clientKey\)/g) ?? [];
+  assert.ok(recordCalls.length >= 4, "bad tokens, rejected payloads, unknown intents, and failures all count");
+  const endpoint = await readFile(new URL("../src/config/env.ts", import.meta.url), "utf8");
+  assert.match(endpoint, /mediaUploadAttemptLimit = integer\("MEDIA_UPLOAD_ATTEMPT_LIMIT", "30", 1\)/);
 });

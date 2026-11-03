@@ -424,7 +424,7 @@ async function publishJob(job: ScheduledPost): Promise<void> {
       if (!job.imageStoragePath && !job.imagePath) {
         job.failureStage = "publishing";
         await saveJob(job);
-          result = await publishMeta(job.userId, job.platform as MetaPlatform, job.text, undefined);
+        result = await publishMeta(job.userId, job.platform as MetaPlatform, job.text, undefined);
       } else {
         await validateBeforePublishing(job, true);
         const imageUrl = job.imageStoragePath
@@ -861,36 +861,44 @@ export async function startScheduleRunner(): Promise<void> {
 export async function schedulePosts(
   ownerId: string,
   posts: NewScheduledPost[],
-  image: string | NewScheduledImage,
+  image?: string | NewScheduledImage,
   document?: NewScheduledDocument,
 ): Promise<Array<Pick<ScheduledPost, "id" | "platform" | "scheduledAt" | "status">>> {
-  const imageInput: NewScheduledImage = typeof image === "string" ? { path: image } : image;
-  if (imageInput.storagePath && (imageInput.path || imageInput.bytes)) {
+  // An omitted image yields text-only posts, which Facebook and LinkedIn
+  // support natively; Instagram is rejected below. All image validation only
+  // runs when an image reference is provided.
+  const imageInput: NewScheduledImage | undefined = image === undefined
+    ? undefined
+    : typeof image === "string" ? { path: image } : image;
+  if (imageInput?.storagePath && (imageInput.path || imageInput.bytes)) {
     throw new Error("Provide only one of imagePath, image bytes, or imageStoragePath.");
   }
-  const sourceImagePath = imageInput.path ? path.resolve(imageInput.path) : undefined;
-  const imageStorageRef = imageInput.storagePath
+  const sourceImagePath = imageInput?.path ? path.resolve(imageInput.path) : undefined;
+  const imageStorageRef = imageInput?.storagePath
     ? assertOwnedStorageObjectPath(imageInput.storagePath, ownerId)
     : undefined;
   if (imageStorageRef) requireCloudStorageForReference();
-  const extension = (imageInput.extension
+  const extension = (imageInput?.extension
     ?? (imageStorageRef
       ? path.extname(imageStorageRef)
       : sourceImagePath
         ? path.extname(sourceImagePath)
         : "")).toLowerCase();
-  const contentType = imageInput.contentType
+  const contentType = imageInput?.contentType
     ?? (imageStorageRef
       ? contentTypeForExtension(extension)
       : sourceImagePath
         ? contentTypeFor(sourceImagePath)
         : "");
-  if (!contentType || !extension) {
+  if (imageInput && (!contentType || !extension)) {
     throw new Error("Scheduled image requires a path, bytes, or storage object path with a content type and extension.");
   }
   const currentTime = Date.now();
   for (const post of posts) {
-    if (config.scheduledImageStorage === "local" && post.platform !== "linkedin" && !config.imagePublicBaseUrl.startsWith("https://")) {
+    if (!imageInput && post.platform === "instagram") {
+      throw new Error("Instagram requires an image reference; text-only posts are not supported.");
+    }
+    if (imageInput && config.scheduledImageStorage === "local" && post.platform !== "linkedin" && !config.imagePublicBaseUrl.startsWith("https://")) {
       throw new Error("Scheduled Instagram and Facebook image publishing requires IMAGE_PUBLIC_BASE_URL to be a public HTTPS tunnel URL.");
     }
     try {
@@ -913,23 +921,25 @@ export async function schedulePosts(
   await ensureScheduleStore();
   let storedImagePath = "";
   let imageStoragePath: string | undefined;
-  if (imageStorageRef) {
-    // Permanent private-storage reference from the upload API: record it as-is
-    // and let the worker download it at publish time. No expiring URL is stored.
-    imageStoragePath = imageStorageRef;
-  } else {
-    const imageBytes = imageInput.bytes ?? (sourceImagePath ? await readFile(sourceImagePath) : undefined);
-    if (!imageBytes) throw new Error("The selected schedule image file is empty.");
-    if (!imageBytes.byteLength) throw new Error("The selected schedule image file is empty.");
-    if (imageBytes.byteLength > config.scheduleImageMaxBytes) {
-      throw new Error("Scheduled image exceeds SCHEDULE_IMAGE_MAX_BYTES.");
-    }
-    if (config.scheduledImageStorage === "supabase") {
-      imageStoragePath = await uploadScheduledImage(imageBytes, contentType, extension, ownerId);
+  if (imageInput) {
+    if (imageStorageRef) {
+      // Permanent private-storage reference from the upload API: record it as-is
+      // and let the worker download it at publish time. No expiring URL is stored.
+      imageStoragePath = imageStorageRef;
     } else {
-      await mkdir(mediaDirectory, { recursive: true });
-      storedImagePath = path.join(mediaDirectory, `${randomBytes(16).toString("hex")}${extension}`);
-      await writeFile(storedImagePath, imageBytes, { mode: 0o600, flag: "wx" });
+      const imageBytes = imageInput.bytes ?? (sourceImagePath ? await readFile(sourceImagePath) : undefined);
+      if (!imageBytes) throw new Error("The selected schedule image file is empty.");
+      if (!imageBytes.byteLength) throw new Error("The selected schedule image file is empty.");
+      if (imageBytes.byteLength > config.scheduleImageMaxBytes) {
+        throw new Error("Scheduled image exceeds SCHEDULE_IMAGE_MAX_BYTES.");
+      }
+      if (config.scheduledImageStorage === "supabase") {
+        imageStoragePath = await uploadScheduledImage(imageBytes, contentType, extension, ownerId);
+      } else {
+        await mkdir(mediaDirectory, { recursive: true });
+        storedImagePath = path.join(mediaDirectory, `${randomBytes(16).toString("hex")}${extension}`);
+        await writeFile(storedImagePath, imageBytes, { mode: 0o600, flag: "wx" });
+      }
     }
   }
 
@@ -990,8 +1000,10 @@ export async function schedulePosts(
     imageToken: randomBytes(32).toString("hex"),
     imagePath: storedImagePath,
     ...(imageStoragePath ? { imageStoragePath } : {}),
-    contentType,
-    mediaType: document ? "document" : "image",
+    // Text-only rows carry a neutral content type; the columns are NOT NULL and
+    // mediaType "none" records that this job publishes text only.
+    contentType: imageInput ? contentType : "application/octet-stream",
+    mediaType: document ? "document" : imageInput ? "image" : "none",
     ...(post.platform === "linkedin" ? documentFields : { documentPath: "" }),
     status: "scheduled",
     createdAt,
@@ -1473,9 +1485,19 @@ export function dedupeStorageCandidates(candidates: StorageObjectCandidate[]): S
 // while the objects are deleted. When the references cannot be evaluated
 // (database error), deletion is skipped entirely: keeping an orphaned object
 // is always recoverable, deleting blindly breaks live posts.
-async function deleteUnreferencedStorageObjects(candidates: StorageObjectCandidate[]): Promise<void> {
+//
+// Returns what happened per path (`deleted`, `referenced`). Deletion decide-ers
+// that need per-path outcomes (the upload-intent sweeper) use the returned
+// sets; existing callers ignore them. An object Supabase reports as missing
+// (HTTP 404) counts as deleted: the cleanup goal is already satisfied.
+export interface StorageCleanupResult {
+  deleted: Set<string>;
+  referenced: Set<string>;
+}
+
+export async function deleteUnreferencedStorageObjects(candidates: StorageObjectCandidate[]): Promise<StorageCleanupResult> {
   const deduped = dedupeStorageCandidates(candidates);
-  if (!deduped.length) return;
+  if (!deduped.length) return { deleted: new Set(), referenced: new Set() };
   let client: PoolClient | undefined;
   try {
     await ensureScheduleStore();
@@ -1507,6 +1529,7 @@ async function deleteUnreferencedStorageObjects(candidates: StorageObjectCandida
     `, [paths]);
     const referenced = new Set(rows.map((row) => row.path));
     const deletable = deduped.filter((candidate) => !referenced.has(candidate.path));
+    const deleted = new Set<string>();
     for (const candidate of deletable) {
       const cleanup = candidate.kind === "video"
         ? deleteScheduledVideo
@@ -1515,7 +1538,13 @@ async function deleteUnreferencedStorageObjects(candidates: StorageObjectCandida
           : deleteScheduledImage;
       try {
         await cleanup(candidate.path);
+        deleted.add(candidate.path);
       } catch (error) {
+        if (/HTTP 404\b/.test(safeError(error))) {
+          // The object is already gone; the cleanup goal is met.
+          deleted.add(candidate.path);
+          continue;
+        }
         console.error(JSON.stringify({
           event: "scheduled_object_delete_failed",
           storagePath: candidate.path,
@@ -1524,12 +1553,14 @@ async function deleteUnreferencedStorageObjects(candidates: StorageObjectCandida
       }
     }
     await client.query("COMMIT");
+    return { deleted, referenced };
   } catch (error) {
     await client?.query("ROLLBACK").catch(() => undefined);
     console.error(JSON.stringify({
       event: "scheduled_shared_object_cleanup_skipped",
       error: safeError(error),
     }));
+    return { deleted: new Set(), referenced: new Set() };
   } finally {
     client?.release();
   }

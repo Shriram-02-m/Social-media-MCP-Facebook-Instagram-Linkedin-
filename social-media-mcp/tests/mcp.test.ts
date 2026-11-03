@@ -51,6 +51,7 @@ test("built MCP server exposes tools and validates dry-run publishing", async ()
       "social_schedule_posts",
       "social_scheduled_posts_status",
       "social_token_store_status",
+      "social_upload_media_intent",
     ]);
 
     const facebookAuthorization = await client.callTool({
@@ -98,7 +99,7 @@ test("built MCP server exposes tools and validates dry-run publishing", async ()
       results: Array<{ published: boolean; issues?: string[] }>;
     };
     assert.equal(instagramBody.results[0]?.published, false);
-    assert.match(instagramBody.results[0]?.issues?.join(" ") ?? "", /requires an image URL/);
+    assert.match(instagramBody.results[0]?.issues?.join(" ") ?? "", /requires an image reference/);
   } finally {
     await client.close();
   }

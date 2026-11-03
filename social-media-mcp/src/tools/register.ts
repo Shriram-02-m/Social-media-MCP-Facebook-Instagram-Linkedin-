@@ -289,8 +289,8 @@ export function registerTools(server: McpServer, options: RegisterToolsOptions =
 
   server.registerTool("social_schedule_posts", {
     description: remote
-      ? "Persistently schedule separate posts to connected social platforms. The durable media reference is imageStoragePath (the permanent object path returned by POST /api/media/upload); the worker downloads it with server-side credentials and creates a fresh signed URL only when the platform needs one. A public HTTPS imageUrl is also accepted and is downloaded and re-stored immediately. For a native LinkedIn document, pass documentStoragePath (durable) or a public HTTPS documentUrl. Local imagePath/documentPath are not accepted in remote mode."
-      : "Persistently schedule separate posts to connected social platforms. In local mode the MCP scheduler, image server, and public tunnel must remain running; in cloud mode media is stored privately in Supabase Storage and the separate worker publishes it. Provide a permanent imageStoragePath from POST /api/media/upload, a public HTTPS imageUrl, or a local imagePath (stdio). An optional PDF documentStoragePath, documentUrl, or documentPath is attached as a native LinkedIn document post (LinkedIn only).",
+      ? "Persistently schedule separate posts to connected social platforms. Provide an image reference (imageStoragePath, the permanent object path returned by POST /api/media/upload, or a public HTTPS imageUrl that is downloaded and re-stored immediately) for image posts, or omit every image reference for a text-only Facebook or LinkedIn post; Instagram always requires an image. The worker downloads stored media with server-side credentials and creates a fresh signed URL only when the platform needs one. For a native LinkedIn document, pass documentStoragePath (durable) or a public HTTPS documentUrl. Local imagePath/documentPath are not accepted in remote mode."
+      : "Persistently schedule separate posts to connected social platforms. In local mode the MCP scheduler, image server, and public tunnel must remain running; in cloud mode media is stored privately in Supabase Storage and the separate worker publishes it. Provide a permanent imageStoragePath from POST /api/media/upload, a public HTTPS imageUrl, or a local imagePath (stdio) for image posts, or omit every image reference for a text-only Facebook or LinkedIn post; Instagram always requires an image. An optional PDF documentStoragePath, documentUrl, or documentPath is attached as a native LinkedIn document post (LinkedIn only).",
     inputSchema: z.object({
       posts: z.array(z.object({
         platform: z.enum(["instagram", "facebook", "linkedin"]),
@@ -315,19 +315,21 @@ export function registerTools(server: McpServer, options: RegisterToolsOptions =
   }, async ({ posts, imageUrl, imageStoragePath, imagePath, documentUrl, documentStoragePath, documentPath, documentTitle }) => safely(async () => {
     // Reject remote local paths before any token lookup, fetch, or filesystem read.
     rejectRemoteLocalPaths(remote, { imagePath, documentPath });
-    if ([imageUrl, imageStoragePath, imagePath].filter(Boolean).length !== 1) {
-      throw new Error("Provide exactly one of imageUrl, imageStoragePath, or imagePath.");
+    if ([imageUrl, imageStoragePath, imagePath].filter(Boolean).length > 1) {
+      throw new Error("Provide at most one of imageUrl, imageStoragePath, or imagePath.");
     }
     if ([documentUrl, documentStoragePath, documentPath].filter(Boolean).length > 1) {
       throw new Error("Provide at most one of documentUrl, documentStoragePath, or documentPath.");
     }
-    let image: string | NewScheduledImage;
+    // Omitting every image reference schedules text-only posts; Instagram is
+    // rejected by the scheduler because its API cannot publish text-only feeds.
+    let image: string | NewScheduledImage | undefined;
     if (imagePath) {
       image = imagePath;
     } else if (imageStoragePath) {
       image = { storagePath: imageStoragePath };
-    } else {
-      const fetched = await fetchRemoteImage(imageUrl!);
+    } else if (imageUrl) {
+      const fetched = await fetchRemoteImage(imageUrl);
       image = { bytes: fetched.bytes, contentType: fetched.contentType, extension: fetched.extension };
     }
     const document = documentUrl

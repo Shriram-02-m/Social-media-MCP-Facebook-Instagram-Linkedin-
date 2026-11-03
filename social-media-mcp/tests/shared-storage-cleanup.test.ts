@@ -41,6 +41,8 @@ test("cleanup helper is concurrency-safe and fails safe", async () => {
   assert.match(helper, /pg_advisory_xact_lock/, "per-path advisory locks serialize racing cleanups");
   assert.match(helper, /sort\(\(a, b\) => a\.path\.localeCompare\(b\.path\)\)/, "sorted lock order prevents deadlocks");
   assert.match(helper, /scheduled_shared_object_cleanup_skipped/, "unverifiable references must not delete");
+  assert.match(helper, /deleted\.add\(candidate\.path\)/, "per-path outcomes are reported to callers");
+  assert.match(helper, /HTTP 404/, "an object Supabase reports as missing still counts as cleaned up");
   const referenceIndex = helper.indexOf("const referenced = new Set");
   const deleteIndex = helper.indexOf("deleteScheduledVideo");
   const beginIndex = helper.indexOf('"BEGIN"');

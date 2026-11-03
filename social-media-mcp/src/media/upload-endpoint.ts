@@ -4,6 +4,7 @@ import {
   UploadIntentError,
   claimPendingMediaUploadIntent,
   completeMediaUploadIntent,
+  createSlidingWindowPenaltyBox,
   evaluateMediaUpload,
   extensionForContentType,
   failMediaUploadIntent,
@@ -30,6 +31,23 @@ import {
 
 // 1 MiB of transport slack above the largest accepted video.
 export const mediaUploadBodyLimit = config.scheduleVideoMaxBytes + 1024 * 1024;
+
+// Failed-attempt penalty box (HTTP 429). Blocks noise from repeated bad tokens
+// or rejected bodies: per client address, in-memory per cloud-worker process,
+// on top of the cryptographic single-use claim (which already bounds what any
+// one token can do). Configured by MEDIA_UPLOAD_ATTEMPT_LIMIT over a rolling
+// 10-minute window; successful uploads never record a penalty hit.
+const attemptPenalty = createSlidingWindowPenaltyBox({
+  maxAttempts: config.mediaUploadAttemptLimit,
+  windowMs: 600_000,
+});
+
+// Best-effort client attribution for throttling only (never logged raw; the
+// Render proxy supplies x-forwarded-for).
+function requestClientKey(request: Request): string {
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return forwarded || "unknown";
+}
 
 function redactError(error: unknown): string {
   const message = error instanceof Error ? error.message : "Unknown upload error.";
@@ -65,6 +83,7 @@ function requestContentType(request: Request): string {
 // one. That keeps "one token, at most one accepted upload" unconditional.
 export async function mediaUploadResponse(request: Request): Promise<Response> {
   const token = extractUploadToken(request);
+  const clientKey = requestClientKey(request);
   try {
     if (request.method !== "POST") {
       return jsonResponse(405, { error: "Use POST." }, { allow: "POST" });
@@ -72,7 +91,14 @@ export async function mediaUploadResponse(request: Request): Promise<Response> {
     if (!config.supabaseUrl || !config.supabaseServiceRoleKey || !config.databaseUrl) {
       return jsonResponse(503, { error: "Media uploads are not configured on this deployment." });
     }
+    if (attemptPenalty.blocked(clientKey)) {
+      console.warn(JSON.stringify({ event: "media_upload_throttled", status: 429, knownClient: clientKey !== "unknown" }));
+      return jsonResponse(429, {
+        error: "Too many failed upload attempts. Wait ten minutes and request a new upload intent.",
+      });
+    }
     if (!token || token.length < 32) {
+      attemptPenalty.record(clientKey);
       return jsonResponse(401, { error: "Provide the upload token as an Authorization: Bearer header." });
     }
     const intent = await claimPendingMediaUploadIntent(token);
@@ -89,6 +115,7 @@ export async function mediaUploadResponse(request: Request): Promise<Response> {
       );
       if (problem) {
         await failMediaUploadIntent(intent.id);
+        attemptPenalty.record(clientKey);
         console.warn(JSON.stringify({ event: "media_upload_rejected", intentId: intent.id, status: problem.status }));
         return jsonResponse(problem.status, { error: problem.message });
       }
@@ -105,6 +132,7 @@ export async function mediaUploadResponse(request: Request): Promise<Response> {
       // header) and again by every later download/validate call in the worker.
       if (!matchesMediaSignature(bytes, declaredContentType)) {
         await failMediaUploadIntent(intent.id);
+        attemptPenalty.record(clientKey);
         console.warn(JSON.stringify({ event: "media_upload_bad_signature", intentId: intent.id }));
         return jsonResponse(415, {
           error: `File contents do not match ${declaredContentType}. The upload intent is single-use; request a new one.`,
@@ -174,6 +202,7 @@ export async function mediaUploadResponse(request: Request): Promise<Response> {
     if (error instanceof UploadIntentError) {
       // Deliberately log identity without any token material beyond a short,
       // unsalted digest prefix for tracing — never the raw token itself.
+      attemptPenalty.record(clientKey);
       console.warn(JSON.stringify({
         event: "media_upload_rejected",
         tokenFingerprint: token ? hashForLogging(token) : "missing",
@@ -181,6 +210,7 @@ export async function mediaUploadResponse(request: Request): Promise<Response> {
       }));
       return jsonResponse(error.status, { error: error.message });
     }
+    attemptPenalty.record(clientKey);
     console.error(JSON.stringify({ event: "media_upload_failed", error: redactError(error) }));
     return jsonResponse(500, { error: "The upload failed. Request a new upload intent and try again." });
   }

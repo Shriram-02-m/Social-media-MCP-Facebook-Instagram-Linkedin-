@@ -3,6 +3,7 @@ import path from "node:path";
 import type { QueryResultRow } from "pg";
 import { config } from "../config/env.js";
 import { databasePool } from "../database.js";
+import { deleteUnreferencedStorageObjects, type StorageObjectCandidate } from "../scheduler.js";
 
 // Single-use media upload intents for MCP clients.
 //
@@ -196,6 +197,10 @@ export function fallbackMediaUploadPageUrl(): string | undefined {
 // Sliding-window limiter keyed by authenticated user, per cloud-worker process.
 // Intent creation is the only mutation this protects; the upload endpoint is
 // already single-use and capped by token.
+//
+// Two layers guard intent creation: this in-process window (fast, always
+// available) and a durable per-process-safe database window below, so the
+// configured limit survives scale-to-zero restarts and multiple instances.
 
 export interface SlidingWindowRateLimiter {
   allow(key: string, nowMs?: number): boolean;
@@ -221,9 +226,41 @@ export function createSlidingWindowRateLimiter(options: {
   };
 }
 
+// Penalty box for failed upload attempts (bad tokens, rejected bytes). Unlike
+// the limiter above, per-key hits are recorded only on failures and blocking
+// consults the recorded history without adding a hit, so a client cannot lift
+// its own block by retrying. The endpoint answers 429 while blocked.
+export interface SlidingWindowPenaltyBox {
+  record(key: string, nowMs?: number): void;
+  blocked(key: string, nowMs?: number): boolean;
+}
+
+export function createSlidingWindowPenaltyBox(options: {
+  maxAttempts: number;
+  windowMs: number;
+}): SlidingWindowPenaltyBox {
+  const { maxAttempts, windowMs } = options;
+  const hits = new Map<string, number[]>();
+  return {
+    record(key: string, nowMs: number = Date.now()): void {
+      const window = (hits.get(key) ?? []).filter((timestamp) => timestamp > nowMs - windowMs);
+      window.push(nowMs);
+      hits.set(key, window);
+    },
+    blocked(key: string, nowMs: number = Date.now()): boolean {
+      const window = (hits.get(key) ?? []).filter((timestamp) => timestamp > nowMs - windowMs);
+      hits.set(key, window);
+      return window.length >= maxAttempts;
+    },
+  };
+}
+
+// The rolling window shared by the in-process limiter and the database check.
+export const INTENT_RATE_WINDOW_SECONDS = 600;
+
 const intentRateLimiter = createSlidingWindowRateLimiter({
   maxRequests: config.mediaUploadIntentRateLimit,
-  windowMs: 600_000,
+  windowMs: INTENT_RATE_WINDOW_SECONDS * 1000,
 });
 
 export class UploadIntentError extends Error {
@@ -285,18 +322,74 @@ function requireCloudStorageInProcess(): void {
   }
 }
 
-// Best-effort sweep of dead rows whenever a new intent is created. Completed
-// rows keep only audit metadata (the storagePath reference never depends on
-// this table), so sweeping cannot affect a scheduled post.
+// Durable intent-creation rate check over the migration-012 hit history. The
+// statement counts this user's hits inside the rolling window and inserts a
+// new hit only when the configured limit allows one, in the same statement:
+// concurrent workers each atomically claim a slot (or find the window full).
+// Old hits outside the window are pruned in the same statement so the table
+// stays small. Returns false when the window is already at its limit.
+export async function recordMediaIntentRateHit(userId: string): Promise<boolean> {
+  const { rows } = await databasePool().query<{ inserted_id: string | null }>(
+    `WITH existing AS (
+       SELECT COUNT(*)::int AS hits
+       FROM public.mcp_media_intent_rate_hits
+       WHERE user_id = $1 AND hit_at > NOW() - make_interval(secs => $2)
+     ), pruned AS (
+       DELETE FROM public.mcp_media_intent_rate_hits
+       WHERE user_id = $1 AND hit_at <= NOW() - make_interval(secs => $2)
+       RETURNING 1
+     ), inserted AS (
+       INSERT INTO public.mcp_media_intent_rate_hits (id, user_id, hit_at)
+       SELECT $3, $1, NOW()
+       WHERE (SELECT hits FROM existing) < $4::int
+       RETURNING id
+     )
+     SELECT (SELECT id FROM inserted) AS inserted_id`,
+    [userId, INTENT_RATE_WINDOW_SECONDS, randomBytes(12).toString("hex"), config.mediaUploadIntentRateLimit],
+  );
+  return rows[0]?.inserted_id != null;
+}
+
+// Best-effort sweep of dead rows and their orphaned storage objects whenever a
+// new intent is created. A swept intent's stored object may already be
+// scheduled by the user's posts, so every deletion goes through the shared
+// reference-counted helper: objects referenced by an active scheduled or
+// publishing post are always kept. Completed rows keep only audit metadata
+// (the storagePath reference never depends on this table), so sweeping cannot
+// affect a scheduled post.
 async function sweepStaleIntents(ownerId: string): Promise<void> {
+  const stale = await databasePool().query<MediaUploadIntentRow>(
+    `SELECT id, storage_path, kind
+     FROM public.mcp_media_upload_intents
+     WHERE user_id = $1
+       AND storage_path IS NOT NULL
+       AND (
+         expires_at < NOW()
+         OR (status = 'uploaded' AND created_at < NOW() - INTERVAL '7 days')
+       )`,
+    [ownerId],
+  );
+  const candidates: StorageObjectCandidate[] = stale.rows
+    .map((row) => ({ kind: row.kind as StorageObjectCandidate["kind"], path: row.storage_path }))
+    .filter((candidate): candidate is StorageObjectCandidate => Boolean(candidate.path));
+  const cleanup = await deleteUnreferencedStorageObjects(candidates);
+  // Rows whose object could not be deleted keep their record so a later sweep
+  // can retry; deleted (or referenced-but-unreachable) audit rows are swept.
+  const retryPaths = stale.rows
+    .map((row) => ({ id: row.id, path: row.storage_path }))
+    .filter((row): row is { id: string; path: string } => Boolean(row.path));
+  const deletableIds = retryPaths
+    .filter((row) => cleanup.deleted.has(row.path))
+    .map((row) => row.id);
   await databasePool().query(
     `DELETE FROM public.mcp_media_upload_intents
      WHERE user_id = $1
        AND (
          expires_at < NOW()
          OR (status = 'uploaded' AND created_at < NOW() - INTERVAL '7 days')
-       )`,
-    [ownerId],
+       )
+       AND (storage_path IS NULL OR id = ANY($2::text[]))`,
+    [ownerId, deletableIds],
   );
 }
 
@@ -313,6 +406,25 @@ export async function createMediaUploadIntent(
     throw new Error(
       "Too many upload intents requested. Wait a few minutes and request a single new upload intent.",
     );
+  }
+  // The in-process window is the always-available guard; this durable check
+  // makes the same limit hold across restarts and worker instances. A database
+  // error here fails open (the in-process window still applies) instead of
+  // blocking uploads while the database recovers.
+  try {
+    if (!(await recordMediaIntentRateHit(userId))) {
+      throw new Error(
+        "Too many upload intents requested. Wait a few minutes and request a single new upload intent.",
+      );
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Too many upload intents requested")) {
+      throw error;
+    }
+    console.error(JSON.stringify({
+      event: "media_upload_intent_rate_limit_database_unavailable",
+      error: error instanceof Error ? error.message : "Unknown rate-limit database error.",
+    }));
   }
   const token = newUploadToken();
   const id = randomBytes(16).toString("hex");
