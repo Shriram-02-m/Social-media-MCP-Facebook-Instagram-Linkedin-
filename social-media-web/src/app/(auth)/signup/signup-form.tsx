@@ -36,7 +36,11 @@ export function SignupForm({ next }: { next: string }) {
       return;
     }
 
-    router.replace(next);
+    // Registration is approval-based: the freshly created account starts
+    // pending, so its auto-created session is discarded immediately. The user
+    // sees the approval notice instead of the dashboard.
+    await authClient.signOut();
+    router.replace("/pending");
     router.refresh();
   }
 

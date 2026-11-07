@@ -15,7 +15,7 @@ import { Calendar } from "@/components/ui/calendar";
 export interface CalendarPost {
   id: string;
   platform: "facebook" | "instagram" | "linkedin";
-  status: "scheduled" | "publishing" | "published" | "failed" | "cancelled";
+  status: "scheduled" | "publishing" | "published" | "failed" | "cancelled" | "held";
   mediaType: string;
   text: string;
   when: string;

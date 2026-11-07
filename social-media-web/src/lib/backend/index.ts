@@ -8,6 +8,11 @@ export {
   processDueJobs,
   canSafelyRetryScheduledPost,
   canRescheduleScheduledPost,
+  canCancelScheduledPost,
+  // Account-level hold/resume (admin suspension & soft deletion support).
+  assertAccountCanSchedule,
+  holdScheduledPostsForUser,
+  resumeScheduledPostsForUser,
 } from "../../../../social-media-mcp/dist/scheduler.js";
 
 export type {

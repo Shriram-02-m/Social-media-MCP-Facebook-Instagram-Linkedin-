@@ -1,6 +1,11 @@
 import { headers } from "next/headers";
 
 import { auth } from "@/lib/auth";
+import {
+  ApprovalRequiredError,
+  requireApprovedUser,
+  UnauthorizedError,
+} from "@/lib/session";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -12,15 +17,27 @@ export class ApiError extends Error {
   }
 }
 
+// Standard protected-API helper. Beyond session validity it enforces the
+// account-approval gate: pending, rejected, suspended, and soft-deleted users
+// are rejected even if a previously issued session cookie is still valid.
+// Admin-only routes must additionally call requireAdmin() from "@/lib/session".
 export async function requireApiSession() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) throw new ApiError("Authentication required.", 401);
-  return session;
+  return requireApprovedUser();
+}
+
+export async function currentSessionOrNull() {
+  return auth.api.getSession({ headers: await headers() });
 }
 
 export function apiErrorResponse(error: unknown): Response {
   if (error instanceof ApiError) {
     return Response.json({ error: error.message }, { status: error.status });
+  }
+  if (error instanceof UnauthorizedError) {
+    return Response.json({ error: error.message }, { status: 401 });
+  }
+  if (error instanceof ApprovalRequiredError) {
+    return Response.json({ error: error.message, code: error.code }, { status: 403 });
   }
   console.error("[api] unhandled error:", error);
   const message = error instanceof Error ? error.message : "Unexpected error.";

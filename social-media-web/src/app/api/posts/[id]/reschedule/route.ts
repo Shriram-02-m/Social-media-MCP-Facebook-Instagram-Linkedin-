@@ -29,7 +29,7 @@ export async function POST(
     if (!post) throw new ApiError("That post was not found.", 404);
     if (!canRescheduleScheduledPost(post.status)) {
       throw new ApiError(
-        `Only scheduled posts can be rescheduled; this post is ${post.status}.`,
+        `Only scheduled or held posts can be rescheduled; this post is ${post.status}.`,
       );
     }
 

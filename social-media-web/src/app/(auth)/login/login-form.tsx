@@ -30,11 +30,16 @@ export function LoginForm({ next }: { next: string }) {
 
     const { error: signInError } = await authClient.signIn.email({ email, password });
     if (signInError) {
+      // Includes Better Auth's native BANNED_USER message for suspended
+      // accounts and a generic failure otherwise, so unknown emails never
+      // reveal whether an account exists.
       setError(signInError.message ?? "Sign in failed. Check your credentials.");
       setPending(false);
       return;
     }
 
+    // Pending/rejected users hold a limited session that grants no access;
+    // the dashboard layout sends them to the status page (no enumeration).
     router.replace(next);
     router.refresh();
   }

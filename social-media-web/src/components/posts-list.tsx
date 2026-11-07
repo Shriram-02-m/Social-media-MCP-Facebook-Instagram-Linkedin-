@@ -35,7 +35,7 @@ export interface ScheduledPostSummary {
   platform: "facebook" | "instagram" | "linkedin";
   text: string;
   scheduledAt: string;
-  status: "scheduled" | "publishing" | "published" | "failed" | "cancelled";
+  status: "scheduled" | "publishing" | "published" | "failed" | "cancelled" | "held";
   publishedAt?: string;
   error?: string;
   retryCount: number;
@@ -49,6 +49,7 @@ const STATUS_TONES: Record<ScheduledPostSummary["status"], "default" | "secondar
   published: "default",
   failed: "destructive",
   cancelled: "outline",
+  held: "outline",
 };
 
 const PLATFORM_LABELS: Record<ScheduledPostSummary["platform"], string> = {
@@ -63,6 +64,7 @@ const STATUS_LABELS: Record<ScheduledPostSummary["status"], string> = {
   published: "Published",
   failed: "Failed",
   cancelled: "Cancelled",
+  held: "Held",
 };
 
 const PLATFORM_ORDER: ScheduledPostSummary["platform"][] = [

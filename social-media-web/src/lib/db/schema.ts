@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
@@ -8,6 +10,15 @@ export const user = pgTable("user", {
   image: text("image"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  // Better Auth admin plugin fields (single Super Admin: role = "admin").
+  role: text("role").notNull().default("user"),
+  banned: boolean("banned").notNull().default(false),
+  banReason: text("ban_reason"),
+  banExpires: timestamp("ban_expires", { withTimezone: true }),
+  // Multi-user approval workflow: pending -> approved | rejected. Suspension
+  // is expressed through `banned`; deletion through `deleted_at`.
+  approvalStatus: text("approval_status").notNull().default("pending"),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
 export const session = pgTable("session", {
@@ -19,6 +30,10 @@ export const session = pgTable("session", {
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  // Better Auth admin plugin: user id set on sessions created via
+  // impersonateUser / revokeUserImpersonation. Nullable: regular sessions
+  // never have it. Server-managed only (plugin field `input: false`).
+  impersonatedBy: text("impersonated_by"),
 });
 
 export const account = pgTable("account", {
@@ -44,4 +59,24 @@ export const verification = pgTable("verification", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+// Activity / audit trail (created by migration 0002, mirrored by the MCP
+// backend's migration 013 so both apps write the same shape). Writers must
+// never store passwords, tokens, secrets, or encryption keys in metadata.
+export const activityLog = pgTable("activity_log", {
+  id: text("id")
+    .primaryKey()
+    // Application-level id generation keeps inserts simple and matches the
+    // database DDL (id text PRIMARY KEY without a server-side default).
+    .$defaultFn(() => randomUUID()),
+  actorUserId: text("actor_user_id"),
+  targetUserId: text("target_user_id"),
+  action: text("action").notNull(),
+  resourceType: text("resource_type").notNull(),
+  resourceId: text("resource_id"),
+  metadata: text("metadata")
+    .notNull()
+    .default("{}"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

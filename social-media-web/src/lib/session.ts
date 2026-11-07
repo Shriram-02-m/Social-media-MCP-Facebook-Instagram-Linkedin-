@@ -1,11 +1,12 @@
 import { headers } from "next/headers";
 
-import { auth } from "@/lib/auth";
+import { auth, ADMIN_ROLE, type AppUser } from "@/lib/auth";
 
-export type AdminSession = Awaited<ReturnType<typeof auth.api.getSession>>;
+export type AdminSession = NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>;
 
-export async function getSession(): Promise<AdminSession> {
-  return auth.api.getSession({ headers: await headers() });
+export async function getSession(): Promise<AdminSession | null> {
+  const result = await auth.api.getSession({ headers: await headers() });
+  return result ?? null;
 }
 
 export class UnauthorizedError extends Error {
@@ -15,8 +16,110 @@ export class UnauthorizedError extends Error {
   }
 }
 
-export async function requireAdmin(): Promise<NonNullable<AdminSession>> {
+export class ApprovalRequiredError extends Error {
+  readonly status = 403;
+  readonly code: "pending" | "rejected" | "suspended" | "deleted";
+
+  constructor(code: ApprovalRequiredError["code"]) {
+    const messages: Record<ApprovalRequiredError["code"], string> = {
+      pending: "This account is awaiting administrator approval.",
+      rejected: "This account was not approved. Contact the administrator if you believe this is a mistake.",
+      suspended: "This account has been suspended. Contact the administrator if you believe this is a mistake.",
+      deleted: "This account is no longer active.",
+    };
+    super(messages[code]);
+    this.name = "ApprovalRequiredError";
+    this.code = code;
+  }
+}
+
+/** Outcome of the account-state check: either access or the deny reason. */
+export type AccessDecision = "approved" | ApprovalRequiredError["code"];
+
+export interface AccountState {
+  role: string;
+  isAdmin: boolean;
+  approvalStatus: "pending" | "approved" | "rejected";
+  banned: boolean;
+  banActive: boolean;
+  deleted: boolean;
+}
+
+// Better Auth returns the admin-plugin fields on the session user. Roles can
+// be a comma-joined string or an array; parse defensively so authorization
+// never depends on a specific plugin typing shape.
+export function readAccountState(session: AdminSession | null): AccountState | null {
+  if (!session) return null;
+  const user = session.user as unknown as Record<string, unknown> & Pick<AppUser, "id">;
+  const rawRole = user["role"];
+  const roleParts = Array.isArray(rawRole)
+    ? rawRole.map(String)
+    : typeof rawRole === "string" ? rawRole.split(",").map((part) => part.trim()) : [];
+  if (roleParts.length === 0) roleParts.push("user");
+  const rawApproval = user["approvalStatus"];
+  const approvalStatus = rawApproval === "approved" || rawApproval === "rejected" ? rawApproval : "pending";
+  const banned = user["banned"] === true;
+  const banExpiresAt = user["banExpires"] instanceof Date ? user["banExpires"] : null;
+  const deletedAt = user["deletedAt"];
+  return {
+    role: roleParts[0]!,
+    isAdmin: roleParts.includes(ADMIN_ROLE),
+    approvalStatus,
+    banned,
+    banActive: banned && (banExpiresAt === null || banExpiresAt.getTime() > Date.now()),
+    deleted: deletedAt instanceof Date && !Number.isNaN(deletedAt.getTime()),
+  };
+}
+
+export function denyReason(state: AccountState): AccessDecision {
+  if (state.deleted) return "deleted";
+  if (state.banActive) return "suspended";
+  if (state.approvalStatus !== "approved") return state.approvalStatus;
+  // A banned flag with a stale expiry is treated as approved again.
+  return "approved";
+}
+
+/** Verify that a valid authenticated session exists. */
+export async function requireAuthenticatedUser(): Promise<AdminSession> {
   const session = await getSession();
   if (!session) throw new UnauthorizedError();
   return session;
+}
+
+/**
+ * Verify the session user is an approved, unbanned, not soft-deleted account.
+ * The Super Admin passes this check as well (admin accounts are approved).
+ */
+export async function requireApprovedUser(): Promise<AdminSession> {
+  const session = await requireAuthenticatedUser();
+  const state = readAccountState(session);
+  if (!state) throw new UnauthorizedError();
+  const reason = denyReason(state);
+  if (reason !== "approved") throw new ApprovalRequiredError(reason);
+  return session;
+}
+
+/**
+ * Verify the session belongs to the single Super Admin. Regular users -
+ * regardless of session validity - can never pass this check, and role
+ * changes are only possible through admin-only endpoints backed by the
+ * database-level single-admin unique index.
+ */
+export async function requireAdmin(): Promise<AdminSession> {
+  const session = await requireAuthenticatedUser();
+  const state = readAccountState(session);
+  if (!state) throw new UnauthorizedError();
+  if (!state.isAdmin) throw new ApprovalRequiredError("rejected");
+  const reason = denyReason(state);
+  if (reason !== "approved") throw new ApprovalRequiredError(reason);
+  return session;
+}
+
+/**
+ * Ownership guard: the authenticated user id always comes from the verified
+ * server-side session; a client-supplied user id is never trusted. Compare it
+ * against the resource owner when a request could address another user's data.
+ */
+export function requireResourceOwnership(session: AdminSession, ownerUserId: string): void {
+  if (session.user.id !== ownerUserId) throw new ApprovalRequiredError("rejected");
 }

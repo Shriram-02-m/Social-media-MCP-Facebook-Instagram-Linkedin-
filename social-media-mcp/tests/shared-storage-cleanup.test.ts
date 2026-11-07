@@ -27,7 +27,7 @@ test("cleanup helper counts references in posts and media tables, honoring activ
   assert.match(scheduler, /post\.document_storage_path = ANY\(\$1::text\[\]\)/);
   assert.match(scheduler, /media_ref\.storage_path = ANY\(\$1::text\[\]\)/);
   assert.match(scheduler, /JOIN public\.scheduled_posts AS post ON post\.id = media_ref\.post_id/);
-  assert.match(scheduler, /refs\.status IN \('scheduled', 'publishing'\)/);
+  assert.match(scheduler, /refs\.status IN \('scheduled', 'publishing', 'held'\)/, "held posts keep their shared media references live for resume");
 });
 
 test("cleanup helper is concurrency-safe and fails safe", async () => {
@@ -60,7 +60,7 @@ test("cancel routes shared objects through the reference-counted helper", async 
   assert.match(cancel, /unregisterScheduledMedia/, "media token registration is still cleaned up");
   assert.match(cancel, /await unlink\(file\)/, "local files remain directly deleted (never shared)");
   assert.match(cancel, /kind: "document", path: row\.document_storage_path/, "documents join the reference check");
-  assert.match(cancel, /WHERE id = \$1 AND user_id = \$2 AND status = 'scheduled'/, "cancel still only applies to unclaimed posts");
+  assert.match(cancel, /WHERE id = \$1 AND user_id = \$2 AND status IN \('scheduled', 'held'\)/, "cancel still only applies to unclaimed posts (scheduled or held, never publishing/published)");
 });
 
 test("scheduling failure cleanup no longer deletes shared references unconditionally", async () => {

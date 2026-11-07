@@ -33,6 +33,7 @@ import {
   validateScheduledImageWithRetries,
   type ScheduledImageValidation,
 } from "./utils/scheduled-image.js";
+import { recordActivity } from "./utils/activity.js";
 
 export interface NewScheduledPost {
   platform: Platform;
@@ -93,7 +94,14 @@ export function canSafelyRetryScheduledPost(
 export function canRescheduleScheduledPost(status: ScheduledPost["status"]): boolean {
   // Only posts that have not started publishing can be moved. Once a job is
   // publishing/published (or already cancelled/terminal) its schedule is fixed.
-  return status === "scheduled";
+  // A `held` post belongs to a suspended or deleted account; rescheduling it
+  // explicitly (to a future time) is the defined way to recover an overdue
+  // held job — it returns the job to `scheduled` with the new time.
+  return status === "scheduled" || status === "held";
+}
+
+export function canCancelScheduledPost(status: ScheduledPost["status"]): boolean {
+  return status === "scheduled" || status === "held";
 }
 
 export function normalizeRescheduledTime(scheduledAt: string, now: number = Date.now()): string {
@@ -128,7 +136,7 @@ interface ScheduledPost extends NewScheduledPost {
   documentStoragePath?: string;
   documentContentType?: string;
   documentTitle?: string;
-  status: "scheduled" | "publishing" | "published" | "failed" | "cancelled";
+  status: "scheduled" | "publishing" | "published" | "failed" | "cancelled" | "held";
   createdAt: string;
   publishedAt?: string;
   result?: PublishedPost;
@@ -823,6 +831,12 @@ export async function processDueJobs(): Promise<number> {
         SELECT id
         FROM public.scheduled_posts
         WHERE status = 'scheduled' AND scheduled_at <= NOW()
+          -- Database-level hold enforcement: a suspended or soft-deleted (or
+          -- otherwise inactive) account's posts are never claimed, even if the
+          -- explicit hold transition and a worker claim race each other. The
+          -- function reads the Better Auth account table when it exists and
+          -- allows posting when this database has no registration system.
+          AND public.social_media_account_is_active(user_id)
         ORDER BY scheduled_at
         FOR UPDATE SKIP LOCKED
         LIMIT 10
@@ -918,6 +932,7 @@ export async function schedulePosts(
     if (!tokens[post.platform]) throw new Error(`${post.platform} is not connected; authorize it before scheduling.`);
   }
 
+  await assertAccountCanSchedule(ownerId);
   await ensureScheduleStore();
   let storedImagePath = "";
   let imageStoragePath: string | undefined;
@@ -1172,6 +1187,7 @@ export async function scheduleMediaPosts(
     if (!tokens[post.platform]) throw new Error(`${post.platform} is not connected; authorize it before scheduling.`);
   }
 
+  await assertAccountCanSchedule(ownerId);
   await ensureScheduleStore();
 
   const storedItems: ScheduledMediaItem[] = [];
@@ -1399,6 +1415,7 @@ export async function retryScheduledPost(ownerId: string, jobId: string): Promis
   scheduledAt: string;
   status: "scheduled";
 }> {
+  await assertAccountCanSchedule(ownerId);
   await ensureScheduleStore();
   const client = await databasePool().connect();
   let transactionStarted = false;
@@ -1525,7 +1542,8 @@ export async function deleteUnreferencedStorageObjects(candidates: StorageObject
       SELECT DISTINCT refs.path
       FROM refs
       WHERE refs.path = ANY($1::text[])
-        AND refs.status IN ('scheduled', 'publishing')
+        -- Held posts are resumable, so their storage objects stay live too.
+        AND refs.status IN ('scheduled', 'publishing', 'held')
     `, [paths]);
     const referenced = new Set(rows.map((row) => row.path));
     const deletable = deduped.filter((candidate) => !referenced.has(candidate.path));
@@ -1575,7 +1593,7 @@ export async function cancelScheduledPost(ownerId: string, jobId: string): Promi
   const { rows } = await databasePool().query<ScheduledPostRow>(
     `UPDATE public.scheduled_posts
      SET status = 'cancelled', error = 'Cancelled before publishing.', claimed_at = NULL, updated_at = NOW()
-     WHERE id = $1 AND user_id = $2 AND status = 'scheduled'
+     WHERE id = $1 AND user_id = $2 AND status IN ('scheduled', 'held')
      RETURNING *`,
     [jobId, ownerId],
   );
@@ -1654,11 +1672,25 @@ export async function rescheduleScheduledPost(
     const row = rows[0];
     if (!row) throw new Error(`Scheduled post ${jobId} was not found.`);
     if (!canRescheduleScheduledPost(row.status)) {
-      throw new Error(`Only scheduled posts can be rescheduled; this post is ${row.status}.`);
+      throw new Error(`Only scheduled or held posts can be rescheduled; this post is ${row.status}.`);
+    }
+    if (row.status === "held" && row.image_path && !row.image_storage_path) {
+      await registerScheduledMedia(row.image_token, row.image_path, row.content_type);
+    }
+    if (row.status === "held") {
+      const { rows: heldMediaRows } = await client.query<ScheduledMediaRow>(
+        "SELECT * FROM public.scheduled_post_media WHERE post_id = $1 ORDER BY position",
+        [jobId],
+      );
+      for (const item of heldMediaRows) {
+        if (item.image_path && !item.storage_path) {
+          await registerScheduledMedia(item.image_token, item.image_path, item.content_type);
+        }
+      }
     }
     await client.query(
       `UPDATE public.scheduled_posts
-       SET scheduled_at = $3, claimed_at = NULL, updated_at = NOW()
+       SET status = 'scheduled', scheduled_at = $3, error = NULL, claimed_at = NULL, updated_at = NOW()
        WHERE id = $1 AND user_id = $2`,
       [jobId, ownerId, normalizedScheduledAt],
     );
@@ -1675,6 +1707,202 @@ export async function rescheduleScheduledPost(
     throw error;
   } finally {
     client.release();
+  }
+  await startScheduleRunner();
+  return result;
+}
+
+// Database-level account gate for new scheduling/retrying activity. Uses the
+// same SQL guard as the worker claim (`social_media_account_is_active`), so
+// suspended or soft-deleted accounts can neither claim existing jobs nor push
+// new ones from any entry point (web API, stdio MCP, or remote MCP).
+export async function assertAccountCanSchedule(ownerId: string): Promise<void> {
+  await ensureScheduleStore();
+  const { rows } = await databasePool().query<{ active: boolean }>(
+    "SELECT public.social_media_account_is_active($1) AS active",
+    [ownerId],
+  );
+  if (!rows[0]?.active) {
+    throw new Error("This account cannot schedule or publish posts right now. Ask the administrator to reactivate it.");
+  }
+}
+
+// Places every not-yet-claimed scheduled post of one account into the `held`
+// state. The transition runs in one transaction and takes row locks the same
+// way reschedule/retry do, so a concurrent worker claim either finishes
+// claiming a job just before the lock (that publish started before the hold)
+// or, because the claim uses FOR UPDATE SKIP LOCKED inside a query that also
+// filters on `social_media_account_is_active`, skips it entirely. Nothing
+// else on the job changes: text, media references, scheduled_at, and record
+// history are preserved exactly.
+export async function holdScheduledPostsForUser(
+  ownerId: string,
+  options: { actorUserId?: string; reason?: string } = {},
+): Promise<Array<{ id: string; platform: Platform; scheduledAt: string; status: "held" }>> {
+  await ensureScheduleStore();
+  const holdError = (options.reason?.trim() || "Held: the account was removed or suspended before publishing.")
+    .slice(0, 500);
+  const client = await databasePool().connect();
+  let transactionStarted = false;
+  let heldJobs: Array<{ id: string; platform: Platform; scheduledAt: string; status: "held" }> = [];
+  try {
+    await client.query("BEGIN");
+    transactionStarted = true;
+    const { rows } = await client.query<ScheduledPostRow>(`
+      WITH locked AS (
+        SELECT id
+        FROM public.scheduled_posts
+        WHERE user_id = $1 AND status = 'scheduled'
+        ORDER BY scheduled_at
+        FOR UPDATE
+      )
+      UPDATE public.scheduled_posts AS post
+      SET status = 'held', error = $2, claimed_at = NULL, updated_at = NOW()
+      FROM locked
+      WHERE post.id = locked.id
+      RETURNING post.*`,
+      [ownerId, holdError],
+    );
+    await client.query("COMMIT");
+    transactionStarted = false;
+    heldJobs = rows.map((row) => ({
+      id: row.id,
+      platform: row.platform,
+      scheduledAt: row.scheduled_at.toISOString(),
+      status: "held",
+    }));
+  } catch (error) {
+    if (transactionStarted) await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+  for (const job of heldJobs) {
+    await recordActivity({
+      actorUserId: options.actorUserId,
+      targetUserId: ownerId,
+      action: "scheduled_post_hold",
+      resourceType: "scheduled_post",
+      resourceId: job.id,
+      metadata: { platform: job.platform, scheduledAt: job.scheduledAt, reason: options.reason ?? undefined },
+    });
+  }
+  return heldJobs;
+}
+
+export interface ResumeScheduledPostsResult {
+  // Held posts whose original schedule time is still in the future. They are
+  // back in the normal queue and publish at their original scheduled_at.
+  resumed: Array<{ id: string; platform: Platform; scheduledAt: string; status: "scheduled" }>;
+  // Held posts whose original schedule time has already passed. They stay
+  // `held` and are never published automatically; each needs an explicit
+  // `rescheduleScheduledPost` (admin decision) to re-enter the queue.
+  stillHeld: Array<{ id: string; platform: Platform; scheduledAt: string; overdue: true }>;
+}
+
+// Explicit admin resume. Never bulk-publishes overdue posts by restoring them
+// with a stale schedule time: future-time held posts return to `scheduled`
+// with their original scheduled_at preserved, while overdue ones remain held
+// until the admin reschedules each explicitly. Previously published or
+// uncertain (publishing-stage failure) outcomes are untouched, so no
+// duplicates can be introduced by a resume.
+export async function resumeScheduledPostsForUser(
+  ownerId: string,
+  jobId: string | undefined,
+  options: { actorUserId?: string } = {},
+): Promise<ResumeScheduledPostsResult> {
+  await ensureScheduleStore();
+  const result: ResumeScheduledPostsResult = { resumed: [], stillHeld: [] };
+  const client = await databasePool().connect();
+  let transactionStarted = false;
+  try {
+    await client.query("BEGIN");
+    transactionStarted = true;
+    const { rows } = await client.query<ScheduledPostRow>(
+      `SELECT * FROM public.scheduled_posts
+       WHERE user_id = $1 AND status = 'held' AND ($2::text IS NULL OR id = $2)
+       ORDER BY scheduled_at
+       FOR UPDATE`,
+      [ownerId, jobId ?? null],
+    );
+    if (jobId && !rows[0]) {
+      const existing = await client.query<{ status: ScheduledPost["status"] }>(
+        "SELECT status FROM public.scheduled_posts WHERE id = $1 AND user_id = $2",
+        [jobId, ownerId],
+      );
+      if (!existing.rowCount) throw new Error(`Scheduled post ${jobId} was not found.`);
+      throw new Error(`Only held posts can be resumed; this post is ${existing.rows[0]!.status}.`);
+    }
+    for (const row of rows) {
+      const overdue = row.scheduled_at.getTime() <= Date.now();
+      if (overdue) {
+        await client.query(
+          `UPDATE public.scheduled_posts
+           SET error = 'Still held: the original schedule time has passed. Reschedule the post explicitly.',
+              updated_at = NOW()
+           WHERE id = $1`,
+          [row.id],
+        );
+        result.stillHeld.push({
+          id: row.id,
+          platform: row.platform,
+          scheduledAt: row.scheduled_at.toISOString(),
+          overdue: true,
+        });
+        continue;
+      }
+      if (row.image_path && !row.image_storage_path) {
+        await registerScheduledMedia(row.image_token, row.image_path, row.content_type);
+      }
+      const { rows: heldMediaRows } = await client.query<ScheduledMediaRow>(
+        "SELECT * FROM public.scheduled_post_media WHERE post_id = $1 ORDER BY position",
+        [row.id],
+      );
+      for (const item of heldMediaRows) {
+        if (item.image_path && !item.storage_path) {
+          await registerScheduledMedia(item.image_token, item.image_path, item.content_type);
+        }
+      }
+      await client.query(
+        `UPDATE public.scheduled_posts
+         SET status = 'scheduled', error = NULL, claimed_at = NULL, updated_at = NOW()
+         WHERE id = $1`,
+        [row.id],
+      );
+      result.resumed.push({
+        id: row.id,
+        platform: row.platform,
+        scheduledAt: row.scheduled_at.toISOString(),
+        status: "scheduled",
+      });
+    }
+    await client.query("COMMIT");
+    transactionStarted = false;
+  } catch (error) {
+    if (transactionStarted) await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+  for (const job of result.resumed) {
+    await recordActivity({
+      actorUserId: options.actorUserId,
+      targetUserId: ownerId,
+      action: "scheduled_post_resume",
+      resourceType: "scheduled_post",
+      resourceId: job.id,
+      metadata: { platform: job.platform, scheduledAt: job.scheduledAt },
+    });
+  }
+  for (const job of result.stillHeld) {
+    await recordActivity({
+      actorUserId: options.actorUserId,
+      targetUserId: ownerId,
+      action: "scheduled_post_resume_overdue_blocked",
+      resourceType: "scheduled_post",
+      resourceId: job.id,
+      metadata: { platform: job.platform, scheduledAt: job.scheduledAt, overdue: true },
+    });
   }
   await startScheduleRunner();
   return result;

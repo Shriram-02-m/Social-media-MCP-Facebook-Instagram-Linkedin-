@@ -15,6 +15,7 @@ const migrationNames = [
   "010_mcp_oauth.sql",
   "011_mcp_media_upload_intents.sql",
   "012_mcp_intent_rate_limit.sql",
+  "013_account_hold.sql",
 ];
 
 let migrations: Promise<void> | undefined;

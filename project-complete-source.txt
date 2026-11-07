@@ -4,8 +4,8 @@ SOCIAL MEDIA APPS - COMPLETE SOURCE CODE EXPORT
 Repository root : Social_Media_apps
 Projects        : social-media-mcp (MCP server + publishing engine)
                   social-media-web (Next.js admin console)
-Exported        : 2026-11-03 11:41:54
-Files exported  : 176
+Exported        : 2026-11-03 16:29:36
+Files exported  : 177
 
 CONVENTIONS
   - Paths are relative to the repository root and use forward slashes.
@@ -38,167 +38,168 @@ TABLE OF CONTENTS
    13. social-media-mcp/migrations/009_user_app_credentials.sql
    14. social-media-mcp/migrations/010_mcp_oauth.sql
    15. social-media-mcp/migrations/011_mcp_media_upload_intents.sql
-   16. social-media-mcp/opencode.json
-   17. social-media-mcp/package.json
-   18. social-media-mcp/README.md
-   19. social-media-mcp/render.yaml
-   20. social-media-mcp/scripts/check-database.ts
-   21. social-media-mcp/scripts/migrate-database.ts
-   22. social-media-mcp/scripts/migrate-scheduled-images-to-cloud.ts
-   23. social-media-mcp/scripts/migrate-tokens-to-cloud.ts
-   24. social-media-mcp/src/auth/app-credentials.ts
-   25. social-media-mcp/src/auth/mcp-oauth.ts
-   26. social-media-mcp/src/auth/oauth.ts
-   27. social-media-mcp/src/auth/oauth-callback.ts
-   28. social-media-mcp/src/auth/oauth-sessions.ts
-   29. social-media-mcp/src/auth/token-store.ts
-   30. social-media-mcp/src/config/env.ts
-   31. social-media-mcp/src/database.ts
-   32. social-media-mcp/src/database-migrations.ts
-   33. social-media-mcp/src/index.ts
-   34. social-media-mcp/src/mcp/handler.ts
-   35. social-media-mcp/src/mcp/http-adapter.ts
-   36. social-media-mcp/src/media/upload-endpoint.ts
-   37. social-media-mcp/src/platforms/linkedin.ts
-   38. social-media-mcp/src/platforms/meta.ts
-   39. social-media-mcp/src/platforms/types.ts
-   40. social-media-mcp/src/scheduler.ts
-   41. social-media-mcp/src/scheduling/db.ts
-   42. social-media-mcp/src/scheduling/migrate.ts
-   43. social-media-mcp/src/scheduling/model.ts
-   44. social-media-mcp/src/scheduling/store.ts
-   45. social-media-mcp/src/scheduling/worker.ts
-   46. social-media-mcp/src/storage/scheduled-images.ts
-   47. social-media-mcp/src/storage/upload-intents.ts
-   48. social-media-mcp/src/tools/media-input.ts
-   49. social-media-mcp/src/tools/register.ts
-   50. social-media-mcp/src/utils/http.ts
-   51. social-media-mcp/src/utils/remote-media.ts
-   52. social-media-mcp/src/utils/scheduled-image.ts
-   53. social-media-mcp/src/utils/validation.ts
-   54. social-media-mcp/src/worker.ts
-   55. social-media-mcp/tests/app-credentials.test.ts
-   56. social-media-mcp/tests/app-credentials-key.test.ts
-   57. social-media-mcp/tests/cloud-storage.test.ts
-   58. social-media-mcp/tests/cloud-worker.test.ts
-   59. social-media-mcp/tests/fixtures/linkedin-consent-child.mjs
-   60. social-media-mcp/tests/helpers/tsx-spawn.ts
-   61. social-media-mcp/tests/linkedin.test.ts
-   62. social-media-mcp/tests/linkedin-oauth.test.ts
-   63. social-media-mcp/tests/linkedin-token-refresh.test.ts
-   64. social-media-mcp/tests/mcp.test.ts
-   65. social-media-mcp/tests/mcp-oauth.test.ts
-   66. social-media-mcp/tests/media-upload-intents.test.ts
-   67. social-media-mcp/tests/meta-container.test.ts
-   68. social-media-mcp/tests/multiuser.test.ts
-   69. social-media-mcp/tests/oauth.test.ts
-   70. social-media-mcp/tests/oauth-sessions.test.ts
-   71. social-media-mcp/tests/remote-media.test.ts
-   72. social-media-mcp/tests/remote-media-input.test.ts
-   73. social-media-mcp/tests/remote-tool-guards.test.ts
-   74. social-media-mcp/tests/scheduled-image.test.ts
-   75. social-media-mcp/tests/scheduled-media.test.ts
-   76. social-media-mcp/tests/scheduled-media-lifecycle.test.ts
-   77. social-media-mcp/tests/scheduled-reschedule.test.ts
-   78. social-media-mcp/tests/scheduled-retry.test.ts
-   79. social-media-mcp/tests/schedule-text-only.test.ts
-   80. social-media-mcp/tests/scheduling.test.ts
-   81. social-media-mcp/tests/scheduling-documents.test.ts
-   82. social-media-mcp/tests/scheduling-postgres.test.ts
-   83. social-media-mcp/tests/shared-storage-cleanup.test.ts
-   84. social-media-mcp/tests/validation.test.ts
-   85. social-media-mcp/tsconfig.json
-   86. social-media-web/.env.example
-   87. social-media-web/.gitignore
-   88. social-media-web/AGENTS.md
-   89. social-media-web/components.json
-   90. social-media-web/drizzle.config.ts
-   91. social-media-web/eslint.config.mjs
-   92. social-media-web/migrations/0001_better_auth.sql
-   93. social-media-web/next.config.ts
-   94. social-media-web/package.json
-   95. social-media-web/README.md
-   96. social-media-web/scripts/migrate.mjs
-   97. social-media-web/scripts/seed-admin.mts
-   98. social-media-web/src/app/(auth)/login/login-form.tsx
-   99. social-media-web/src/app/(auth)/login/page.tsx
-  100. social-media-web/src/app/(auth)/signup/page.tsx
-  101. social-media-web/src/app/(auth)/signup/signup-form.tsx
-  102. social-media-web/src/app/(dashboard)/accounts/accounts-panel.tsx
-  103. social-media-web/src/app/(dashboard)/accounts/developer-app-settings.tsx
-  104. social-media-web/src/app/(dashboard)/accounts/page.tsx
-  105. social-media-web/src/app/(dashboard)/calendar/calendar-panel.tsx
-  106. social-media-web/src/app/(dashboard)/calendar/page.tsx
-  107. social-media-web/src/app/(dashboard)/compose/composer.tsx
-  108. social-media-web/src/app/(dashboard)/compose/page.tsx
-  109. social-media-web/src/app/(dashboard)/history/page.tsx
-  110. social-media-web/src/app/(dashboard)/layout.tsx
-  111. social-media-web/src/app/(dashboard)/media/media-uploader.tsx
-  112. social-media-web/src/app/(dashboard)/media/page.tsx
-  113. social-media-web/src/app/(dashboard)/page.tsx
-  114. social-media-web/src/app/(dashboard)/queue/page.tsx
-  115. social-media-web/src/app/api/auth/[...all]/route.ts
-  116. social-media-web/src/app/api/credentials/route.ts
-  117. social-media-web/src/app/api/health/route.ts
-  118. social-media-web/src/app/api/mcp/oauth/authorize/route.ts
-  119. social-media-web/src/app/api/media/upload/route.ts
-  120. social-media-web/src/app/api/platforms/authorize/route.ts
-  121. social-media-web/src/app/api/platforms/authorize/wait/route.ts
-  122. social-media-web/src/app/api/platforms/route.ts
-  123. social-media-web/src/app/api/posts/[id]/cancel/route.ts
-  124. social-media-web/src/app/api/posts/[id]/reschedule/route.ts
-  125. social-media-web/src/app/api/posts/[id]/retry/route.ts
-  126. social-media-web/src/app/api/posts/route.ts
-  127. social-media-web/src/app/api/worker/run/route.ts
-  128. social-media-web/src/app/globals.css
-  129. social-media-web/src/app/layout.tsx
-  130. social-media-web/src/app/mcp/authorize/page.tsx
-  131. social-media-web/src/components/app-sidebar.tsx
-  132. social-media-web/src/components/page-placeholder.tsx
-  133. social-media-web/src/components/posts-list.tsx
-  134. social-media-web/src/components/reschedule-dialog.tsx
-  135. social-media-web/src/components/sign-out-button.tsx
-  136. social-media-web/src/components/ui/alert-dialog.tsx
-  137. social-media-web/src/components/ui/avatar.tsx
-  138. social-media-web/src/components/ui/badge.tsx
-  139. social-media-web/src/components/ui/breadcrumb.tsx
-  140. social-media-web/src/components/ui/button.tsx
-  141. social-media-web/src/components/ui/calendar.tsx
-  142. social-media-web/src/components/ui/card.tsx
-  143. social-media-web/src/components/ui/checkbox.tsx
-  144. social-media-web/src/components/ui/dialog.tsx
-  145. social-media-web/src/components/ui/dropdown-menu.tsx
-  146. social-media-web/src/components/ui/input.tsx
-  147. social-media-web/src/components/ui/label.tsx
-  148. social-media-web/src/components/ui/popover.tsx
-  149. social-media-web/src/components/ui/progress.tsx
-  150. social-media-web/src/components/ui/radio-group.tsx
-  151. social-media-web/src/components/ui/scroll-area.tsx
-  152. social-media-web/src/components/ui/select.tsx
-  153. social-media-web/src/components/ui/separator.tsx
-  154. social-media-web/src/components/ui/sheet.tsx
-  155. social-media-web/src/components/ui/sidebar.tsx
-  156. social-media-web/src/components/ui/skeleton.tsx
-  157. social-media-web/src/components/ui/sonner.tsx
-  158. social-media-web/src/components/ui/switch.tsx
-  159. social-media-web/src/components/ui/table.tsx
-  160. social-media-web/src/components/ui/tabs.tsx
-  161. social-media-web/src/components/ui/textarea.tsx
-  162. social-media-web/src/components/ui/tooltip.tsx
-  163. social-media-web/src/hooks/use-mobile.ts
-  164. social-media-web/src/lib/api.ts
-  165. social-media-web/src/lib/auth.ts
-  166. social-media-web/src/lib/auth-client.ts
-  167. social-media-web/src/lib/backend/index.ts
-  168. social-media-web/src/lib/db/index.ts
-  169. social-media-web/src/lib/db/schema.ts
-  170. social-media-web/src/lib/redirects.ts
-  171. social-media-web/src/lib/session.ts
-  172. social-media-web/src/lib/utils.ts
-  173. social-media-web/src/proxy.ts
-  174. social-media-web/src/styles/shadcn-tailwind.css
-  175. social-media-web/tsconfig.json
-  176. social-media-web/vercel.json
+   16. social-media-mcp/migrations/012_mcp_intent_rate_limit.sql
+   17. social-media-mcp/opencode.json
+   18. social-media-mcp/package.json
+   19. social-media-mcp/README.md
+   20. social-media-mcp/render.yaml
+   21. social-media-mcp/scripts/check-database.ts
+   22. social-media-mcp/scripts/migrate-database.ts
+   23. social-media-mcp/scripts/migrate-scheduled-images-to-cloud.ts
+   24. social-media-mcp/scripts/migrate-tokens-to-cloud.ts
+   25. social-media-mcp/src/auth/app-credentials.ts
+   26. social-media-mcp/src/auth/mcp-oauth.ts
+   27. social-media-mcp/src/auth/oauth.ts
+   28. social-media-mcp/src/auth/oauth-callback.ts
+   29. social-media-mcp/src/auth/oauth-sessions.ts
+   30. social-media-mcp/src/auth/token-store.ts
+   31. social-media-mcp/src/config/env.ts
+   32. social-media-mcp/src/database.ts
+   33. social-media-mcp/src/database-migrations.ts
+   34. social-media-mcp/src/index.ts
+   35. social-media-mcp/src/mcp/handler.ts
+   36. social-media-mcp/src/mcp/http-adapter.ts
+   37. social-media-mcp/src/media/upload-endpoint.ts
+   38. social-media-mcp/src/platforms/linkedin.ts
+   39. social-media-mcp/src/platforms/meta.ts
+   40. social-media-mcp/src/platforms/types.ts
+   41. social-media-mcp/src/scheduler.ts
+   42. social-media-mcp/src/scheduling/db.ts
+   43. social-media-mcp/src/scheduling/migrate.ts
+   44. social-media-mcp/src/scheduling/model.ts
+   45. social-media-mcp/src/scheduling/store.ts
+   46. social-media-mcp/src/scheduling/worker.ts
+   47. social-media-mcp/src/storage/scheduled-images.ts
+   48. social-media-mcp/src/storage/upload-intents.ts
+   49. social-media-mcp/src/tools/media-input.ts
+   50. social-media-mcp/src/tools/register.ts
+   51. social-media-mcp/src/utils/http.ts
+   52. social-media-mcp/src/utils/remote-media.ts
+   53. social-media-mcp/src/utils/scheduled-image.ts
+   54. social-media-mcp/src/utils/validation.ts
+   55. social-media-mcp/src/worker.ts
+   56. social-media-mcp/tests/app-credentials.test.ts
+   57. social-media-mcp/tests/app-credentials-key.test.ts
+   58. social-media-mcp/tests/cloud-storage.test.ts
+   59. social-media-mcp/tests/cloud-worker.test.ts
+   60. social-media-mcp/tests/fixtures/linkedin-consent-child.mjs
+   61. social-media-mcp/tests/helpers/tsx-spawn.ts
+   62. social-media-mcp/tests/linkedin.test.ts
+   63. social-media-mcp/tests/linkedin-oauth.test.ts
+   64. social-media-mcp/tests/linkedin-token-refresh.test.ts
+   65. social-media-mcp/tests/mcp.test.ts
+   66. social-media-mcp/tests/mcp-oauth.test.ts
+   67. social-media-mcp/tests/media-upload-intents.test.ts
+   68. social-media-mcp/tests/meta-container.test.ts
+   69. social-media-mcp/tests/multiuser.test.ts
+   70. social-media-mcp/tests/oauth.test.ts
+   71. social-media-mcp/tests/oauth-sessions.test.ts
+   72. social-media-mcp/tests/remote-media.test.ts
+   73. social-media-mcp/tests/remote-media-input.test.ts
+   74. social-media-mcp/tests/remote-tool-guards.test.ts
+   75. social-media-mcp/tests/scheduled-image.test.ts
+   76. social-media-mcp/tests/scheduled-media.test.ts
+   77. social-media-mcp/tests/scheduled-media-lifecycle.test.ts
+   78. social-media-mcp/tests/scheduled-reschedule.test.ts
+   79. social-media-mcp/tests/scheduled-retry.test.ts
+   80. social-media-mcp/tests/schedule-text-only.test.ts
+   81. social-media-mcp/tests/scheduling.test.ts
+   82. social-media-mcp/tests/scheduling-documents.test.ts
+   83. social-media-mcp/tests/scheduling-postgres.test.ts
+   84. social-media-mcp/tests/shared-storage-cleanup.test.ts
+   85. social-media-mcp/tests/validation.test.ts
+   86. social-media-mcp/tsconfig.json
+   87. social-media-web/.env.example
+   88. social-media-web/.gitignore
+   89. social-media-web/AGENTS.md
+   90. social-media-web/components.json
+   91. social-media-web/drizzle.config.ts
+   92. social-media-web/eslint.config.mjs
+   93. social-media-web/migrations/0001_better_auth.sql
+   94. social-media-web/next.config.ts
+   95. social-media-web/package.json
+   96. social-media-web/README.md
+   97. social-media-web/scripts/migrate.mjs
+   98. social-media-web/scripts/seed-admin.mts
+   99. social-media-web/src/app/(auth)/login/login-form.tsx
+  100. social-media-web/src/app/(auth)/login/page.tsx
+  101. social-media-web/src/app/(auth)/signup/page.tsx
+  102. social-media-web/src/app/(auth)/signup/signup-form.tsx
+  103. social-media-web/src/app/(dashboard)/accounts/accounts-panel.tsx
+  104. social-media-web/src/app/(dashboard)/accounts/developer-app-settings.tsx
+  105. social-media-web/src/app/(dashboard)/accounts/page.tsx
+  106. social-media-web/src/app/(dashboard)/calendar/calendar-panel.tsx
+  107. social-media-web/src/app/(dashboard)/calendar/page.tsx
+  108. social-media-web/src/app/(dashboard)/compose/composer.tsx
+  109. social-media-web/src/app/(dashboard)/compose/page.tsx
+  110. social-media-web/src/app/(dashboard)/history/page.tsx
+  111. social-media-web/src/app/(dashboard)/layout.tsx
+  112. social-media-web/src/app/(dashboard)/media/media-uploader.tsx
+  113. social-media-web/src/app/(dashboard)/media/page.tsx
+  114. social-media-web/src/app/(dashboard)/page.tsx
+  115. social-media-web/src/app/(dashboard)/queue/page.tsx
+  116. social-media-web/src/app/api/auth/[...all]/route.ts
+  117. social-media-web/src/app/api/credentials/route.ts
+  118. social-media-web/src/app/api/health/route.ts
+  119. social-media-web/src/app/api/mcp/oauth/authorize/route.ts
+  120. social-media-web/src/app/api/media/upload/route.ts
+  121. social-media-web/src/app/api/platforms/authorize/route.ts
+  122. social-media-web/src/app/api/platforms/authorize/wait/route.ts
+  123. social-media-web/src/app/api/platforms/route.ts
+  124. social-media-web/src/app/api/posts/[id]/cancel/route.ts
+  125. social-media-web/src/app/api/posts/[id]/reschedule/route.ts
+  126. social-media-web/src/app/api/posts/[id]/retry/route.ts
+  127. social-media-web/src/app/api/posts/route.ts
+  128. social-media-web/src/app/api/worker/run/route.ts
+  129. social-media-web/src/app/globals.css
+  130. social-media-web/src/app/layout.tsx
+  131. social-media-web/src/app/mcp/authorize/page.tsx
+  132. social-media-web/src/components/app-sidebar.tsx
+  133. social-media-web/src/components/page-placeholder.tsx
+  134. social-media-web/src/components/posts-list.tsx
+  135. social-media-web/src/components/reschedule-dialog.tsx
+  136. social-media-web/src/components/sign-out-button.tsx
+  137. social-media-web/src/components/ui/alert-dialog.tsx
+  138. social-media-web/src/components/ui/avatar.tsx
+  139. social-media-web/src/components/ui/badge.tsx
+  140. social-media-web/src/components/ui/breadcrumb.tsx
+  141. social-media-web/src/components/ui/button.tsx
+  142. social-media-web/src/components/ui/calendar.tsx
+  143. social-media-web/src/components/ui/card.tsx
+  144. social-media-web/src/components/ui/checkbox.tsx
+  145. social-media-web/src/components/ui/dialog.tsx
+  146. social-media-web/src/components/ui/dropdown-menu.tsx
+  147. social-media-web/src/components/ui/input.tsx
+  148. social-media-web/src/components/ui/label.tsx
+  149. social-media-web/src/components/ui/popover.tsx
+  150. social-media-web/src/components/ui/progress.tsx
+  151. social-media-web/src/components/ui/radio-group.tsx
+  152. social-media-web/src/components/ui/scroll-area.tsx
+  153. social-media-web/src/components/ui/select.tsx
+  154. social-media-web/src/components/ui/separator.tsx
+  155. social-media-web/src/components/ui/sheet.tsx
+  156. social-media-web/src/components/ui/sidebar.tsx
+  157. social-media-web/src/components/ui/skeleton.tsx
+  158. social-media-web/src/components/ui/sonner.tsx
+  159. social-media-web/src/components/ui/switch.tsx
+  160. social-media-web/src/components/ui/table.tsx
+  161. social-media-web/src/components/ui/tabs.tsx
+  162. social-media-web/src/components/ui/textarea.tsx
+  163. social-media-web/src/components/ui/tooltip.tsx
+  164. social-media-web/src/hooks/use-mobile.ts
+  165. social-media-web/src/lib/api.ts
+  166. social-media-web/src/lib/auth.ts
+  167. social-media-web/src/lib/auth-client.ts
+  168. social-media-web/src/lib/backend/index.ts
+  169. social-media-web/src/lib/db/index.ts
+  170. social-media-web/src/lib/db/schema.ts
+  171. social-media-web/src/lib/redirects.ts
+  172. social-media-web/src/lib/session.ts
+  173. social-media-web/src/lib/utils.ts
+  174. social-media-web/src/proxy.ts
+  175. social-media-web/src/styles/shadcn-tailwind.css
+  176. social-media-web/tsconfig.json
+  177. social-media-web/vercel.json
 
 ================================================================================
 
@@ -297,8 +298,13 @@ MCP_ALLOW_LOOPBACK_REDIRECTS=true
 # declared kind; the tool result's storagePath is permanent regardless.
 MCP_UPLOAD_INTENT_TTL_SECONDS=900
 # Maximum upload intents per authenticated user per rolling 10-minute window,
-# enforced per cloud-worker process. Default 20, max 200.
+# enforced in every cloud-worker process and durably across processes via
+# migration 012. Default 20, max 200.
 MCP_UPLOAD_INTENT_RATE_LIMIT=20
+# Failed POST /media/upload attempts one client address may produce per
+# rolling 10-minute window before the endpoint answers 429 outright.
+# In-memory per cloud-worker process. Default 30.
+MEDIA_UPLOAD_ATTEMPT_LIMIT=30
 
 SCHEDULE_IMAGE_TIMEOUT_MS=10000
 SCHEDULE_IMAGE_MAX_BYTES=10485760
@@ -1000,6 +1006,38 @@ REVOKE ALL ON TABLE public.mcp_media_upload_intents FROM PUBLIC, anon, authentic
 GRANT ALL ON TABLE public.mcp_media_upload_intents TO service_role;
 
 ================================================================================
+FILE: social-media-mcp/migrations/012_mcp_intent_rate_limit.sql
+================================================================================
+
+-- Durable rate-limit hit history for MCP media upload intent creation.
+--
+-- The in-process sliding-window limiter resets on scale-to-zero and multiplies
+-- across worker instances. This table gives every cloud worker a shared view of
+-- recent intent-creation hits per authenticated user so the configured limit
+-- holds across restarts, cold starts, and multiple instances. The limiter still
+-- applies in-process first; the database check is best-effort and fails open
+-- while the database is unavailable (the in-process window remains the guard).
+--
+-- Additive only: no existing table, row, constraint, or policy is modified.
+-- Old hits are removed by application code (the intent-creation path) in the
+-- same rolling window they are checked against, so the table stays small.
+
+CREATE TABLE IF NOT EXISTS public.mcp_media_intent_rate_hits (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  hit_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS mcp_media_intent_rate_hits_window_idx
+  ON public.mcp_media_intent_rate_hits (user_id, hit_at);
+
+ALTER TABLE public.mcp_media_intent_rate_hits ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON TABLE public.mcp_media_intent_rate_hits FROM PUBLIC, anon, authenticated;
+
+GRANT ALL ON TABLE public.mcp_media_intent_rate_hits TO service_role;
+
+================================================================================
 FILE: social-media-mcp/opencode.json
 ================================================================================
 
@@ -1084,7 +1122,7 @@ Put the generated 64-character hex key in `SOCIAL_MCP_TOKEN_ENCRYPTION_KEY`. The
 
 Set `DATABASE_URL` to your Supabase PostgreSQL connection string. Use the direct connection when IPv6 is available, or the Supabase session pooler for IPv4-only environments; URL-encode special characters in the password and require TLS (`sslmode=require`). The scheduler uses a bounded `pg` connection pool and never prints the connection string. Run `npm run db:check` to test `SELECT NOW()` without displaying credentials.
 
-Scheduled-post records and delivery state are stored in the Supabase `public.scheduled_posts` table. `npm run db:migrate` applies the repeatable migrations `001`-`003` and `005`-`010`; they preserve rows, add constraints and cloud object references, add optional LinkedIn document columns and the `application/pdf` Storage MIME type, create the server-only token table and private Storage bucket, add multi-user ownership, create the server-only `oauth_authorization_sessions` table used by cloud OAuth callbacks, create the user-owned `oauth_app_credentials` table for Developer App Settings, and create the remote MCP OAuth tables used by Claude. Migration `004` is intentionally manual because it requires a real, deployed Render URL and secrets in Supabase Vault. The app uses an atomic `FOR UPDATE SKIP LOCKED` claim so concurrent processes do not take the same due job.
+Scheduled-post records and delivery state are stored in the Supabase `public.scheduled_posts` table. `npm run db:migrate` applies the repeatable migrations `001`-`003` and `005`-`012`; they preserve rows, add constraints and cloud object references, add optional LinkedIn document columns and the `application/pdf` Storage MIME type, create the server-only token table and private Storage bucket, add multi-user ownership, create the server-only `oauth_authorization_sessions` table used by cloud OAuth callbacks, create the user-owned `oauth_app_credentials` table for Developer App Settings, create the remote MCP OAuth tables used by Claude, create the single-use media upload intent table, and create the durable upload intent rate-limit hit history. Migration `004` is intentionally manual because it requires a real, deployed Render URL and secrets in Supabase Vault. The app uses an atomic `FOR UPDATE SKIP LOCKED` claim so concurrent processes do not take the same due job.
 
 By default, `SCHEDULER_MODE=local` uses a `setInterval` loop in the MCP process and local images/tokens, so the MCP process, local image server, and ngrok must stay running. The opt-in cloud configuration and deployment steps are described below. Code being present is not evidence that your Render service or Supabase Cron has been deployed.
 
@@ -1092,7 +1130,7 @@ By default, `SCHEDULER_MODE=local` uses a `setInterval` loop in the MCP process 
 
 1. Set `DATABASE_URL` in the private `.env` using the connection URI from Supabase **Project Settings → Database**. Do not commit `.env`.
 2. Check connectivity: `npm run db:check`.
-3. Run `npm run db:migrate`, then `npm run build` and `npm test`. Migrations `001`-`003` and `005`-`010` are safe to rerun; the app also applies them when its scheduler starts.
+3. Run `npm run db:migrate`, then `npm run build` and `npm test`. Migrations `001`-`003` and `005`-`012` are safe to rerun; the app also applies them when its scheduler starts.
 4. Start or restart the MCP server. Existing scheduled-post rows are not copied from another database automatically.
 
 Pool settings are `DATABASE_POOL_MAX` (default `5`), `DATABASE_CONNECTION_TIMEOUT_MS` (default `10000`), and `DATABASE_IDLE_TIMEOUT_MS` (default `30000`).
@@ -1116,7 +1154,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'
 
 Use one 64-character hex value for `CLOUD_TOKEN_ENCRYPTION_KEY` and a second, independent 64-character hex value for `APP_CREDENTIAL_ENCRYPTION_KEY`; use the base64url value as `WORKER_TRIGGER_SECRET`. Keep `APP_CREDENTIAL_ENCRYPTION_KEY` identical on Render **and** Vercel, and keep `WORKER_TRIGGER_SECRET` identical in Render and Supabase Vault. Never put the service-role key or any secret in source control, client applications, or logs.
 
-1. Set the cloud variables in the local MCP server environment, then run `npm run db:migrate`. Migrations `001`-`003` and `005`-`010` are repeatable; they preserve scheduled rows, add the cloud object-path and optional LinkedIn document columns, add the encrypted `oauth_tokens` table, add multi-user ownership, create the server-only `oauth_authorization_sessions` table, create the user-owned `oauth_app_credentials` table, create the private image bucket, and create the remote MCP OAuth tables. The cloud migration refuses to use a bucket named `social-media-images` if it is public. The database connection needs permission to apply these migrations.
+1. Set the cloud variables in the local MCP server environment, then run `npm run db:migrate`. Migrations `001`-`003` and `005`-`012` are repeatable; they preserve scheduled rows, add the cloud object-path and optional LinkedIn document columns, add the encrypted `oauth_tokens` table, add multi-user ownership, create the server-only `oauth_authorization_sessions` table, create the user-owned `oauth_app_credentials` table, create the private image bucket, create the remote MCP OAuth tables, create the media upload intent table, and create the durable upload intent rate-limit history. The cloud migration refuses to use a bucket named `social-media-images` if it is public. The database connection needs permission to apply these migrations.
 2. Stop any currently running local MCP scheduler before migrating pending jobs. Run `npm run tokens:migrate` while the local encrypted vault and `SOCIAL_MCP_TOKEN_ENCRYPTION_KEY` are still available. It inserts encrypted token records and refuses to overwrite existing cloud token rows unless explicitly invoked with `npm run tokens:migrate -- --overwrite`. The local vault is never removed or modified. LinkedIn refresh is attempted only when LinkedIn issued a refresh token; expired or revoked Meta tokens and tokens without a provider refresh token require provider reauthorization.
 3. Run `npm run images:migrate` on the computer that has the original scheduled image files. It uploads scheduled jobs and retryable image-validation failures, stores their cloud object paths, and leaves both the local files and database `image_path` values intact. Run this before enabling cloud Cron. Jobs whose source files are missing are reported as errors and need manual repair or rescheduling.
 4. Configure the MCP process for cloud job creation and management:
@@ -1196,7 +1234,7 @@ Run `/mcp` in Claude Code and complete the browser authorization if prompted. Th
 
 The durable remote media reference is a **permanent private-storage object path**, not a URL. Upload the file through the authenticated web endpoint `POST /api/media/upload` (multipart `file` field) or from the **Media** page in the web app. It validates the image, video, or PDF, stores it under a per-user prefix in the private `social-media-images` bucket, and returns `storagePath`. Pass that as `imageStoragePath`, `media[].storagePath`, or `documentStoragePath` when scheduling. The scheduling row stores only that path (plus content type/title metadata); an expiring signed URL is never persisted.
 
-**In-chat uploads from MCP clients (`social_upload_media_intent`).** The MCP tool creates a single-use, time-limited upload intent bound to the authenticated user and returns an HTTPS endpoint, a one-time bearer upload token (shown once; only its SHA-256 digest is stored), and a `curl` command. Claude runs that command from an environment that can read the file bytes — Claude.ai's code-execution sandbox can expose chat attachments on a local path, and Claude Code has the file on disk. The worker's `POST /media/upload` endpoint claims the intent atomically, validates the declared and actual content type, size limit, and file signature server-side, stores the object under the user's prefix, and returns the permanent `storagePath` — never a signed URL. If the model cannot execute uploads (sandbox off, network allowlist blocking the worker host), the tool result also names the web **Media** page fallback, where the user uploads in the browser and pastes the `storagePath` back. Whether a given Claude.ai session can run the upload depends on client capabilities that are not part of the MCP spec; verify in your account before relying on the in-chat path. `social_publish` also accepts `imageStoragePath`, resolving fresh signed URLs only inside the publish call.
+**In-chat uploads from MCP clients (`social_upload_media_intent`).** The MCP tool creates a single-use, time-limited upload intent bound to the authenticated user and returns an HTTPS endpoint, a one-time bearer upload token (shown once; only its SHA-256 digest is stored), and a `curl` command. Claude runs that command from an environment that can read the file bytes — Claude.ai's code-execution sandbox can expose chat attachments on a local path, and Claude Code has the file on disk. The worker's `POST /media/upload` endpoint claims the intent atomically, validates the declared and actual content type, size limit, and file signature server-side, stores the object under the user's prefix, and returns the permanent `storagePath` — never a signed URL. Hardening: intent creation is rate-limited per user both in-process and durably across worker processes (migration `012`, `MCP_UPLOAD_INTENT_RATE_LIMIT`); failed uploads are throttled per client address with HTTP 429 (`MEDIA_UPLOAD_ATTEMPT_LIMIT`); and expired or abandoned uploads are deleted from the private bucket by the best-effort sweeper, but only when no scheduled or publishing post still references the object. If the model cannot execute uploads (sandbox off, network allowlist blocking the worker host), the tool result also names the web **Media** page fallback, where the user uploads in the browser and pastes the `storagePath` back. Whether a given Claude.ai session can run the upload depends on client capabilities that are not part of the MCP spec; verify in your account before relying on the in-chat path. `social_publish` also accepts `imageStoragePath`, resolving fresh signed URLs only inside the publish call.
 
 At publish time the worker downloads the object with the server-side service-role key. It creates a fresh signed URL only for platforms that require a public HTTPS URL (Instagram/Facebook), with a lifetime controlled by `SCHEDULE_SIGNED_URL_TTL_SECONDS` (default `86400`; it only needs to outlive the platform's fetch). Platforms with direct upload (LinkedIn) receive the bytes directly. Every retry re-downloads the same original object, so a post scheduled hours or days ahead is unaffected by any earlier URL expiry. Public HTTPS `imageUrl`, `media[].url`, and `documentUrl` inputs are still accepted; they are downloaded immediately, validated, and stored privately at scheduling time.
 
@@ -1609,7 +1647,7 @@ import { ensureDatabaseMigrations } from "../src/database-migrations.js";
 
 try {
   await ensureDatabaseMigrations();
-  console.info("Database migrations 001-003, 005, 006, 007, and 008 completed. Existing scheduled-post records were preserved.");
+  console.info("Database migrations 001-003 and 005-012 completed. Existing scheduled-post records were preserved.");
 } catch (error) {
   const message = error instanceof Error ? error.message : "Unknown database migration error.";
   console.error(message.replace(/postgres(?:ql)?:\/\/[^\s"'<>]+/gi, "[database URL redacted]"));
@@ -4011,6 +4049,11 @@ const mediaUploadIntentTtlSeconds = integer("MCP_UPLOAD_INTENT_TTL_SECONDS", "90
 // Maximum upload intents one authenticated user may request per rolling
 // 10-minute window (per cloud-worker process).
 const mediaUploadIntentRateLimit = integer("MCP_UPLOAD_INTENT_RATE_LIMIT", "20", 1);
+// Failed /media/upload attempts (bad tokens, bad bytes, rejected uploads) one
+// client address may produce inside the penalty window before the endpoint
+// answers 429 outright. In-memory per cloud-worker process: hardening noise
+// control, not the security boundary — tokens are single-use and 256-bit.
+const mediaUploadAttemptLimit = integer("MEDIA_UPLOAD_ATTEMPT_LIMIT", "30", 1);
 const tokenStoreBackend = value("TOKEN_STORE_BACKEND", "local");
 const scheduledImageStorage = value("SCHEDULED_IMAGE_STORAGE", "local");
 const schedulerMode = value("SCHEDULER_MODE", "local");
@@ -4071,6 +4114,7 @@ export const config = {
   scheduleSignedUrlTtlSeconds: integer("SCHEDULE_SIGNED_URL_TTL_SECONDS", "86400", 60),
   mediaUploadIntentTtlSeconds,
   mediaUploadIntentRateLimit,
+  mediaUploadAttemptLimit,
   facebookPageId: value("META_FACEBOOK_PAGE_ID"),
   linkedinAuthorUrn: value("LINKEDIN_AUTHOR_URN"),
   databaseUrl: value("DATABASE_URL"),
@@ -4247,6 +4291,7 @@ const migrationNames = [
   "009_user_app_credentials.sql",
   "010_mcp_oauth.sql",
   "011_mcp_media_upload_intents.sql",
+  "012_mcp_intent_rate_limit.sql",
 ];
 
 let migrations: Promise<void> | undefined;
@@ -4446,6 +4491,7 @@ import {
   UploadIntentError,
   claimPendingMediaUploadIntent,
   completeMediaUploadIntent,
+  createSlidingWindowPenaltyBox,
   evaluateMediaUpload,
   extensionForContentType,
   failMediaUploadIntent,
@@ -4472,6 +4518,23 @@ import {
 
 // 1 MiB of transport slack above the largest accepted video.
 export const mediaUploadBodyLimit = config.scheduleVideoMaxBytes + 1024 * 1024;
+
+// Failed-attempt penalty box (HTTP 429). Blocks noise from repeated bad tokens
+// or rejected bodies: per client address, in-memory per cloud-worker process,
+// on top of the cryptographic single-use claim (which already bounds what any
+// one token can do). Configured by MEDIA_UPLOAD_ATTEMPT_LIMIT over a rolling
+// 10-minute window; successful uploads never record a penalty hit.
+const attemptPenalty = createSlidingWindowPenaltyBox({
+  maxAttempts: config.mediaUploadAttemptLimit,
+  windowMs: 600_000,
+});
+
+// Best-effort client attribution for throttling only (never logged raw; the
+// Render proxy supplies x-forwarded-for).
+function requestClientKey(request: Request): string {
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return forwarded || "unknown";
+}
 
 function redactError(error: unknown): string {
   const message = error instanceof Error ? error.message : "Unknown upload error.";
@@ -4507,6 +4570,7 @@ function requestContentType(request: Request): string {
 // one. That keeps "one token, at most one accepted upload" unconditional.
 export async function mediaUploadResponse(request: Request): Promise<Response> {
   const token = extractUploadToken(request);
+  const clientKey = requestClientKey(request);
   try {
     if (request.method !== "POST") {
       return jsonResponse(405, { error: "Use POST." }, { allow: "POST" });
@@ -4514,7 +4578,14 @@ export async function mediaUploadResponse(request: Request): Promise<Response> {
     if (!config.supabaseUrl || !config.supabaseServiceRoleKey || !config.databaseUrl) {
       return jsonResponse(503, { error: "Media uploads are not configured on this deployment." });
     }
+    if (attemptPenalty.blocked(clientKey)) {
+      console.warn(JSON.stringify({ event: "media_upload_throttled", status: 429, knownClient: clientKey !== "unknown" }));
+      return jsonResponse(429, {
+        error: "Too many failed upload attempts. Wait ten minutes and request a new upload intent.",
+      });
+    }
     if (!token || token.length < 32) {
+      attemptPenalty.record(clientKey);
       return jsonResponse(401, { error: "Provide the upload token as an Authorization: Bearer header." });
     }
     const intent = await claimPendingMediaUploadIntent(token);
@@ -4531,6 +4602,7 @@ export async function mediaUploadResponse(request: Request): Promise<Response> {
       );
       if (problem) {
         await failMediaUploadIntent(intent.id);
+        attemptPenalty.record(clientKey);
         console.warn(JSON.stringify({ event: "media_upload_rejected", intentId: intent.id, status: problem.status }));
         return jsonResponse(problem.status, { error: problem.message });
       }
@@ -4547,6 +4619,7 @@ export async function mediaUploadResponse(request: Request): Promise<Response> {
       // header) and again by every later download/validate call in the worker.
       if (!matchesMediaSignature(bytes, declaredContentType)) {
         await failMediaUploadIntent(intent.id);
+        attemptPenalty.record(clientKey);
         console.warn(JSON.stringify({ event: "media_upload_bad_signature", intentId: intent.id }));
         return jsonResponse(415, {
           error: `File contents do not match ${declaredContentType}. The upload intent is single-use; request a new one.`,
@@ -4616,6 +4689,7 @@ export async function mediaUploadResponse(request: Request): Promise<Response> {
     if (error instanceof UploadIntentError) {
       // Deliberately log identity without any token material beyond a short,
       // unsalted digest prefix for tracing — never the raw token itself.
+      attemptPenalty.record(clientKey);
       console.warn(JSON.stringify({
         event: "media_upload_rejected",
         tokenFingerprint: token ? hashForLogging(token) : "missing",
@@ -4623,6 +4697,7 @@ export async function mediaUploadResponse(request: Request): Promise<Response> {
       }));
       return jsonResponse(error.status, { error: error.message });
     }
+    attemptPenalty.record(clientKey);
     console.error(JSON.stringify({ event: "media_upload_failed", error: redactError(error) }));
     return jsonResponse(500, { error: "The upload failed. Request a new upload intent and try again." });
   }
@@ -6833,9 +6908,19 @@ export function dedupeStorageCandidates(candidates: StorageObjectCandidate[]): S
 // while the objects are deleted. When the references cannot be evaluated
 // (database error), deletion is skipped entirely: keeping an orphaned object
 // is always recoverable, deleting blindly breaks live posts.
-async function deleteUnreferencedStorageObjects(candidates: StorageObjectCandidate[]): Promise<void> {
+//
+// Returns what happened per path (`deleted`, `referenced`). Deletion decide-ers
+// that need per-path outcomes (the upload-intent sweeper) use the returned
+// sets; existing callers ignore them. An object Supabase reports as missing
+// (HTTP 404) counts as deleted: the cleanup goal is already satisfied.
+export interface StorageCleanupResult {
+  deleted: Set<string>;
+  referenced: Set<string>;
+}
+
+export async function deleteUnreferencedStorageObjects(candidates: StorageObjectCandidate[]): Promise<StorageCleanupResult> {
   const deduped = dedupeStorageCandidates(candidates);
-  if (!deduped.length) return;
+  if (!deduped.length) return { deleted: new Set(), referenced: new Set() };
   let client: PoolClient | undefined;
   try {
     await ensureScheduleStore();
@@ -6867,6 +6952,7 @@ async function deleteUnreferencedStorageObjects(candidates: StorageObjectCandida
     `, [paths]);
     const referenced = new Set(rows.map((row) => row.path));
     const deletable = deduped.filter((candidate) => !referenced.has(candidate.path));
+    const deleted = new Set<string>();
     for (const candidate of deletable) {
       const cleanup = candidate.kind === "video"
         ? deleteScheduledVideo
@@ -6875,7 +6961,13 @@ async function deleteUnreferencedStorageObjects(candidates: StorageObjectCandida
           : deleteScheduledImage;
       try {
         await cleanup(candidate.path);
+        deleted.add(candidate.path);
       } catch (error) {
+        if (/HTTP 404\b/.test(safeError(error))) {
+          // The object is already gone; the cleanup goal is met.
+          deleted.add(candidate.path);
+          continue;
+        }
         console.error(JSON.stringify({
           event: "scheduled_object_delete_failed",
           storagePath: candidate.path,
@@ -6884,12 +6976,14 @@ async function deleteUnreferencedStorageObjects(candidates: StorageObjectCandida
       }
     }
     await client.query("COMMIT");
+    return { deleted, referenced };
   } catch (error) {
     await client?.query("ROLLBACK").catch(() => undefined);
     console.error(JSON.stringify({
       event: "scheduled_shared_object_cleanup_skipped",
       error: safeError(error),
     }));
+    return { deleted: new Set(), referenced: new Set() };
   } finally {
     client?.release();
   }
@@ -7538,6 +7632,7 @@ import path from "node:path";
 import type { QueryResultRow } from "pg";
 import { config } from "../config/env.js";
 import { databasePool } from "../database.js";
+import { deleteUnreferencedStorageObjects, type StorageObjectCandidate } from "../scheduler.js";
 
 // Single-use media upload intents for MCP clients.
 //
@@ -7731,6 +7826,10 @@ export function fallbackMediaUploadPageUrl(): string | undefined {
 // Sliding-window limiter keyed by authenticated user, per cloud-worker process.
 // Intent creation is the only mutation this protects; the upload endpoint is
 // already single-use and capped by token.
+//
+// Two layers guard intent creation: this in-process window (fast, always
+// available) and a durable per-process-safe database window below, so the
+// configured limit survives scale-to-zero restarts and multiple instances.
 
 export interface SlidingWindowRateLimiter {
   allow(key: string, nowMs?: number): boolean;
@@ -7756,9 +7855,41 @@ export function createSlidingWindowRateLimiter(options: {
   };
 }
 
+// Penalty box for failed upload attempts (bad tokens, rejected bytes). Unlike
+// the limiter above, per-key hits are recorded only on failures and blocking
+// consults the recorded history without adding a hit, so a client cannot lift
+// its own block by retrying. The endpoint answers 429 while blocked.
+export interface SlidingWindowPenaltyBox {
+  record(key: string, nowMs?: number): void;
+  blocked(key: string, nowMs?: number): boolean;
+}
+
+export function createSlidingWindowPenaltyBox(options: {
+  maxAttempts: number;
+  windowMs: number;
+}): SlidingWindowPenaltyBox {
+  const { maxAttempts, windowMs } = options;
+  const hits = new Map<string, number[]>();
+  return {
+    record(key: string, nowMs: number = Date.now()): void {
+      const window = (hits.get(key) ?? []).filter((timestamp) => timestamp > nowMs - windowMs);
+      window.push(nowMs);
+      hits.set(key, window);
+    },
+    blocked(key: string, nowMs: number = Date.now()): boolean {
+      const window = (hits.get(key) ?? []).filter((timestamp) => timestamp > nowMs - windowMs);
+      hits.set(key, window);
+      return window.length >= maxAttempts;
+    },
+  };
+}
+
+// The rolling window shared by the in-process limiter and the database check.
+export const INTENT_RATE_WINDOW_SECONDS = 600;
+
 const intentRateLimiter = createSlidingWindowRateLimiter({
   maxRequests: config.mediaUploadIntentRateLimit,
-  windowMs: 600_000,
+  windowMs: INTENT_RATE_WINDOW_SECONDS * 1000,
 });
 
 export class UploadIntentError extends Error {
@@ -7820,18 +7951,74 @@ function requireCloudStorageInProcess(): void {
   }
 }
 
-// Best-effort sweep of dead rows whenever a new intent is created. Completed
-// rows keep only audit metadata (the storagePath reference never depends on
-// this table), so sweeping cannot affect a scheduled post.
+// Durable intent-creation rate check over the migration-012 hit history. The
+// statement counts this user's hits inside the rolling window and inserts a
+// new hit only when the configured limit allows one, in the same statement:
+// concurrent workers each atomically claim a slot (or find the window full).
+// Old hits outside the window are pruned in the same statement so the table
+// stays small. Returns false when the window is already at its limit.
+export async function recordMediaIntentRateHit(userId: string): Promise<boolean> {
+  const { rows } = await databasePool().query<{ inserted_id: string | null }>(
+    `WITH existing AS (
+       SELECT COUNT(*)::int AS hits
+       FROM public.mcp_media_intent_rate_hits
+       WHERE user_id = $1 AND hit_at > NOW() - make_interval(secs => $2)
+     ), pruned AS (
+       DELETE FROM public.mcp_media_intent_rate_hits
+       WHERE user_id = $1 AND hit_at <= NOW() - make_interval(secs => $2)
+       RETURNING 1
+     ), inserted AS (
+       INSERT INTO public.mcp_media_intent_rate_hits (id, user_id, hit_at)
+       SELECT $3, $1, NOW()
+       WHERE (SELECT hits FROM existing) < $4::int
+       RETURNING id
+     )
+     SELECT (SELECT id FROM inserted) AS inserted_id`,
+    [userId, INTENT_RATE_WINDOW_SECONDS, randomBytes(12).toString("hex"), config.mediaUploadIntentRateLimit],
+  );
+  return rows[0]?.inserted_id != null;
+}
+
+// Best-effort sweep of dead rows and their orphaned storage objects whenever a
+// new intent is created. A swept intent's stored object may already be
+// scheduled by the user's posts, so every deletion goes through the shared
+// reference-counted helper: objects referenced by an active scheduled or
+// publishing post are always kept. Completed rows keep only audit metadata
+// (the storagePath reference never depends on this table), so sweeping cannot
+// affect a scheduled post.
 async function sweepStaleIntents(ownerId: string): Promise<void> {
+  const stale = await databasePool().query<MediaUploadIntentRow>(
+    `SELECT id, storage_path, kind
+     FROM public.mcp_media_upload_intents
+     WHERE user_id = $1
+       AND storage_path IS NOT NULL
+       AND (
+         expires_at < NOW()
+         OR (status = 'uploaded' AND created_at < NOW() - INTERVAL '7 days')
+       )`,
+    [ownerId],
+  );
+  const candidates: StorageObjectCandidate[] = stale.rows
+    .map((row) => ({ kind: row.kind as StorageObjectCandidate["kind"], path: row.storage_path }))
+    .filter((candidate): candidate is StorageObjectCandidate => Boolean(candidate.path));
+  const cleanup = await deleteUnreferencedStorageObjects(candidates);
+  // Rows whose object could not be deleted keep their record so a later sweep
+  // can retry; deleted (or referenced-but-unreachable) audit rows are swept.
+  const retryPaths = stale.rows
+    .map((row) => ({ id: row.id, path: row.storage_path }))
+    .filter((row): row is { id: string; path: string } => Boolean(row.path));
+  const deletableIds = retryPaths
+    .filter((row) => cleanup.deleted.has(row.path))
+    .map((row) => row.id);
   await databasePool().query(
     `DELETE FROM public.mcp_media_upload_intents
      WHERE user_id = $1
        AND (
          expires_at < NOW()
          OR (status = 'uploaded' AND created_at < NOW() - INTERVAL '7 days')
-       )`,
-    [ownerId],
+       )
+       AND (storage_path IS NULL OR id = ANY($2::text[]))`,
+    [ownerId, deletableIds],
   );
 }
 
@@ -7848,6 +8035,25 @@ export async function createMediaUploadIntent(
     throw new Error(
       "Too many upload intents requested. Wait a few minutes and request a single new upload intent.",
     );
+  }
+  // The in-process window is the always-available guard; this durable check
+  // makes the same limit hold across restarts and worker instances. A database
+  // error here fails open (the in-process window still applies) instead of
+  // blocking uploads while the database recovers.
+  try {
+    if (!(await recordMediaIntentRateHit(userId))) {
+      throw new Error(
+        "Too many upload intents requested. Wait a few minutes and request a single new upload intent.",
+      );
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Too many upload intents requested")) {
+      throw error;
+    }
+    console.error(JSON.stringify({
+      event: "media_upload_intent_rate_limit_database_unavailable",
+      error: error instanceof Error ? error.message : "Unknown rate-limit database error.",
+    }));
   }
   const token = newUploadToken();
   const id = randomBytes(16).toString("hex");
@@ -10730,6 +10936,20 @@ test("media upload intents migration is additive, hashes tokens, and locks acces
   assert.match(migrations, /"011_mcp_media_upload_intents\.sql"/);
 });
 
+test("rate-hit history migration is additive, user-scoped, and locked to the service role", async () => {
+  const migration = await readFile(new URL("../migrations/012_mcp_intent_rate_limit.sql", import.meta.url), "utf8");
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.mcp_media_intent_rate_hits \(/);
+  assert.match(migration, /user_id TEXT NOT NULL/);
+  assert.match(migration, /hit_at TIMESTAMPTZ NOT NULL DEFAULT NOW\(\)/);
+  assert.match(migration, /CREATE INDEX IF NOT EXISTS mcp_media_intent_rate_hits_window_idx/);
+  assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(migration, /REVOKE ALL ON TABLE public\.mcp_media_intent_rate_hits FROM PUBLIC, anon, authenticated/);
+  assert.match(migration, /GRANT ALL ON TABLE public\.mcp_media_intent_rate_hits TO service_role/);
+  assert.doesNotMatch(migration, /\bDROP\s+TABLE\b|\bDELETE\s+FROM\b/i, "migrations never delete data or drop tables");
+  const migrations = await readFile(new URL("../src/database-migrations.ts", import.meta.url), "utf8");
+  assert.match(migrations, /"012_mcp_intent_rate_limit\.sql"/);
+});
+
 // --- Pure validation helpers --------------------------------------------------
 
 test("filenames are display-only and cannot traverse or shape a storage key", () => {
@@ -10897,6 +11117,67 @@ test("the intent tool result explains the Claude.ai reality and the browser fall
   assert.match(intentsSource, /code execution/, "instructions must describe the sandbox requirement honestly");
   assert.match(intentsSource, /fallback upload/, "instructions must offer the browser fallback");
   assert.match(intentsSource, /not an MCP access token/);
+});
+
+// --- Durable intent rate limiting (migration 012 + database check) ------------
+
+test("intent rate limiting spans processes via the database and fails open on database errors", async () => {
+  const intentsSource = await readFile(new URL("../src/storage/upload-intents.ts", import.meta.url), "utf8");
+  const inMemoryIndex = intentsSource.indexOf("intentRateLimiter.allow(userId)");
+  const databaseIndex = intentsSource.indexOf("recordMediaIntentRateHit(userId)");
+  assert.ok(inMemoryIndex >= 0, "the in-process window remains the always-available guard");
+  assert.ok(databaseIndex > inMemoryIndex, "the durable database window is consulted after the in-process check");
+  assert.match(intentsSource, /mcp_media_intent_rate_hits/);
+  assert.match(intentsSource, /hit_at > NOW\(\) - make_interval\(secs => \$2\)/);
+  assert.match(intentsSource, /media_upload_intent_rate_limit_database_unavailable/,
+    "a database error must fail open instead of blocking uploads");
+});
+
+// --- Expired-upload cleanup through the reference-counted helper --------------
+
+test("expired uploads are cleaned up through the reference-counted storage helper", async () => {
+  const intentsSource = await readFile(new URL("../src/storage/upload-intents.ts", import.meta.url), "utf8");
+  assert.match(intentsSource, /await deleteUnreferencedStorageObjects\(candidates\)/,
+    "sweeping never deletes an object without the shared reference check");
+  const selectIndex = intentsSource.indexOf("SELECT id, storage_path, kind");
+  const cleanupIndex = intentsSource.indexOf("deleteUnreferencedStorageObjects(candidates)");
+  const rowIndex = intentsSource.indexOf("storage_path IS NULL OR id = ANY($2::text[])");
+  assert.ok(selectIndex >= 0 && cleanupIndex > selectIndex, "candidates are read before the reference-counted delete");
+  assert.ok(rowIndex > cleanupIndex, "rows whose object survived the sweep are kept for retry");
+  const sharedStorage = await readFile(new URL("../src/scheduler.ts", import.meta.url), "utf8");
+  assert.match(sharedStorage, /export async function deleteUnreferencedStorageObjects/,
+    "the sweeper reuses the exact reference-counted deletion helper");
+  assert.match(sharedStorage, /export interface StorageCleanupResult/);
+});
+
+// --- Failed-attempt throttling (HTTP 429) --------------------------------------
+
+test("failed-attempt penalty box blocks after the limit and slides with the window", () => {
+  const box = intents.createSlidingWindowPenaltyBox({ maxAttempts: 3, windowMs: 1000 });
+  assert.equal(box.blocked("ip-a", 0), false);
+  box.record("ip-a", 0);
+  box.record("ip-a", 10);
+  box.record("ip-a", 20);
+  assert.equal(box.blocked("ip-a", 30), true);
+  assert.equal(box.blocked("ip-a", 40), true, "blocking consults the recorded history without adding a hit");
+  assert.equal(box.blocked("ip-b", 40), false, "blocks are per client address");
+  assert.equal(box.blocked("ip-a", 1050), false, "the penalty window has slid past all recorded failures");
+});
+
+test("the upload endpoint throttles failed attempts before any claim and records every rejection", async () => {
+  const source = await readFile(new URL("../src/media/upload-endpoint.ts", import.meta.url), "utf8");
+  assert.match(source, /Too many failed upload attempts/);
+  assert.match(source, /media_upload_throttled/);
+  assert.match(source, /windowMs: 600_000/);
+  const blockedIndex = source.indexOf("attemptPenalty.blocked(clientKey)");
+  const claimIndex = source.indexOf("claimPendingMediaUploadIntent(token)");
+  const arrayBufferIndex = source.indexOf("request.arrayBuffer()");
+  assert.ok(blockedIndex >= 0 && blockedIndex < claimIndex, "throttling rejects requests before any intent claim");
+  assert.ok(claimIndex < arrayBufferIndex, "the single-use claim still precedes byte transfer");
+  const recordCalls = source.match(/attemptPenalty\.record\(clientKey\)/g) ?? [];
+  assert.ok(recordCalls.length >= 4, "bad tokens, rejected payloads, unknown intents, and failures all count");
+  const endpoint = await readFile(new URL("../src/config/env.ts", import.meta.url), "utf8");
+  assert.match(endpoint, /mediaUploadAttemptLimit = integer\("MEDIA_UPLOAD_ATTEMPT_LIMIT", "30", 1\)/);
 });
 
 ================================================================================
@@ -12473,6 +12754,8 @@ test("cleanup helper is concurrency-safe and fails safe", async () => {
   assert.match(helper, /pg_advisory_xact_lock/, "per-path advisory locks serialize racing cleanups");
   assert.match(helper, /sort\(\(a, b\) => a\.path\.localeCompare\(b\.path\)\)/, "sorted lock order prevents deadlocks");
   assert.match(helper, /scheduled_shared_object_cleanup_skipped/, "unverifiable references must not delete");
+  assert.match(helper, /deleted\.add\(candidate\.path\)/, "per-path outcomes are reported to callers");
+  assert.match(helper, /HTTP 404/, "an object Supabase reports as missing still counts as cleaned up");
   const referenceIndex = helper.indexOf("const referenced = new Set");
   const deleteIndex = helper.indexOf("deleteScheduledVideo");
   const beginIndex = helper.indexOf('"BEGIN"');

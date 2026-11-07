@@ -74,7 +74,7 @@ test("scheduler scopes ownership-sensitive queries by user_id", async () => {
   const scheduler = await readFile(new URL("../src/scheduler.ts", import.meta.url), "utf8");
 
   assert.match(scheduler, /async function loadJobs\(ownerId: string\)/);
-  assert.match(scheduler, /WHERE id = \$1 AND user_id = \$2 AND status = 'scheduled'/);
+  assert.match(scheduler, /WHERE id = \$1 AND user_id = \$2 AND status IN \('scheduled', 'held'\)/);
   assert.match(scheduler, /WHERE id = \$1 AND user_id = \$2 FOR UPDATE/);
   assert.match(scheduler, /INSERT INTO public\.scheduled_posts[\s\S]*\(user_id, id, platform/);
 });

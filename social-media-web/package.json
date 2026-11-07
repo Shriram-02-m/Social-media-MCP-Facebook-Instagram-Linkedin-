@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "db:migrate": "node scripts/migrate.mjs",
     "db:seed-admin": "tsx scripts/seed-admin.mts"
   },
@@ -45,6 +47,7 @@
     "eslint-config-next": "16.4.1",
     "tailwindcss": "^4",
     "tsx": "^4.20.6",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }
