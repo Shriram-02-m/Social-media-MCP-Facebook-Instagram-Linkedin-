@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { scheduledPostStatus } from "@/lib/backend";
-import { requireAdmin } from "@/lib/session";
+import { requireApprovedUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,10 @@ const PLATFORM_LABELS: Record<string, string> = {
 };
 
 export default async function OverviewPage() {
-  const session = await requireAdmin();
+  // The Overview is the default post-login destination for every role, so it
+  // must only require an approved account - not the Super Admin role. Admin
+  // accounts pass this check too.
+  const session = await requireApprovedUser();
   const posts = await scheduledPostStatus(session.user.id);
 
   const scheduled = posts.filter((post) => post.status === "scheduled").length;

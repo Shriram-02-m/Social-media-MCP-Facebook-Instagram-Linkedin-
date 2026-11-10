@@ -1,9 +1,10 @@
 import { CalendarPanel, type CalendarPost } from "./calendar-panel";
 import { scheduledPostStatus } from "@/lib/backend";
-import { requireAdmin } from "@/lib/session";
+import { requireApprovedUser } from "@/lib/session";
 
 export default async function CalendarPage() {
-  const session = await requireAdmin();
+  // Calendar is in the shared sidebar navigation for every approved account.
+  const session = await requireApprovedUser();
   const posts = await scheduledPostStatus(session.user.id);
 
   const entries: CalendarPost[] = posts
