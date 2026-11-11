@@ -2,11 +2,20 @@
 import { eq } from "drizzle-orm";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { createAuthMiddleware } from "better-auth/api";
 import { admin } from "better-auth/plugins/admin";
+import { emailOTP } from "better-auth/plugins/email-otp";
 
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { logActivity } from "@/lib/activity";
+import { otpEmailContent, sendSecurityEmail } from "@/lib/email";
+import {
+  OTP_ALLOWED_ATTEMPTS,
+  OTP_EXPIRES_IN_SECONDS,
+  OTP_LENGTH,
+  OTP_RESEND_COOLDOWN_SECONDS,
+} from "@/lib/security-policy";
 
 const baseURL =
   process.env.BETTER_AUTH_URL?.trim() ||
@@ -36,6 +45,31 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     disableSignUp: process.env.ALLOW_ADMIN_SIGNUP === "false",
+    // Password recovery revokes every existing session after the OTP is
+    // consumed, so a stolen session cannot survive a recovery.
+    revokeSessionsOnPasswordReset: true,
+    onPasswordReset: async ({ user }) => {
+      await logActivity({
+        actorUserId: user.id,
+        targetUserId: user.id,
+        action: "user_password_reset",
+        resourceType: "user",
+        resourceId: user.id,
+        metadata: { method: "email-otp", sessionsRevoked: true },
+      });
+    },
+  },
+  emailVerification: {
+    afterEmailVerification: async (user) => {
+      await logActivity({
+        actorUserId: user.id,
+        targetUserId: user.id,
+        action: "user_email_verified",
+        resourceType: "user",
+        resourceId: user.id,
+        metadata: { method: "email-otp" },
+      });
+    },
   },
   session: {
     expiresIn: 60 * 60 * 24 * 7,
@@ -65,7 +99,54 @@ export const auth = betterAuth({
       defaultRole: "user",
       bannedUserMessage: BANNED_USER_MESSAGE,
     }),
+    // OTP-based password recovery. Better Auth owns the lifecycle: hashed
+    // storage, 5-minute expiry, three attempts, per-path rate limiting,
+    // single-use consumption, and non-enumerating request responses.
+    emailOTP({
+      otpLength: OTP_LENGTH,
+      expiresIn: OTP_EXPIRES_IN_SECONDS,
+      allowedAttempts: OTP_ALLOWED_ATTEMPTS,
+      storeOTP: "hashed",
+      resendStrategy: "rotate",
+      disableSignUp: true,
+      rateLimit: {
+        window: OTP_RESEND_COOLDOWN_SECONDS,
+        max: 3,
+      },
+      sendVerificationOTP: async ({ email, otp, type }) => {
+        const content = otpEmailContent(type, otp);
+        await sendSecurityEmail({ to: email, ...content });
+      },
+    }),
   ],
+  hooks: {
+    after: createAuthMiddleware(async (ctx) => {
+      // Audit only recovery requests for accounts that exist. Unknown emails
+      // receive the same success response from Better Auth, so this check is
+      // server-side and never changes the client-visible result.
+      if (ctx.path !== "/email-otp/request-password-reset") return;
+      const rawEmail = (ctx.body as { email?: unknown } | undefined)?.email;
+      if (typeof rawEmail !== "string") return;
+      const email = rawEmail.trim().toLowerCase();
+      if (!email) return;
+
+      const [row] = await db
+        .select({ id: schema.user.id })
+        .from(schema.user)
+        .where(eq(schema.user.email, email))
+        .limit(1);
+      if (!row) return;
+
+      await logActivity({
+        actorUserId: row.id,
+        targetUserId: row.id,
+        action: "user_password_reset_requested",
+        resourceType: "user",
+        resourceId: row.id,
+        metadata: { method: "email-otp" },
+      });
+    }),
+  },
   databaseHooks: {
     user: {
       create: {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { buttonVariants } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -8,10 +9,53 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  getAdminProfile,
+  getRecoveryStatus,
+  listAdminSessions,
+} from "@/lib/admin-security";
 import { requireAdminPage } from "@/lib/admin-page";
 import { readAccountState } from "@/lib/session";
 
+import { SessionActions } from "./session-actions";
+import { SettingsClient } from "./settings-client";
+
 export const dynamic = "force-dynamic";
+
+const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "UTC",
+});
+
+function dateTime(value: string): string {
+  return dateTimeFormatter.format(new Date(value));
+}
+
+function device(userAgent: string | null): string {
+  if (!userAgent) return "Unknown device";
+  const browser = /Edg\//.test(userAgent)
+    ? "Edge"
+    : /Firefox\//.test(userAgent)
+      ? "Firefox"
+      : /Chrome\//.test(userAgent)
+        ? "Chrome"
+        : /Safari\//.test(userAgent)
+          ? "Safari"
+          : "Browser";
+  const os = /Windows/.test(userAgent)
+    ? "Windows"
+    : /Mac OS X|Macintosh/.test(userAgent)
+      ? "macOS"
+      : /Android/.test(userAgent)
+        ? "Android"
+        : /iPhone|iPad|iOS/.test(userAgent)
+          ? "iOS"
+          : /Linux/.test(userAgent)
+            ? "Linux"
+            : null;
+  return os ? `${browser} on ${os}` : browser;
+}
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -26,15 +70,60 @@ export default async function AdminSettingsPage() {
   const session = await requireAdminPage();
   const state = readAccountState(session);
 
+  const [profile, recovery, sessions] = await Promise.all([
+    getAdminProfile(session.user.id),
+    getRecoveryStatus(session.user.id),
+    listAdminSessions(session.user.id, session.session.id),
+  ]);
+
+  const otherSessions = sessions.filter((item) => !item.current);
+
   return (
     <>
       <div>
         <h1 className="text-2xl font-semibold">Administration settings</h1>
         <p className="text-sm text-muted-foreground">
-          Read-only summary of the security model that protects this console.
-          Changes to individual accounts are made from the Users pages.
+          Manage your profile, password, and account recovery. Changes to
+          individual accounts are made from the Users pages.
         </p>
       </div>
+
+      <SettingsClient profile={profile} recovery={recovery} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Active sessions</CardTitle>
+          <CardDescription>
+            Every browser currently signed in as this administrator. Session
+            tokens are never displayed.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <ul className="flex flex-col gap-3">
+            {sessions.map((item) => (
+              <li
+                key={item.id}
+                className="flex flex-col gap-2 border-b pb-3 last:border-b-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="flex flex-col gap-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium">{device(item.userAgent)}</span>
+                    {item.current ? <Badge variant="secondary">This device</Badge> : null}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    Last active {dateTime(item.updatedAt)} · Expires {dateTime(item.expiresAt)}
+                    {item.ipAddress ? ` · ${item.ipAddress}` : ""}
+                  </span>
+                </div>
+              </li>
+            ))}
+            {sessions.length === 0 ? (
+              <li className="text-sm text-muted-foreground">No active sessions.</li>
+            ) : null}
+          </ul>
+          <SessionActions otherSessionCount={otherSessions.length} />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
@@ -46,8 +135,8 @@ export default async function AdminSettingsPage() {
           </CardHeader>
           <CardContent>
             <dl>
-              <Row label="Name">{session.user.name}</Row>
-              <Row label="Email">{session.user.email}</Row>
+              <Row label="Name">{profile.name}</Row>
+              <Row label="Email">{profile.email}</Row>
               <Row label="Role">{state?.isAdmin ? "Super Admin" : state?.role}</Row>
               <Row label="Approval">{state?.approvalStatus}</Row>
             </dl>

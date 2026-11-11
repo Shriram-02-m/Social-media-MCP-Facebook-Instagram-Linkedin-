@@ -1,10 +1,5 @@
 import Link from "next/link";
 
-import { buttonVariants } from "@/components/ui/button";
-
-import { DateRangeFilter } from "@/components/admin/date-range-filter";
-import { OverviewChart } from "@/components/admin/overview-chart";
-import { PostStatusBadge, UserStatusBadge } from "@/components/admin/status-badge";
 import {
   Card,
   CardContent,
@@ -13,243 +8,104 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { requireAdminPage } from "@/lib/admin-page";
-import { listActivity } from "@/lib/admin-activity";
-import { parseActivityFilters, parseDateRange } from "@/lib/admin-policy";
-import { getAdminOverview } from "@/lib/admin-overview";
+import { getAdminUserStats, type AdminUserStats } from "@/lib/admin-overview";
 
 export const dynamic = "force-dynamic";
 
-const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
-  dateStyle: "medium",
-  timeStyle: "short",
-  timeZone: "UTC",
-});
+type StatKey = keyof AdminUserStats;
 
-function dateTime(value: string): string {
-  return dateTimeFormatter.format(new Date(value));
-}
-
-function Stat({
-  label,
-  value,
-  hint,
-}: {
+const STATS: {
+  key: StatKey;
   label: string;
-  value: number | string;
-  hint?: string;
+  description: string;
+  href: string;
+  indicator: string;
+}[] = [
+  {
+    key: "total",
+    label: "Total Users",
+    description: "Every registered account, including suspended and soft-deleted records.",
+    href: "/users",
+    indicator: "bg-sky-500",
+  },
+  {
+    key: "approved",
+    label: "Approved Users",
+    description: "Active accounts cleared for console access.",
+    href: "/users?approval=approved",
+    indicator: "bg-emerald-500",
+  },
+  {
+    key: "pending",
+    label: "Pending Users",
+    description: "Users waiting for administrator approval.",
+    href: "/users?approval=pending",
+    indicator: "bg-amber-500",
+  },
+  {
+    key: "rejected",
+    label: "Rejected Users",
+    description: "Active registration requests denied by the administrator.",
+    href: "/users?approval=rejected",
+    indicator: "bg-destructive",
+  },
+];
+
+function StatCard({
+  stat,
+  value,
+}: {
+  stat: (typeof STATS)[number];
+  value: number;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-2xl">{value}</CardTitle>
-      </CardHeader>
-      {hint ? (
+    <Link
+      href={stat.href}
+      className="group block rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+    >
+      <Card className="h-full transition-colors group-hover:bg-muted/50">
+        <CardHeader>
+          <CardDescription className="flex items-center gap-2">
+            <span
+              className={`size-2 rounded-full ${stat.indicator}`}
+              aria-hidden="true"
+            />
+            {stat.label}
+          </CardDescription>
+          <CardTitle className="text-3xl tabular-nums">{value}</CardTitle>
+        </CardHeader>
         <CardContent>
-          <p className="text-xs text-muted-foreground">{hint}</p>
+          <p className="text-xs text-muted-foreground">{stat.description}</p>
         </CardContent>
-      ) : null}
-    </Card>
+      </Card>
+    </Link>
   );
 }
 
-export default async function AdminOverviewPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function AdminOverviewPage() {
   await requireAdminPage();
-  const params = await searchParams;
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (typeof value === "string") query.set(key, value);
-    else if (Array.isArray(value) && value[0]) query.set(key, value[0]);
-  }
-
-  const range = parseDateRange(query, { defaultDays: 30, maxDays: 366 });
-  const overview = await getAdminOverview(range);
-  const activity = await listActivity({
-    ...parseActivityFilters(query),
-    page: 1,
-    pageSize: 8,
-    offset: 0,
-  });
-
-  const { users, socialAccounts, posts, series } = overview;
+  const stats = await getAdminUserStats();
 
   return (
     <>
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold">Admin overview</h1>
         <p className="text-sm text-muted-foreground">
-          Platform-wide health for users, connected accounts, and scheduled
-          publishing. All figures come from live database records.
+          User registration and approval statistics from live database records.
+          Select a card to open the matching user list.
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          Showing activity from {dateTime(range.fromIso)} to {dateTime(range.toIso)}.
-        </p>
-        <DateRangeFilter
-          fromIso={range.fromIso}
-          toIso={range.toIso}
-          defaultDays={30}
-        />
-      </div>
-
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
-          label="Total users"
-          value={users.total}
-          hint={`${users.newInRange} registered in this range`}
-        />
-        <Stat
-          label="Pending approvals"
-          value={users.pending}
-          hint={`${users.approved} approved · ${users.rejected} rejected`}
-        />
-        <Stat
-          label="Suspended accounts"
-          value={users.suspended}
-          hint={`${users.deleted} soft-deleted`}
-        />
-        <Stat
-          label="Connected social accounts"
-          value={socialAccounts.connected}
-          hint={`${socialAccounts.expired} expired token(s)`}
-        />
+        {STATS.map((stat) => (
+          <StatCard key={stat.key} stat={stat} value={stats[stat.key]} />
+        ))}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
-          label="Scheduled posts"
-          value={posts.scheduled + posts.publishing}
-          hint={`${posts.inRange.scheduled + posts.inRange.publishing} in this range`}
-        />
-        <Stat
-          label="Published posts"
-          value={posts.published}
-          hint={`${posts.inRange.published} published in this range`}
-        />
-        <Stat
-          label="Failed posts"
-          value={posts.failed}
-          hint={`${posts.inRange.failed} failed in this range`}
-        />
-        <Stat
-          label="Held posts"
-          value={posts.held}
-          hint="Prevented from publishing until resumed"
-        />
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Daily activity</CardTitle>
-          <CardDescription>
-            New users and post activity over the selected range. The most recent
-            30 days are charted.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <OverviewChart series={series} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent activity</CardTitle>
-          <CardDescription>
-            The latest administrative and publishing events across all accounts.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {activity.entries.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No activity recorded in this range.
-            </p>
-          ) : (
-            <ul className="divide-y">
-              {activity.entries.map((entry) => (
-                <li
-                  key={entry.id}
-                  className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{entry.action}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {entry.actorName ?? entry.actorEmail ?? entry.actorUserId ?? "System"}
-                      {entry.targetEmail ? ` → ${entry.targetEmail}` : ""}
-                    </p>
-                  </div>
-                  <span className="whitespace-nowrap text-xs text-muted-foreground">
-                    {dateTime(entry.createdAt)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="pt-4">
-            <Link
-              href="/admin/activity"
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              View activity logs
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Publishing snapshot</CardTitle>
-          <CardDescription>
-            Current status of every scheduled post in the system.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          <PostStatusBadge status="scheduled" />
-          <span className="text-sm text-muted-foreground">{posts.scheduled}</span>
-          <PostStatusBadge status="publishing" />
-          <span className="text-sm text-muted-foreground">{posts.publishing}</span>
-          <PostStatusBadge status="published" />
-          <span className="text-sm text-muted-foreground">{posts.published}</span>
-          <PostStatusBadge status="failed" />
-          <span className="text-sm text-muted-foreground">{posts.failed}</span>
-          <PostStatusBadge status="cancelled" />
-          <span className="text-sm text-muted-foreground">{posts.cancelled}</span>
-          <PostStatusBadge status="held" />
-          <span className="text-sm text-muted-foreground">{posts.held}</span>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Account health</CardTitle>
-          <CardDescription>
-            A quick view of account states. Detailed management lives on the
-            Users page.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-4 text-sm">
-          <span className="flex items-center gap-2">
-            <UserStatusBadge status="approved" /> {users.approved}
-          </span>
-          <span className="flex items-center gap-2">
-            <UserStatusBadge status="pending" /> {users.pending}
-          </span>
-          <span className="flex items-center gap-2">
-            <UserStatusBadge status="rejected" /> {users.rejected}
-          </span>
-          <span className="flex items-center gap-2">
-            <UserStatusBadge status="suspended" /> {users.suspended}
-          </span>
-          <span className="flex items-center gap-2">
-            <UserStatusBadge status="deleted" /> {users.deleted}
-          </span>
-        </CardContent>
-      </Card>
+      <p className="text-xs text-muted-foreground">
+        Total includes every registered account. Approved, pending, and rejected
+        counts exclude suspended and soft-deleted accounts.
+      </p>
     </>
   );
 }

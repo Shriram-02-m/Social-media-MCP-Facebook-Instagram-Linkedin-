@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => {
   }
   return {
     requireAdmin: vi.fn(),
-    getAdminOverview: vi.fn(),
+    getAdminUserStats: vi.fn(),
     listSocialAccounts: vi.fn(),
     listScheduledPosts: vi.fn(),
     adminHoldPost: vi.fn(),
@@ -50,7 +50,7 @@ vi.mock("@/lib/api", () => ({
 }));
 
 vi.mock("@/lib/admin-overview", () => ({
-  getAdminOverview: mocks.getAdminOverview,
+  getAdminUserStats: mocks.getAdminUserStats,
 }));
 vi.mock("@/lib/admin-social-accounts", () => ({
   listSocialAccounts: mocks.listSocialAccounts,
@@ -87,7 +87,7 @@ function url(pathname: string): Request {
 
 beforeEach(() => {
   mocks.requireAdmin.mockReset();
-  mocks.getAdminOverview.mockReset();
+  mocks.getAdminUserStats.mockReset();
   mocks.listSocialAccounts.mockReset();
   mocks.listScheduledPosts.mockReset();
   mocks.adminHoldPost.mockReset();
@@ -99,7 +99,7 @@ beforeEach(() => {
 describe("admin API authorization", () => {
   it("returns 401 when there is no session", async () => {
     mocks.requireAdmin.mockRejectedValue(new mocks.UnauthorizedError("Authentication required."));
-    const response = await overviewGET(url("/api/admin/overview"));
+    const response = await overviewGET();
     expect(response.status).toBe(401);
   });
 
@@ -108,7 +108,7 @@ describe("admin API authorization", () => {
       new mocks.ApprovalRequiredError("Admin access required."),
     );
     for (const response of [
-      await overviewGET(url("/api/admin/overview")),
+      await overviewGET(),
       await socialGET(url("/api/admin/social-accounts")),
       await schedulerGET(url("/api/admin/scheduler")),
       await activityGET(url("/api/admin/activity")),
@@ -119,11 +119,21 @@ describe("admin API authorization", () => {
 
   it("serves data to the Super Admin", async () => {
     mocks.requireAdmin.mockResolvedValue(adminSession);
-    mocks.getAdminOverview.mockResolvedValue({ users: { total: 4 } });
-    const response = await overviewGET(url("/api/admin/overview"));
+    mocks.getAdminUserStats.mockResolvedValue({
+      total: 4,
+      approved: 3,
+      pending: 1,
+      rejected: 0,
+    });
+    const response = await overviewGET();
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ users: { total: 4 } });
-    expect(mocks.getAdminOverview).toHaveBeenCalledOnce();
+    await expect(response.json()).resolves.toEqual({
+      total: 4,
+      approved: 3,
+      pending: 1,
+      rejected: 0,
+    });
+    expect(mocks.getAdminUserStats).toHaveBeenCalledOnce();
   });
 
   it("checks the admin guard before doing any data work", async () => {

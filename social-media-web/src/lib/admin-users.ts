@@ -1,6 +1,8 @@
 import { and, asc, count, desc, eq, ilike, or } from "drizzle-orm";
 
 import { logActivity } from "@/lib/activity";
+import { getAdminUserStats } from "@/lib/admin-overview";
+import { activeApprovalCondition } from "@/lib/admin-user-filters";
 import { ApiError } from "@/lib/api";
 import { db } from "@/lib/db";
 import { isUniqueViolation } from "@/lib/db-errors";
@@ -96,7 +98,7 @@ export async function listUsers(filters: UserFilters): Promise<AdminUserList> {
     conditions.push(or(ilike(user.name, pattern), ilike(user.email, pattern))!);
   }
   if (filters.approval !== "all") {
-    conditions.push(eq(user.approvalStatus, filters.approval));
+    conditions.push(activeApprovalCondition(filters.approval));
   }
   if (filters.role !== "all") {
     conditions.push(eq(user.role, filters.role));
@@ -122,23 +124,17 @@ export async function listUsers(filters: UserFilters): Promise<AdminUserList> {
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(user.createdAt), asc(user.email))) as UserRow[];
 
-  const grouped = await db
-    .select({ approvalStatus: user.approvalStatus, total: count() })
-    .from(user)
-    .groupBy(user.approvalStatus);
+  // Reuse the dashboard aggregate so the cards and the directory can never
+  // disagree: total counts every row, while approved/pending/rejected count
+  // only active accounts. Both queries stay in PostgreSQL.
+  const stats = await getAdminUserStats();
 
   const counts: AdminUserCounts = {
-    total: 0,
-    pending: 0,
-    approved: 0,
-    rejected: 0,
+    total: stats.total,
+    pending: stats.pending,
+    approved: stats.approved,
+    rejected: stats.rejected,
   };
-  for (const group of grouped) {
-    const total = Number(group.total);
-    counts.total += total;
-    const status = asApprovalStatus(group.approvalStatus);
-    counts[status] += total;
-  }
 
   return { users: rows.map(toSummary), counts };
 }

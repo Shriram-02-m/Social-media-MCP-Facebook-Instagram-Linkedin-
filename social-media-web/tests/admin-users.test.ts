@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 
+import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { activeApprovalCondition } from "@/lib/admin-user-filters";
 import {
   parseUserFilters,
   validateUserUpdate,
@@ -46,6 +48,23 @@ describe("parseUserFilters", () => {
     ).toMatchObject({ query: "dinesh", approval: "rejected" });
     expect(parseUserFilters({ q: ["first", "second"] }).query).toBe("first");
   });
+});
+
+describe("activeApprovalCondition", () => {
+  const dialect = new PgDialect();
+
+  it.each(["approved", "pending", "rejected"] as const)(
+    "filters %s users to active accounts in PostgreSQL",
+    (status) => {
+      const query = dialect.sqlToQuery(activeApprovalCondition(status));
+
+      expect(query.sql).toContain('"user"."approval_status" =');
+      expect(query.sql).toContain('"user"."banned" =');
+      expect(query.sql).toContain('"user"."deleted_at" is null');
+      expect(query.sql).toMatch(/ and /);
+      expect(query.params).toEqual([status, false]);
+    },
+  );
 });
 
 describe("validateUserUpdate", () => {
@@ -377,5 +396,35 @@ describe("user-management wiring", () => {
     expect(sidebar).toMatch(/title: "Users", href: "\/users"/);
     expect(sidebar).toMatch(/\{isAdmin \?/);
     expect(sidebar).toMatch(/<SidebarGroupLabel>Administration<\/SidebarGroupLabel>/);
+  });
+
+  it("applies the shared active-approval filter to approval lists", () => {
+    const lib = readFile("src/lib/admin-users.ts");
+
+    expect(lib).toMatch(/activeApprovalCondition\(filters\.approval\)/);
+    expect(lib).toMatch(/getAdminUserStats\(\)/);
+    expect(lib).toMatch(/ilike\(user\.name/);
+    expect(lib).toMatch(/ilike\(user\.email/);
+    expect(lib).toMatch(/orderBy\(desc\(user\.createdAt\), asc\(user\.email\)\)/);
+  });
+
+  it("keeps Total Users unfiltered while approval counts are active-only", () => {
+    const lib = readFile("src/lib/admin-users.ts");
+
+    expect(lib).toMatch(/if \(filters\.approval !== "all"\)/);
+    expect(lib).toMatch(/total:\s*stats\.total/);
+    expect(lib).toMatch(/pending:\s*stats\.pending/);
+    expect(lib).toMatch(/approved:\s*stats\.approved/);
+    expect(lib).toMatch(/rejected:\s*stats\.rejected/);
+  });
+
+  it("preserves URL-driven search, approval, and role filters", () => {
+    const page = readFile("src/app/(dashboard)/users/page.tsx");
+    const filters = readFile("src/app/(dashboard)/users/users-filters.tsx");
+
+    expect(page).toMatch(/parseUserFilters\(await props\.searchParams\)/);
+    expect(filters).toMatch(/params\.set\("q", trimmed\)/);
+    expect(filters).toMatch(/params\.set\("approval", nextApproval\)/);
+    expect(filters).toMatch(/params\.set\("role", nextRole\)/);
   });
 });

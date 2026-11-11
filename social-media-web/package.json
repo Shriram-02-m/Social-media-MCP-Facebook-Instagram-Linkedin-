@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:migrate": "node scripts/migrate.mjs",
-    "db:seed-admin": "tsx scripts/seed-admin.mts"
+    "db:seed-admin": "tsx scripts/seed-admin.mts",
+    "db:recover-admin": "tsx scripts/recover-admin.mts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
