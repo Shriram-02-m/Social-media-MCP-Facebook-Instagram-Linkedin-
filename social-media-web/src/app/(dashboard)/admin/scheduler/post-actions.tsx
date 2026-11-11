@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ExternalLinkIcon, PauseIcon, PlayIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -14,21 +15,42 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 
 export function PostActions({
   id,
   status,
+  publishedUrl,
 }: {
   id: string;
   status: "scheduled" | "publishing" | "published" | "failed" | "cancelled" | "held";
+  publishedUrl?: string | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const action = status === "scheduled" ? "hold" : status === "held" ? "resume" : null;
+  // Only surface absolute HTTP(S) links from the publishing result.
+  const safePublishedUrl =
+    publishedUrl && /^https?:\/\//i.test(publishedUrl) ? publishedUrl : null;
 
-  if (!action) return <span className="text-xs text-muted-foreground">—</span>;
+  if (!action) {
+    if (status === "published" && safePublishedUrl) {
+      return (
+        <a
+          href={safePublishedUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          title="View published post"
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+        >
+          <ExternalLinkIcon aria-hidden="true" />
+          View
+        </a>
+      );
+    }
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
 
   async function submit() {
     setBusy(true);
@@ -69,6 +91,11 @@ export function PostActions({
         variant={action === "hold" ? "outline" : "default"}
         onClick={() => setOpen(true)}
       >
+        {action === "hold" ? (
+          <PauseIcon aria-hidden="true" />
+        ) : (
+          <PlayIcon aria-hidden="true" />
+        )}
         {action === "hold" ? "Hold" : "Resume"}
       </Button>
       <AlertDialog open={open} onOpenChange={setOpen}>

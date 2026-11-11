@@ -22,7 +22,10 @@ export interface AdminScheduledPost {
   platform: AdminPlatform;
   scheduledAt: string;
   status: AdminPostStatus;
+  /** Short, single-purpose preview for the table. */
   textPreview: string;
+  /** Full post text, used by the admin details dialog. */
+  text: string;
   mediaType: string | null;
   createdAt: string;
   publishedAt: string | null;
@@ -147,6 +150,7 @@ export async function listScheduledPosts(
           scheduledAt: row.scheduled_at.toISOString(),
           status: row.status,
           textPreview: row.text.length > 140 ? `${row.text.slice(0, 140)}…` : row.text,
+          text: row.text,
           mediaType: row.media_type,
           createdAt: row.created_at.toISOString(),
           publishedAt: row.published_at ? row.published_at.toISOString() : null,

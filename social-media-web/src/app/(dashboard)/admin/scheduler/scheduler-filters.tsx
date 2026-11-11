@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -64,90 +65,114 @@ export function SchedulerFilters({
     );
   }
 
-  const active = query.trim() || status !== "all" || platform !== "all";
+  const active = Boolean(query.trim()) || status !== "all" || platform !== "all";
 
   return (
-    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-      <form
-        className="flex w-full gap-2 sm:max-w-sm"
-        onSubmit={(event) => {
-          event.preventDefault();
-          apply(query, status, platform);
-        }}
-      >
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search owner or post text"
-          aria-label="Search scheduled posts by owner or text"
-          maxLength={100}
-        />
-        <Button type="submit" variant="outline" disabled={pending}>
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <Label
+          htmlFor="scheduler-search"
+          className="text-xs font-medium text-muted-foreground"
+        >
           Search
-        </Button>
-      </form>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Select
-          value={status}
-          onValueChange={(value) => {
-            const next = value ?? "all";
-            setStatus(next);
-            apply(query, next, platform);
+        </Label>
+        <form
+          className="flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            apply(query, status, platform);
           }}
         >
-          <SelectTrigger size="sm" className="w-36" aria-label="Filter by post status">
-            <SelectValue>
-              {(value) => STATUS_LABELS[value ?? "all"] ?? "All statuses"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(STATUS_LABELS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <Input
+            id="scheduler-search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search owner or post text"
+            aria-label="Search scheduled posts by owner or text"
+            maxLength={100}
+            className="min-w-0"
+          />
+          <Button type="submit" variant="outline" disabled={pending}>
+            Search
+          </Button>
+        </form>
+      </div>
 
-        <Select
-          value={platform}
-          onValueChange={(value) => {
-            const next = value ?? "all";
-            setPlatform(next);
-            apply(query, status, next);
-          }}
-        >
-          <SelectTrigger size="sm" className="w-40" aria-label="Filter by platform">
-            <SelectValue>
-              {(value) => PLATFORM_LABELS[value ?? "all"] ?? "All platforms"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(PLATFORM_LABELS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {active ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={pending}
-            onClick={() => {
-              setQuery("");
-              setStatus("all");
-              setPlatform("all");
-              apply("", "all", "all");
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:w-[380px] lg:shrink-0">
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs font-medium text-muted-foreground">
+            Status
+          </Label>
+          <Select
+            value={status}
+            onValueChange={(value) => {
+              const next = value ?? "all";
+              setStatus(next);
+              apply(query, next, platform);
             }}
           >
-            Reset
-          </Button>
-        ) : null}
+            <SelectTrigger
+              className="w-full"
+              aria-label="Filter by post status"
+            >
+              <SelectValue>
+                {(value) => STATUS_LABELS[value ?? "all"] ?? "All statuses"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs font-medium text-muted-foreground">
+            Platform
+          </Label>
+          <Select
+            value={platform}
+            onValueChange={(value) => {
+              const next = value ?? "all";
+              setPlatform(next);
+              apply(query, status, next);
+            }}
+          >
+            <SelectTrigger className="w-full" aria-label="Filter by platform">
+              <SelectValue>
+                {(value) => PLATFORM_LABELS[value ?? "all"] ?? "All platforms"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(PLATFORM_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
+
+      {active ? (
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={pending}
+          className="self-start lg:self-end"
+          onClick={() => {
+            setQuery("");
+            setStatus("all");
+            setPlatform("all");
+            apply("", "all", "all");
+          }}
+        >
+          Reset
+        </Button>
+      ) : null}
     </div>
   );
 }

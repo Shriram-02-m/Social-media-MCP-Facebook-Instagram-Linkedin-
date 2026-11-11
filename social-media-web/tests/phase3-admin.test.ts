@@ -369,6 +369,36 @@ describe("global scheduler", () => {
     expect(page).toMatch(/PostActions/);
   });
 
+  it("renders a fixed-width scheduler table without overlapping columns", () => {
+    const contentCell = readFile(
+      "src/app/(dashboard)/admin/scheduler/post-content-cell.tsx",
+    );
+    const errorCell = readFile(
+      "src/app/(dashboard)/admin/scheduler/error-cell.tsx",
+    );
+
+    // Explicit widths plus a fixed layout stop long content from stretching a
+    // column into its neighbours.
+    expect(page).toMatch(/table-fixed/);
+    expect(page).toMatch(/<colgroup>/);
+    expect(page).toMatch(/PostContentCell/);
+    expect(page).toMatch(/ErrorCell/);
+    expect(contentCell).toMatch(/line-clamp-/);
+    expect(contentCell).toMatch(/break-words/);
+    expect(errorCell).toMatch(/line-clamp-/);
+    expect(errorCell).toMatch(/break-words/);
+  });
+
+  it("keeps the scheduler header, statistics, and pagination", () => {
+    expect(page).toMatch(
+      /Manage scheduled posts across all connected social accounts, monitor/,
+    );
+    expect(page).toMatch(/AdminPagination/);
+    for (const label of ["Scheduled", "Published", "Failed", "Held"]) {
+      expect(page).toMatch(new RegExp(`label="${label}"`));
+    }
+  });
+
   it("prevents duplicate publishing in the worker claim", () => {
     const worker = readFile("../social-media-mcp/src/scheduler.ts");
     expect(worker).toMatch(/WHERE status = 'scheduled' AND scheduled_at <= NOW\(\)/);

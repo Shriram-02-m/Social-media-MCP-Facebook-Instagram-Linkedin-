@@ -10,20 +10,35 @@ const POST_LABELS: Record<AdminPostStatus, string> = {
   held: "Held",
 };
 
-const POST_VARIANTS: Record<
-  AdminPostStatus,
-  "default" | "secondary" | "destructive" | "outline"
-> = {
-  scheduled: "outline",
-  publishing: "secondary",
-  published: "default",
-  failed: "destructive",
-  cancelled: "secondary",
-  held: "outline",
+// Distinct, low-saturation colours keep every status readable at a glance
+// without competing with the primary action colours in the table.
+const POST_CLASSES: Record<AdminPostStatus, string> = {
+  scheduled:
+    "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300",
+  publishing:
+    "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300",
+  published:
+    "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300",
+  failed:
+    "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300",
+  cancelled:
+    "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300",
+  held: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300",
 };
 
 export function PostStatusBadge({ status }: { status: AdminPostStatus }) {
-  return <Badge variant={POST_VARIANTS[status]}>{POST_LABELS[status]}</Badge>;
+  return (
+    <Badge
+      variant="outline"
+      className={`px-1.5 text-[11px] ${POST_CLASSES[status]}`}
+    >
+      <span
+        aria-hidden="true"
+        className="size-1.5 shrink-0 rounded-full bg-current"
+      />
+      {POST_LABELS[status]}
+    </Badge>
+  );
 }
 
 const SOCIAL_LABELS: Record<SocialAccountStatus, string> = {

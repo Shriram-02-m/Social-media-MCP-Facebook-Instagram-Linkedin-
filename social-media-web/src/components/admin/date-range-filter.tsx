@@ -45,14 +45,17 @@ export function DateRangeFilter({
 
   return (
     <form
-      className="flex flex-wrap items-end gap-3"
+      className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end"
       onSubmit={(event) => {
         event.preventDefault();
         apply(from, to);
       }}
     >
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="admin-range-from" className="text-xs">
+      <div className="flex w-full flex-col gap-1.5 sm:w-40">
+        <Label
+          htmlFor="admin-range-from"
+          className="text-xs font-medium text-muted-foreground"
+        >
           From
         </Label>
         <Input
@@ -61,10 +64,14 @@ export function DateRangeFilter({
           value={from}
           max={to || undefined}
           onChange={(event) => setFrom(event.target.value)}
+          className="w-full"
         />
       </div>
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="admin-range-to" className="text-xs">
+      <div className="flex w-full flex-col gap-1.5 sm:w-40">
+        <Label
+          htmlFor="admin-range-to"
+          className="text-xs font-medium text-muted-foreground"
+        >
           To
         </Label>
         <Input
@@ -73,24 +80,26 @@ export function DateRangeFilter({
           value={to}
           min={from || undefined}
           onChange={(event) => setTo(event.target.value)}
+          className="w-full"
         />
       </div>
-      <Button type="submit" size="sm" disabled={pending}>
-        Apply
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        disabled={pending}
-        onClick={() => {
-          setFrom(defaultFrom);
-          setTo(defaultTo);
-          apply(defaultFrom, defaultTo);
-        }}
-      >
-        Last {defaultDays} days
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="submit" disabled={pending}>
+          Apply
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={pending}
+          onClick={() => {
+            setFrom(defaultFrom);
+            setTo(defaultTo);
+            apply(defaultFrom, defaultTo);
+          }}
+        >
+          Last {defaultDays} days
+        </Button>
+      </div>
     </form>
   );
 }
