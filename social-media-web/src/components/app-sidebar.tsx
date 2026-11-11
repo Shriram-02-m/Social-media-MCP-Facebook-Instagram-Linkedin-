@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CalendarClock,
   CalendarDays,
   History,
   Image as ImageIcon,
@@ -8,6 +9,10 @@ import {
   Link2,
   ListChecks,
   PenSquare,
+  ScrollText,
+  Settings,
+  ShieldCheck,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -34,9 +39,25 @@ const NAV_ITEMS = [
   { title: "Accounts", href: "/accounts", icon: Link2 },
 ];
 
-export function AppSidebar() {
-  const pathname = usePathname();
+const ADMIN_NAV_ITEMS = [
+  { title: "Overview", href: "/admin", icon: ShieldCheck, exact: true },
+  { title: "Users", href: "/users", icon: Users, exact: false },
+  { title: "Social Accounts", href: "/admin/social-accounts", icon: Link2, exact: false },
+  { title: "Scheduler", href: "/admin/scheduler", icon: CalendarClock, exact: false },
+  { title: "Activity Logs", href: "/admin/activity", icon: ScrollText, exact: false },
+  { title: "Settings", href: "/admin/settings", icon: Settings, exact: false },
+];
 
+function isActive(href: string, pathname: string, exact: boolean): boolean {
+  if (exact) return pathname === href;
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+export function AppSidebar({ isAdmin }: { isAdmin: boolean }) {
+  const pathname = usePathname();
+  // The server enforces admin access on the page and APIs; this only keeps the
+  // admin navigation out of the regular-user interface.
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
@@ -66,7 +87,7 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     render={<Link href={item.href} />}
-                    isActive={item.href === "/" ? pathname === "/" : pathname.startsWith(item.href)}
+                    isActive={isActive(item.href, pathname, item.href === "/")}
                     tooltip={item.title}
                   >
                     <item.icon />
@@ -77,6 +98,28 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {isAdmin ? (
+          <SidebarGroup>
+            <SidebarGroupLabel>Administration</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {ADMIN_NAV_ITEMS.map((item) => (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      render={<Link href={item.href} />}
+                      isActive={isActive(item.href, pathname, item.exact)}
+                      tooltip={item.title}
+                    >
+                      <item.icon />
+                      <span>{item.title}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ) : null}
       </SidebarContent>
     </Sidebar>
   );

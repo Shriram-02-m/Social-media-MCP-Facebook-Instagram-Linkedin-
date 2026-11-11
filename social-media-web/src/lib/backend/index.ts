@@ -12,6 +12,7 @@ export {
   // Account-level hold/resume (admin suspension & soft deletion support).
   assertAccountCanSchedule,
   holdScheduledPostsForUser,
+  holdScheduledPostForUser,
   resumeScheduledPostsForUser,
 } from "../../../../social-media-mcp/dist/scheduler.js";
 
@@ -21,6 +22,11 @@ export type {
   NewScheduledMedia,
   MediaType,
 } from "../../../../social-media-mcp/dist/scheduler.js";
+
+export {
+  loadTokenMetadata,
+  type TokenMetadata,
+} from "../../../../social-media-mcp/dist/auth/token-store.js";
 
 export { metaConnectionStatus } from "../../../../social-media-mcp/dist/platforms/meta.js";
 export { linkedinConnectionStatus } from "../../../../social-media-mcp/dist/platforms/linkedin.js";

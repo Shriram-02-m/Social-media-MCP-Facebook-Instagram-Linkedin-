@@ -469,6 +469,20 @@ async function publishJob(job: ScheduledPost): Promise<void> {
     }));
   }
   await saveJob(job);
+  await recordActivity({
+    actorUserId: job.userId,
+    targetUserId: job.userId,
+    action: job.status === "published" ? "scheduled_post_published" : "scheduled_post_failed",
+    resourceType: "scheduled_post",
+    resourceId: job.id,
+    metadata: {
+      platform: job.platform,
+      status: job.status,
+      retryCount: job.retryCount,
+      ...(job.status === "failed" ? { failureStage: job.failureStage, error: job.error } : {}),
+      ...(job.publishedAt ? { publishedAt: job.publishedAt } : {}),
+    },
+  });
 }
 
 async function validateBeforePublishing(job: ScheduledPost, checkPublic: boolean): Promise<void> {
@@ -1089,6 +1103,20 @@ export async function schedulePosts(
     client?.release();
   }
   await startScheduleRunner();
+  for (const job of createdJobs) {
+    await recordActivity({
+      actorUserId: ownerId,
+      targetUserId: ownerId,
+      action: "scheduled_post_created",
+      resourceType: "scheduled_post",
+      resourceId: job.id,
+      metadata: {
+        platform: job.platform,
+        scheduledAt: job.scheduledAt,
+        mediaType: job.mediaType,
+      },
+    });
+  }
   return createdJobs.map(({ id, platform, scheduledAt, status }) => ({ id, platform, scheduledAt, status }));
 }
 
@@ -1463,6 +1491,14 @@ export async function retryScheduledPost(ownerId: string, jobId: string): Promis
   } finally {
     client.release();
   }
+  await recordActivity({
+    actorUserId: ownerId,
+    targetUserId: ownerId,
+    action: "scheduled_post_retried",
+    resourceType: "scheduled_post",
+    resourceId: result.id,
+    metadata: { platform: result.platform, scheduledAt: result.scheduledAt },
+  });
   await startScheduleRunner();
   return result;
 }
@@ -1640,6 +1676,14 @@ export async function cancelScheduledPost(ownerId: string, jobId: string): Promi
     "DELETE FROM public.scheduled_post_media WHERE post_id = $1",
     [jobId],
   );
+  await recordActivity({
+    actorUserId: ownerId,
+    targetUserId: ownerId,
+    action: "scheduled_post_cancelled",
+    resourceType: "scheduled_post",
+    resourceId: row.id,
+    metadata: { platform: row.platform, status: "cancelled" },
+  });
   return { id: row.id, platform: row.platform, status: "cancelled" };
 }
 
@@ -1708,6 +1752,18 @@ export async function rescheduleScheduledPost(
   } finally {
     client.release();
   }
+  await recordActivity({
+    actorUserId: ownerId,
+    targetUserId: ownerId,
+    action: "scheduled_post_rescheduled",
+    resourceType: "scheduled_post",
+    resourceId: result.id,
+    metadata: {
+      platform: result.platform,
+      scheduledAt: result.scheduledAt,
+      previousStatus: "held_or_scheduled",
+    },
+  });
   await startScheduleRunner();
   return result;
 }
@@ -1788,6 +1844,69 @@ export async function holdScheduledPostsForUser(
     });
   }
   return heldJobs;
+}
+
+// Per-post admin hold used by the central scheduler screen. The same atomic
+// `scheduled -> held` transition as the account-level hold is used: the row is
+// locked, a concurrent worker claim either already owns a `publishing` row (and
+// is rejected below) or skips the row through FOR UPDATE SKIP LOCKED. Published,
+// failed, cancelled, and publishing rows are never modified.
+export async function holdScheduledPostForUser(
+  ownerId: string,
+  jobId: string,
+  options: { actorUserId?: string; reason?: string } = {},
+): Promise<{ id: string; platform: Platform; scheduledAt: string; status: "held" }> {
+  await ensureScheduleStore();
+  const holdError = (options.reason?.trim() || "Held by the administrator before publishing.").slice(0, 500);
+  const client = await databasePool().connect();
+  let transactionStarted = false;
+  let held: { id: string; platform: Platform; scheduledAt: string; status: "held" };
+  try {
+    await client.query("BEGIN");
+    transactionStarted = true;
+    const { rows } = await client.query<ScheduledPostRow>(
+      "SELECT * FROM public.scheduled_posts WHERE id = $1 AND user_id = $2 FOR UPDATE",
+      [jobId, ownerId],
+    );
+    const row = rows[0];
+    if (!row) throw new Error(`Scheduled post ${jobId} was not found.`);
+    if (row.status !== "scheduled") {
+      throw new Error(`Only scheduled posts can be held; this post is ${row.status}.`);
+    }
+    await client.query(
+      `UPDATE public.scheduled_posts
+       SET status = 'held', error = $2, claimed_at = NULL, updated_at = NOW()
+       WHERE id = $1`,
+      [jobId, holdError],
+    );
+    await client.query("COMMIT");
+    transactionStarted = false;
+    held = {
+      id: row.id,
+      platform: row.platform,
+      scheduledAt: row.scheduled_at.toISOString(),
+      status: "held",
+    };
+  } catch (error) {
+    if (transactionStarted) await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+  await recordActivity({
+    actorUserId: options.actorUserId,
+    targetUserId: ownerId,
+    action: "scheduled_post_hold",
+    resourceType: "scheduled_post",
+    resourceId: held.id,
+    metadata: {
+      platform: held.platform,
+      scheduledAt: held.scheduledAt,
+      reason: options.reason ?? undefined,
+      scope: "single_post",
+    },
+  });
+  return held;
 }
 
 export interface ResumeScheduledPostsResult {

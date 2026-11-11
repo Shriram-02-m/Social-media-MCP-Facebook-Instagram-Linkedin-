@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { apiRequest } from "../utils/http.js";
 import { config } from "../config/env.js";
+import { recordActivity } from "../utils/activity.js";
 import { loadTokens, saveTokens } from "./token-store.js";
 import {
   assertAppCredentialFingerprint,
@@ -237,21 +238,54 @@ export async function processOAuthCallback(
     ?? searchParams.get("error");
   if (providerError) {
     await dependencies.store.updateStatus(session.sessionId, "cancelled", "The provider authorization was cancelled or denied.");
+    await recordActivity({
+      actorUserId: session.userId,
+      targetUserId: session.userId,
+      action: "social_account_connection_cancelled",
+      resourceType: "social_account",
+      resourceId: `${session.userId}:${session.platform}`,
+      metadata: { platform: session.platform },
+    });
     return { result: "cancelled", platform: session.platform, sessionId: session.sessionId };
   }
 
   const code = searchParams.get("code");
   if (!code) {
     await dependencies.store.updateStatus(session.sessionId, "failed", "The provider callback did not include an authorization code.");
+    await recordActivity({
+      actorUserId: session.userId,
+      targetUserId: session.userId,
+      action: "social_account_connection_failed",
+      resourceType: "social_account",
+      resourceId: `${session.userId}:${session.platform}`,
+      metadata: { platform: session.platform, reason: "missing_authorization_code" },
+    });
     return { result: "failed", platform: session.platform, sessionId: session.sessionId };
   }
 
   try {
     await dependencies.finish(session.platform, session.userId, code, session.redirectUri, session.appCredentialFingerprint);
     await dependencies.store.updateStatus(session.sessionId, "connected");
+    await recordActivity({
+      actorUserId: session.userId,
+      targetUserId: session.userId,
+      action: "social_account_connected",
+      resourceType: "social_account",
+      resourceId: `${session.userId}:${session.platform}`,
+      metadata: { platform: session.platform },
+    });
     return { result: "connected", platform: session.platform, sessionId: session.sessionId };
   } catch (error) {
-    await dependencies.store.updateStatus(session.sessionId, "failed", safeErrorMessage(error));
+    const failure = safeErrorMessage(error);
+    await dependencies.store.updateStatus(session.sessionId, "failed", failure);
+    await recordActivity({
+      actorUserId: session.userId,
+      targetUserId: session.userId,
+      action: "social_account_connection_failed",
+      resourceType: "social_account",
+      resourceId: `${session.userId}:${session.platform}`,
+      metadata: { platform: session.platform, error: failure },
+    });
     return { result: "failed", platform: session.platform, sessionId: session.sessionId };
   }
 }

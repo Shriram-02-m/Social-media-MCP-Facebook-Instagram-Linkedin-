@@ -115,6 +115,21 @@ export const auth = betterAuth({
           if (user?.banned) return false;
           return undefined;
         },
+        after: async (session) => {
+          // Login audit. Only non-sensitive request context is stored: never
+          // the session token, cookie, password, or headers.
+          await logActivity({
+            actorUserId: session.userId,
+            targetUserId: session.userId,
+            action: "user_login",
+            resourceType: "session",
+            resourceId: session.id,
+            metadata: {
+              ipAddress: session.ipAddress ?? null,
+              userAgent: session.userAgent ? session.userAgent.slice(0, 200) : null,
+            },
+          });
+        },
       },
     },
   },

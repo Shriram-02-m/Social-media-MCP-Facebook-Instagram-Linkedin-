@@ -175,6 +175,78 @@ export async function loadTokens(ownerId: string): Promise<TokenVault> {
   return config.tokenStoreBackend === "supabase" ? loadCloudTokens(ownerId) : readLocalTokens(ownerId);
 }
 
+/**
+ * Non-secret connection metadata for administrative monitoring.
+ *
+ * Tokens are decrypted in memory only to read display fields (account name,
+ * expiry, scopes, page count) and are never returned. The ciphertext itself is
+ * never exposed either. Callers can therefore render connection health without
+ * ever handling a credential.
+ */
+export interface TokenMetadata {
+  platform: Platform;
+  connected: true;
+  accountName: string | null;
+  accountId: string | null;
+  expiresAt: number | null;
+  expired: boolean;
+  scopes: string[];
+  pageCount: number;
+  connectedAt: string | null;
+  updatedAt: string | null;
+}
+
+function metadataFor(
+  platform: Platform,
+  token: StoredToken,
+  updatedAt: string | null,
+): TokenMetadata {
+  return {
+    platform,
+    connected: true,
+    accountName: token.accountName ?? null,
+    accountId: token.accountId ?? null,
+    expiresAt: typeof token.expiresAt === "number" ? token.expiresAt : null,
+    expired: typeof token.expiresAt === "number" && token.expiresAt <= Date.now(),
+    // Cap the list so a malformed/oversized stored token cannot bloat an admin
+    // response. Values are permission names, never secrets.
+    scopes: Array.isArray(token.scopes) ? token.scopes.filter((scope) => typeof scope === "string").slice(0, 50) : [],
+    pageCount: Array.isArray(token.pages) ? token.pages.length : 0,
+    connectedAt: typeof token.connectedAt === "number" ? new Date(token.connectedAt).toISOString() : null,
+    updatedAt,
+  };
+}
+
+export async function loadTokenMetadata(ownerId: string): Promise<TokenMetadata[]> {
+  if (config.tokenStoreBackend === "supabase") {
+    const { rows } = await databasePool().query<{
+      platform: Platform;
+      token_ciphertext: EncryptedCloudToken;
+      updated_at: Date;
+    }>(
+      "SELECT platform, token_ciphertext, updated_at FROM public.oauth_tokens WHERE user_id = $1 AND platform = ANY($2::text[])",
+      [ownerId, platforms],
+    );
+    return rows
+      .filter((row) => isPlatform(row.platform))
+      .map((row) => metadataFor(
+        row.platform,
+        decryptCloudToken(row.platform, row.token_ciphertext),
+        row.updated_at instanceof Date ? row.updated_at.toISOString() : null,
+      ));
+  }
+
+  const vault = await readLocalTokens(ownerId);
+  return platforms.flatMap((platform) => {
+    const token = vault[platform];
+    if (!token) return [];
+    const connectedAt = typeof token.connectedAt === "number"
+      ? new Date(token.connectedAt).toISOString()
+      : null;
+    return [metadataFor(platform, token, connectedAt)];
+  });
+}
+
 export async function saveTokens(ownerId: string, tokens: TokenVault): Promise<void> {
   if (config.tokenStoreBackend === "supabase") {
     await saveCloudTokens(ownerId, tokens);
