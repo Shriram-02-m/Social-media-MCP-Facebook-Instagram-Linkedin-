@@ -2,6 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import {
+  KeyRoundIcon,
+  PauseCircleIcon,
+  PlayCircleIcon,
+  RotateCcwIcon,
+  Trash2Icon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -15,6 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 
 type AccountAction =
   | "suspend"
@@ -45,10 +53,10 @@ const CONFIRM: Record<AccountAction, { title: string; description: string; label
     label: "Reactivate account",
   },
   soft_delete: {
-    title: "Delete this account?",
+    title: "Soft delete this account?",
     description:
-      "This is a soft delete: access is revoked, scheduled posts are held, and audit history is preserved. The account is not permanently removed.",
-    label: "Delete account",
+      "Access is revoked, scheduled posts are held, and audit history is preserved. The account is not permanently removed and can be restored later.",
+    label: "Soft delete account",
   },
   restore: {
     title: "Restore this account?",
@@ -63,6 +71,27 @@ const CONFIRM: Record<AccountAction, { title: string; description: string; label
     label: "Revoke sessions",
   },
 };
+
+const STATUS_ACTIONS = {
+  suspend: {
+    label: "Suspend account",
+    icon: PauseCircleIcon,
+    description:
+      "Temporarily block access. Sessions are revoked and unclaimed scheduled posts are held.",
+  },
+  reactivate: {
+    label: "Reactivate account",
+    icon: PlayCircleIcon,
+    description:
+      "Restore access for a suspended account and return future held posts to the queue.",
+  },
+  restore: {
+    label: "Restore account",
+    icon: RotateCcwIcon,
+    description:
+      "Undo the soft delete. The account becomes active again if it was approved.",
+  },
+} as const;
 
 export function AccountActions({
   id,
@@ -83,6 +112,18 @@ export function AccountActions({
 
   const isDeleted = Boolean(deletedAt);
   const isProtectedAdmin = role === "admin";
+  const statusAction: keyof typeof STATUS_ACTIONS = isDeleted
+    ? "restore"
+    : banned
+      ? "reactivate"
+      : "suspend";
+  const statusMeta = STATUS_ACTIONS[statusAction];
+  const StatusIcon = statusMeta.icon;
+
+  const canRevokeSessions = !isDeleted && !isSelf;
+  const canSoftDelete = !isDeleted && !isSelf && !isProtectedAdmin;
+  const statusDisabled =
+    busy || isSelf || (isProtectedAdmin && statusAction === "suspend");
 
   function summary(body: ActionResult): string {
     if (action === "revoke_sessions") {
@@ -133,45 +174,87 @@ export function AccountActions({
     }
   }
 
-  const buttons: { action: AccountAction; label: string; variant: "default" | "outline" | "destructive" }[] = [];
-  if (isDeleted) {
-    buttons.push({ action: "restore", label: "Restore", variant: "outline" });
-  } else if (banned) {
-    buttons.push({ action: "reactivate", label: "Reactivate", variant: "default" });
-  } else {
-    buttons.push({ action: "suspend", label: "Suspend", variant: "outline" });
-  }
-
-  if (!isDeleted && !isSelf && !isProtectedAdmin) {
-    buttons.push({ action: "soft_delete", label: "Delete", variant: "destructive" });
-  }
-  if (!isDeleted && !isSelf) {
-    buttons.push({ action: "revoke_sessions", label: "Revoke sessions", variant: "outline" });
-  }
-
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-2">
-        {buttons.map((button) => (
+    <div className="flex flex-col gap-5">
+      <section className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-1">
+          <h3 className="text-sm font-medium">Account status</h3>
+          <p className="text-xs text-muted-foreground">
+            {statusMeta.description}
+          </p>
+        </div>
+        <div>
           <Button
-            key={button.action}
             size="sm"
-            variant={button.variant}
-            disabled={busy || isSelf || (isProtectedAdmin && (button.action === "suspend" || button.action === "soft_delete"))}
-            onClick={() => setAction(button.action)}
+            variant={statusAction === "reactivate" ? "default" : "outline"}
+            disabled={statusDisabled}
+            onClick={() => setAction(statusAction)}
           >
-            {button.label}
+            <StatusIcon aria-hidden="true" />
+            {statusMeta.label}
           </Button>
-        ))}
-      </div>
+        </div>
+      </section>
+
+      {canRevokeSessions ? (
+        <>
+          <Separator />
+          <section className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-sm font-medium">Account security</h3>
+              <p className="text-xs text-muted-foreground">
+                Sign this user out of every browser. They must authenticate
+                again to regain access.
+              </p>
+            </div>
+            <div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => setAction("revoke_sessions")}
+              >
+                <KeyRoundIcon aria-hidden="true" />
+                Revoke sessions
+              </Button>
+            </div>
+          </section>
+        </>
+      ) : null}
+
+      {canSoftDelete ? (
+        <>
+          <Separator />
+          <section className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-sm font-medium">Account management</h3>
+              <p className="text-xs text-muted-foreground">
+                Soft delete removes access while keeping the user record, social
+                connections, and publishing history for audit purposes.
+              </p>
+            </div>
+            <div>
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={busy}
+                onClick={() => setAction("soft_delete")}
+              >
+                <Trash2Icon aria-hidden="true" />
+                Soft delete account
+              </Button>
+            </div>
+          </section>
+        </>
+      ) : null}
 
       {isSelf ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="rounded-lg border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           You cannot suspend, delete, or revoke sessions for your own account.
         </p>
       ) : null}
       {isProtectedAdmin && !isSelf ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="rounded-lg border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           The Super Admin account cannot be suspended or deleted.
         </p>
       ) : null}
@@ -186,7 +269,11 @@ export function AccountActions({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
-            <AlertDialogAction disabled={busy} onClick={() => void submit()}>
+            <AlertDialogAction
+              variant={action === "soft_delete" ? "destructive" : "default"}
+              disabled={busy}
+              onClick={() => void submit()}
+            >
               {busy ? "Working…" : action ? CONFIRM[action].label : "Confirm"}
             </AlertDialogAction>
           </AlertDialogFooter>

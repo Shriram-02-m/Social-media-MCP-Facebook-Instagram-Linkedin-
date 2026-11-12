@@ -494,4 +494,90 @@ describe("user-management wiring", () => {
     expect(filters).toContain('inactive: "Inactive"');
     expect(filters).toContain('pending: "Pending"');
   });
+
+  it("renders the redesigned detail sections and account fields", () => {
+    const page = readFile("src/app/(dashboard)/users/[id]/page.tsx");
+
+    for (const section of [
+      "Back to users",
+      "Account information",
+      "Account management",
+      "Social media connections",
+      "Recent scheduled posts",
+    ]) {
+      expect(page).toContain(section);
+    }
+
+    for (const field of [
+      "Full name",
+      "Email address",
+      "Role",
+      "Account status",
+      "Email verification",
+      "Password login",
+      "Account created",
+      "Last updated",
+      "Active sessions",
+      "Suspended",
+      "Deleted",
+    ]) {
+      expect(page).toContain(`label="${field}"`);
+    }
+
+    // Fixed table layout with horizontal scrolling keeps long content from
+    // expanding columns and breaking the page on narrow screens.
+    expect(page).toMatch(/table-fixed/);
+    expect(page).toMatch(/min-w-\[960px\]/);
+    expect(page).toMatch(/<colgroup>/);
+    expect(page).toMatch(/<PostDetails post=\{post\} \/>/);
+  });
+
+  it("keeps grouped account actions wired to the existing endpoints", () => {
+    const userActions = readFile(
+      "src/app/(dashboard)/users/[id]/user-actions.tsx",
+    );
+    const accountActions = readFile(
+      "src/app/(dashboard)/users/[id]/account-actions.tsx",
+    );
+
+    for (const group of ["Registration", "Role"]) {
+      expect(userActions).toContain(group);
+    }
+    for (const group of [
+      "Account status",
+      "Account security",
+      "Account management",
+    ]) {
+      expect(accountActions).toContain(group);
+    }
+
+    expect(userActions).toMatch(/method: "PATCH"/);
+    expect(userActions).toMatch(/approvalStatus: "approved"/);
+    expect(userActions).toMatch(/approvalStatus: "rejected"/);
+    expect(accountActions).toMatch(/\/api\/admin\/users\/\$\{encodeURIComponent\(id\)\}\/account/);
+    expect(accountActions).toMatch(/\/api\/admin\/users\/\$\{encodeURIComponent\(id\)\}\/sessions/);
+    expect(accountActions).toMatch(/method: "DELETE"/);
+  });
+
+  it("exposes full post details without leaking secrets", () => {
+    const page = readFile("src/app/(dashboard)/users/[id]/page.tsx");
+    const details = readFile("src/app/(dashboard)/users/[id]/post-details.tsx");
+    const scheduler = readFile("src/lib/admin-scheduler.ts");
+
+    expect(details).toContain("Post details");
+    expect(details).toContain("Content");
+    expect(details).toContain("Error");
+    expect(details).toMatch(/post\.text/);
+    expect(details).toMatch(/post\.retryCount/);
+    expect(details).toMatch(/post\.failureStage/);
+    expect(details).toMatch(/post\.publishedUrl/);
+
+    expect(scheduler).toMatch(/failure_stage/);
+    expect(scheduler).toMatch(/created_at/);
+    expect(scheduler).toMatch(/media_type/);
+
+    for (const file of [page, details]) {
+      expect(file).not.toMatch(/access_token|refresh_token|client_secret/i);
+    }
+  });
 });

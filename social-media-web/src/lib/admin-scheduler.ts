@@ -195,6 +195,12 @@ export interface AdminUserPost {
   error: string | null;
   retryCount: number;
   textPreview: string;
+  /** Full post text, used by the admin details dialog. */
+  text: string;
+  mediaType: string | null;
+  failureStage: string | null;
+  publishedUrl: string | null;
+  createdAt: string;
 }
 
 /** Recent posts for one owner, used by the admin user detail page. */
@@ -212,8 +218,13 @@ export async function listUserScheduledPosts(
       error: string | null;
       retry_count: number;
       text: string;
+      media_type: string | null;
+      failure_stage: string | null;
+      result: { url?: string } | null;
+      created_at: Date;
     }>(
-      `SELECT id, platform, status, scheduled_at, published_at, error, retry_count, text
+      `SELECT id, platform, status, scheduled_at, published_at, error,
+              retry_count, text, media_type, failure_stage, result, created_at
          FROM public.scheduled_posts
         WHERE user_id = $1
         ORDER BY scheduled_at DESC
@@ -229,6 +240,11 @@ export async function listUserScheduledPosts(
       error: row.error,
       retryCount: row.retry_count,
       textPreview: row.text.length > 100 ? `${row.text.slice(0, 100)}…` : row.text,
+      text: row.text,
+      mediaType: row.media_type,
+      failureStage: row.failure_stage,
+      publishedUrl: typeof row.result?.url === "string" ? row.result.url : null,
+      createdAt: row.created_at.toISOString(),
     }));
   } catch {
     return [];

@@ -2,9 +2,21 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { CheckIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -33,6 +45,7 @@ export function UserActions({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [confirmReject, setConfirmReject] = useState(false);
 
   async function update(
     body: { approvalStatus?: "approved" | "rejected"; role?: "admin" | "user" },
@@ -63,39 +76,73 @@ export function UserActions({
     }
   }
 
-  return (
-    <div className="flex flex-col gap-4">
-      {isSelf ? (
-        <p className="text-sm text-muted-foreground">
-          This is your account. You cannot change your own role or approval
-          status, so you cannot lock yourself out of the console.
-        </p>
-      ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          {approvalStatus !== "approved" ? (
-            <Button
-              size="sm"
-              disabled={busy}
-              onClick={() => void update({ approvalStatus: "approved" }, "User approved.")}
-            >
-              Approve
-            </Button>
-          ) : null}
-          {approvalStatus !== "rejected" ? (
-            <Button
-              size="sm"
-              variant="destructive"
-              disabled={busy}
-              onClick={() => void update({ approvalStatus: "rejected" }, "User rejected.")}
-            >
-              Reject
-            </Button>
-          ) : null}
-        </div>
-      )}
+  const isApproved = approvalStatus === "approved";
+  const isRejected = approvalStatus === "rejected";
 
-      <div className="flex flex-col gap-2">
-        <span className="text-sm font-medium">Role</span>
+  return (
+    <div className="flex flex-col gap-5">
+      <section className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-1">
+          <h3 className="text-sm font-medium">Registration</h3>
+          <p className="text-xs text-muted-foreground">
+            Approve this registration to grant access, or reject it to keep the
+            account inactive.
+          </p>
+        </div>
+
+        {isSelf ? (
+          <p className="rounded-lg border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            This is your account. You cannot change your own approval status or
+            role, so you cannot lock yourself out of the console.
+          </p>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            {!isApproved ? (
+              <Button
+                size="sm"
+                disabled={busy}
+                onClick={() =>
+                  void update({ approvalStatus: "approved" }, "User approved.")
+                }
+              >
+                <CheckIcon aria-hidden="true" />
+                Approve
+              </Button>
+            ) : null}
+            {!isRejected ? (
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={busy}
+                onClick={() => setConfirmReject(true)}
+              >
+                <XIcon aria-hidden="true" />
+                Reject
+              </Button>
+            ) : null}
+            {isApproved ? (
+              <span className="text-xs text-muted-foreground">
+                Registration approved.
+              </span>
+            ) : isRejected ? (
+              <span className="text-xs text-muted-foreground">
+                Registration rejected.
+              </span>
+            ) : null}
+          </div>
+        )}
+      </section>
+
+      <Separator />
+
+      <section className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-1">
+          <h3 className="text-sm font-medium">Role</h3>
+          <p className="text-xs text-muted-foreground">
+            The database allows exactly one Super Admin. Promoting another
+            account is only possible when no admin exists.
+          </p>
+        </div>
         <Select
           value={role}
           disabled={isSelf || busy}
@@ -119,11 +166,33 @@ export function UserActions({
             </SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">
-          The database allows exactly one Super Admin. Promoting another account
-          is only possible when no admin exists.
-        </p>
-      </div>
+      </section>
+
+      <AlertDialog open={confirmReject} onOpenChange={setConfirmReject}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reject this registration?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The account is marked inactive and cannot access the application.
+              Existing records, social connections, and publishing history are
+              preserved.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={busy}
+              onClick={() => {
+                setConfirmReject(false);
+                void update({ approvalStatus: "rejected" }, "User rejected.");
+              }}
+            >
+              Reject registration
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
