@@ -24,13 +24,13 @@ function RoleBadge({ role }: { role: AdminUserSummary["role"] }) {
   );
 }
 
-function ApprovalBadge({
+function StatusBadge({
   status,
 }: {
-  status: AdminUserSummary["approvalStatus"];
+  status: AdminUserSummary["status"];
 }) {
-  if (status === "approved") return <Badge variant="secondary">Approved</Badge>;
-  if (status === "rejected") return <Badge variant="destructive">Rejected</Badge>;
+  if (status === "active") return <Badge variant="secondary">Active</Badge>;
+  if (status === "inactive") return <Badge variant="destructive">Inactive</Badge>;
   return <Badge variant="outline">Pending</Badge>;
 }
 
@@ -56,7 +56,7 @@ export function UsersTable({
           <TableHead>Name</TableHead>
           <TableHead>Email</TableHead>
           <TableHead>Role</TableHead>
-          <TableHead>Approval</TableHead>
+          <TableHead>Status</TableHead>
           <TableHead>Created</TableHead>
           <TableHead className="text-right">Actions</TableHead>
         </TableRow>
@@ -75,7 +75,7 @@ export function UsersTable({
               <RoleBadge role={user.role} />
             </TableCell>
             <TableCell>
-              <ApprovalBadge status={user.approvalStatus} />
+              <StatusBadge status={user.status} />
             </TableCell>
             <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
               {dateFormatter.format(new Date(user.createdAt))}

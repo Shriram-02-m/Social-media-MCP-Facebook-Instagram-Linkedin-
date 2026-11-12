@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { activeApprovalCondition } from "@/lib/admin-user-filters";
+import { nonAdminCondition, userStatusCondition } from "@/lib/admin-user-filters";
 import {
   parseUserFilters,
   validateUserUpdate,
@@ -29,42 +29,82 @@ describe("parseUserFilters", () => {
     expect(filters.query).toHaveLength(100);
   });
 
-  it("whitelists approval and role filters", () => {
-    expect(parseUserFilters({ approval: "APPROVED", role: "ADMIN" })).toEqual({
+  it("whitelists status and role filters", () => {
+    expect(parseUserFilters({ status: "ACTIVE", role: "ADMIN" })).toEqual({
       query: "",
-      approval: "approved",
+      status: "active",
       role: "admin",
     });
-    expect(parseUserFilters({ approval: "bogus", role: "bogus" })).toEqual({
+    expect(parseUserFilters({ status: "bogus", role: "bogus" })).toEqual({
       query: "",
-      approval: "all",
+      status: "all",
       role: "all",
+    });
+  });
+
+  it("maps legacy approval links to the new status terms", () => {
+    expect(parseUserFilters({ approval: "approved" })).toMatchObject({
+      status: "active",
+    });
+    expect(parseUserFilters({ approval: "rejected" })).toMatchObject({
+      status: "inactive",
+    });
+    expect(parseUserFilters({ approval: "pending" })).toMatchObject({
+      status: "pending",
     });
   });
 
   it("reads URLSearchParams and array values", () => {
     expect(
-      parseUserFilters(new URLSearchParams({ q: "dinesh", approval: "rejected" })),
-    ).toMatchObject({ query: "dinesh", approval: "rejected" });
+      parseUserFilters(new URLSearchParams({ q: "dinesh", status: "inactive" })),
+    ).toMatchObject({ query: "dinesh", status: "inactive" });
     expect(parseUserFilters({ q: ["first", "second"] }).query).toBe("first");
   });
 });
 
-describe("activeApprovalCondition", () => {
+describe("userStatusCondition", () => {
   const dialect = new PgDialect();
 
-  it.each(["approved", "pending", "rejected"] as const)(
-    "filters %s users to active accounts in PostgreSQL",
-    (status) => {
-      const query = dialect.sqlToQuery(activeApprovalCondition(status));
+  it("filters pending users to active pending accounts in PostgreSQL", () => {
+    const query = dialect.sqlToQuery(userStatusCondition("pending"));
 
-      expect(query.sql).toContain('"user"."approval_status" =');
-      expect(query.sql).toContain('"user"."banned" =');
-      expect(query.sql).toContain('"user"."deleted_at" is null');
-      expect(query.sql).toMatch(/ and /);
-      expect(query.params).toEqual([status, false]);
-    },
-  );
+    expect(query.sql).toContain('"user"."approval_status" =');
+    expect(query.sql).toContain('"user"."banned" =');
+    expect(query.sql).toContain('"user"."deleted_at" is null');
+    expect(query.sql).toMatch(/ and /);
+    expect(query.params).toEqual(["pending", false]);
+  });
+
+  it("filters active users to approved, unbanned, non-deleted accounts", () => {
+    const query = dialect.sqlToQuery(userStatusCondition("active"));
+
+    expect(query.sql).toContain('"user"."approval_status" =');
+    expect(query.sql).toContain('"user"."banned" =');
+    expect(query.sql).toContain('"user"."deleted_at" is null');
+    expect(query.sql).toMatch(/ and /);
+    expect(query.params).toEqual(["approved", false]);
+  });
+
+  it("filters inactive users to rejected, banned, or soft-deleted accounts", () => {
+    const query = dialect.sqlToQuery(userStatusCondition("inactive"));
+
+    expect(query.sql).toContain('"user"."approval_status" =');
+    expect(query.sql).toContain('"user"."banned" =');
+    expect(query.sql).toContain('"user"."deleted_at" is not null');
+    expect(query.sql).toMatch(/ or /);
+    expect(query.params).toEqual(["rejected", true]);
+  });
+});
+
+describe("nonAdminCondition", () => {
+  const dialect = new PgDialect();
+
+  it("excludes the Super Admin role in PostgreSQL", () => {
+    const query = dialect.sqlToQuery(nonAdminCondition());
+
+    expect(query.sql).toContain('"user"."role" <>');
+    expect(query.params).toEqual(["admin"]);
+  });
 });
 
 describe("validateUserUpdate", () => {
@@ -275,18 +315,18 @@ describe("admin user API authorization", () => {
     requireAdminMock.mockResolvedValue(adminSession);
     listUsersMock.mockResolvedValue({
       users: [{ id: "u-1" }],
-      counts: { total: 1, pending: 0, approved: 1, rejected: 0 },
+      counts: { total: 1, pending: 0, active: 1, inactive: 0 },
     });
 
     const response = await listUsersRoute(
-      new Request("https://example.test/api/admin/users?approval=approved"),
+      new Request("https://example.test/api/admin/users?status=active"),
     );
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ counts: { total: 1 } });
     expect(listUsersMock).toHaveBeenCalledWith({
       query: "",
-      approval: "approved",
+      status: "active",
       role: "all",
     });
   });
@@ -398,33 +438,60 @@ describe("user-management wiring", () => {
     expect(sidebar).toMatch(/<SidebarGroupLabel>Administration<\/SidebarGroupLabel>/);
   });
 
-  it("applies the shared active-approval filter to approval lists", () => {
+  it("applies the shared status filter to status lists", () => {
     const lib = readFile("src/lib/admin-users.ts");
 
-    expect(lib).toMatch(/activeApprovalCondition\(filters\.approval\)/);
+    expect(lib).toMatch(/userStatusCondition\(filters\.status\)/);
     expect(lib).toMatch(/getAdminUserStats\(\)/);
     expect(lib).toMatch(/ilike\(user\.name/);
     expect(lib).toMatch(/ilike\(user\.email/);
     expect(lib).toMatch(/orderBy\(desc\(user\.createdAt\), asc\(user\.email\)\)/);
   });
 
-  it("keeps Total Users unfiltered while approval counts are active-only", () => {
+  it("excludes Super Admin accounts from the default directory and statistics", () => {
     const lib = readFile("src/lib/admin-users.ts");
+    const overview = readFile("src/lib/admin-overview.ts");
+    const filters = readFile("src/lib/admin-user-filters.ts");
 
-    expect(lib).toMatch(/if \(filters\.approval !== "all"\)/);
-    expect(lib).toMatch(/total:\s*stats\.total/);
-    expect(lib).toMatch(/pending:\s*stats\.pending/);
-    expect(lib).toMatch(/approved:\s*stats\.approved/);
-    expect(lib).toMatch(/rejected:\s*stats\.rejected/);
+    expect(filters).toMatch(/export function nonAdminCondition/);
+    expect(filters).toMatch(/ne\(user\.role, "admin"\)/);
+    expect(overview).toMatch(/\.where\(nonAdminCondition\(\)\)/);
+    expect(lib).toMatch(/nonAdminCondition\(\)/);
+    expect(lib).toMatch(/if \(filters\.role !== "all"\)/);
+    expect(lib).toMatch(/eq\(user\.role, filters\.role\)/);
   });
 
-  it("preserves URL-driven search, approval, and role filters", () => {
+  it("keeps Total Users as every non-admin row while status counts use shared buckets", () => {
+    const lib = readFile("src/lib/admin-users.ts");
+
+    expect(lib).toMatch(/if \(filters\.status !== "all"\)/);
+    expect(lib).toMatch(/total:\s*stats\.total/);
+    expect(lib).toMatch(/pending:\s*stats\.pending/);
+    expect(lib).toMatch(/active:\s*stats\.active/);
+    expect(lib).toMatch(/inactive:\s*stats\.inactive/);
+  });
+
+  it("preserves URL-driven search, status, and role filters", () => {
     const page = readFile("src/app/(dashboard)/users/page.tsx");
     const filters = readFile("src/app/(dashboard)/users/users-filters.tsx");
 
     expect(page).toMatch(/parseUserFilters\(await props\.searchParams\)/);
     expect(filters).toMatch(/params\.set\("q", trimmed\)/);
-    expect(filters).toMatch(/params\.set\("approval", nextApproval\)/);
+    expect(filters).toMatch(/params\.set\("status", nextStatus\)/);
     expect(filters).toMatch(/params\.set\("role", nextRole\)/);
+  });
+
+  it("labels the directory statuses Active, Inactive, and Pending", () => {
+    const table = readFile("src/app/(dashboard)/users/users-table.tsx");
+    const filters = readFile("src/app/(dashboard)/users/users-filters.tsx");
+
+    expect(table).toContain("Active");
+    expect(table).toContain("Inactive");
+    expect(table).toContain("Pending");
+    expect(table).not.toContain(">Approved<");
+    expect(table).not.toContain(">Rejected<");
+    expect(filters).toContain('active: "Active"');
+    expect(filters).toContain('inactive: "Inactive"');
+    expect(filters).toContain('pending: "Pending"');
   });
 });

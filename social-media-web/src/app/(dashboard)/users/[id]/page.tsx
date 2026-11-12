@@ -69,14 +69,10 @@ export default async function UserDetailPage(props: PageProps<"/users/[id]">) {
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold">{detail.name}</h1>
-          {detail.deletedAt ? (
-            <Badge variant="destructive">Deleted</Badge>
-          ) : detail.banned ? (
-            <Badge variant="destructive">Suspended</Badge>
-          ) : detail.approvalStatus === "approved" ? (
+          {detail.status === "active" ? (
             <Badge variant="secondary">Active</Badge>
-          ) : detail.approvalStatus === "rejected" ? (
-            <Badge variant="destructive">Rejected</Badge>
+          ) : detail.status === "inactive" ? (
+            <Badge variant="destructive">Inactive</Badge>
           ) : (
             <Badge variant="outline">Pending</Badge>
           )}
@@ -102,11 +98,11 @@ export default async function UserDetailPage(props: PageProps<"/users/[id]">) {
                   <Badge variant="secondary">User</Badge>
                 )}
               </Field>
-              <Field label="Approval">
-                {detail.approvalStatus === "approved" ? (
-                  <Badge variant="secondary">Approved</Badge>
-                ) : detail.approvalStatus === "rejected" ? (
-                  <Badge variant="destructive">Rejected</Badge>
+              <Field label="Status">
+                {detail.status === "active" ? (
+                  <Badge variant="secondary">Active</Badge>
+                ) : detail.status === "inactive" ? (
+                  <Badge variant="destructive">Inactive</Badge>
                 ) : (
                   <Badge variant="outline">Pending</Badge>
                 )}
@@ -135,10 +131,10 @@ export default async function UserDetailPage(props: PageProps<"/users/[id]">) {
         <div className="flex flex-col gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Approval & role</CardTitle>
+              <CardTitle>Status & role</CardTitle>
               <CardDescription>
-                Changes are authorized on the server and recorded in the activity
-                log.
+                Status and role changes are authorized on the server and
+                recorded in the activity log.
               </CardDescription>
             </CardHeader>
             <CardContent>

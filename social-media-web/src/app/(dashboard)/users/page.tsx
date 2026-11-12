@@ -17,8 +17,8 @@ export const dynamic = "force-dynamic";
 const SUMMARY: { key: keyof AdminUserCounts; label: string }[] = [
   { key: "total", label: "Total users" },
   { key: "pending", label: "Pending" },
-  { key: "approved", label: "Approved" },
-  { key: "rejected", label: "Rejected" },
+  { key: "active", label: "Active" },
+  { key: "inactive", label: "Inactive" },
 ];
 
 export default async function UsersPage(props: PageProps<"/users">) {
@@ -51,14 +51,14 @@ export default async function UsersPage(props: PageProps<"/users">) {
         <CardHeader>
           <CardTitle>Directory</CardTitle>
           <CardDescription>
-            Showing {users.length} of {counts.total} accounts. Only approved
-            users can use the console.
+            Showing {users.length} account{users.length === 1 ? "" : "s"} in this
+            view. Only active users can use the console.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <UsersFilters
             initialQuery={filters.query}
-            initialApproval={filters.approval}
+            initialStatus={filters.status}
             initialRole={filters.role}
           />
           <UsersTable users={users} currentUserId={session.user.id} />

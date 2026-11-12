@@ -121,17 +121,17 @@ describe("admin API authorization", () => {
     mocks.requireAdmin.mockResolvedValue(adminSession);
     mocks.getAdminUserStats.mockResolvedValue({
       total: 4,
-      approved: 3,
       pending: 1,
-      rejected: 0,
+      active: 2,
+      inactive: 1,
     });
     const response = await overviewGET();
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       total: 4,
-      approved: 3,
       pending: 1,
-      rejected: 0,
+      active: 2,
+      inactive: 1,
     });
     expect(mocks.getAdminUserStats).toHaveBeenCalledOnce();
   });

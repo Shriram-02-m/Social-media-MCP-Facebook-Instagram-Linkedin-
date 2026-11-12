@@ -1,5 +1,6 @@
 import { count, sql } from "drizzle-orm";
 
+import { nonAdminCondition } from "@/lib/admin-user-filters";
 import {
   summarizeUserStats,
   type AdminUserStats,
@@ -10,10 +11,13 @@ import { user } from "@/lib/db/schema";
 export type { AdminUserStats } from "@/lib/admin-overview-policy";
 
 /**
- * Count users with one grouped aggregate query. Grouping by approval status,
- * the banned flag, and the deleted-at boolean yields at most twelve rows
- * regardless of the user-table size; no user records are loaded into
+ * Count normal users with one grouped aggregate query. Grouping by approval
+ * status, the banned flag, and the deleted-at boolean yields at most twelve
+ * rows regardless of the user-table size; no user records are loaded into
  * application memory.
+ *
+ * Super Admin rows (`role = 'admin'`) are excluded before grouping so they can
+ * never inflate any of the four statistics, regardless of approval status.
  */
 export async function getAdminUserStats(): Promise<AdminUserStats> {
   const deleted = sql<boolean>`${user.deletedAt} is not null`;
@@ -26,9 +30,10 @@ export async function getAdminUserStats(): Promise<AdminUserStats> {
       total: count(),
     })
     .from(user)
+    .where(nonAdminCondition())
     .groupBy(user.approvalStatus, user.banned, deleted);
 
-  const breakdown = summarizeUserStats(
+  return summarizeUserStats(
     rows.map((row) => ({
       approvalStatus: row.approvalStatus,
       banned: row.banned,
@@ -36,11 +41,4 @@ export async function getAdminUserStats(): Promise<AdminUserStats> {
       total: Number(row.total),
     })),
   );
-
-  return {
-    total: breakdown.total,
-    approved: breakdown.approved,
-    pending: breakdown.pending,
-    rejected: breakdown.rejected,
-  };
 }

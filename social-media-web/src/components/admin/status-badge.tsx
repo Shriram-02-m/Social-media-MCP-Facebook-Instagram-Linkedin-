@@ -56,11 +56,11 @@ export function SocialStatusBadge({ status }: { status: SocialAccountStatus }) {
 }
 
 const USER_STATUS_LABELS: Record<string, string> = {
-  approved: "Approved",
+  approved: "Active",
   pending: "Pending",
-  rejected: "Rejected",
-  suspended: "Suspended",
-  deleted: "Deleted",
+  rejected: "Inactive",
+  suspended: "Inactive",
+  deleted: "Inactive",
 };
 
 export function UserStatusBadge({ status }: { status: string }) {

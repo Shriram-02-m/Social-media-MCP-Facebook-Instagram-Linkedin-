@@ -13,11 +13,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const APPROVAL_LABELS: Record<string, string> = {
+const STATUS_LABELS: Record<string, string> = {
   all: "All statuses",
   pending: "Pending",
-  approved: "Approved",
-  rejected: "Rejected",
+  active: "Active",
+  inactive: "Inactive",
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -28,25 +28,25 @@ const ROLE_LABELS: Record<string, string> = {
 
 export function UsersFilters({
   initialQuery,
-  initialApproval,
+  initialStatus,
   initialRole,
 }: {
   initialQuery: string;
-  initialApproval: string;
+  initialStatus: string;
   initialRole: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState(initialQuery);
-  const [approval, setApproval] = useState(initialApproval);
+  const [status, setStatus] = useState(initialStatus);
   const [role, setRole] = useState(initialRole);
 
-  function apply(nextQuery: string, nextApproval: string, nextRole: string) {
+  function apply(nextQuery: string, nextStatus: string, nextRole: string) {
     const params = new URLSearchParams();
     const trimmed = nextQuery.trim();
     if (trimmed) params.set("q", trimmed);
-    if (nextApproval !== "all") params.set("approval", nextApproval);
+    if (nextStatus !== "all") params.set("status", nextStatus);
     if (nextRole !== "all") params.set("role", nextRole);
     const search = params.toString();
     startTransition(() =>
@@ -55,11 +55,11 @@ export function UsersFilters({
   }
 
   const filtersActive =
-    query.trim().length > 0 || approval !== "all" || role !== "all";
+    query.trim().length > 0 || status !== "all" || role !== "all";
 
   function reset() {
     setQuery("");
-    setApproval("all");
+    setStatus("all");
     setRole("all");
     apply("", "all", "all");
   }
@@ -70,7 +70,7 @@ export function UsersFilters({
         className="flex w-full gap-2 sm:max-w-sm"
         onSubmit={(event) => {
           event.preventDefault();
-          apply(query, approval, role);
+          apply(query, status, role);
         }}
       >
         <Input
@@ -87,24 +87,24 @@ export function UsersFilters({
 
       <div className="flex flex-wrap items-center gap-2">
         <Select
-          value={approval}
+          value={status}
           onValueChange={(value) => {
             const next = value ?? "all";
-            setApproval(next);
+            setStatus(next);
             apply(query, next, role);
           }}
         >
           <SelectTrigger
             size="sm"
             className="w-36"
-            aria-label="Filter by approval status"
+            aria-label="Filter by status"
           >
             <SelectValue>
-              {(value) => APPROVAL_LABELS[value ?? "all"] ?? "All statuses"}
+              {(value) => STATUS_LABELS[value ?? "all"] ?? "All statuses"}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {Object.entries(APPROVAL_LABELS).map(([value, label]) => (
+            {Object.entries(STATUS_LABELS).map(([value, label]) => (
               <SelectItem key={value} value={value}>
                 {label}
               </SelectItem>
@@ -117,7 +117,7 @@ export function UsersFilters({
           onValueChange={(value) => {
             const next = value ?? "all";
             setRole(next);
-            apply(query, approval, next);
+            apply(query, status, next);
           }}
         >
           <SelectTrigger size="sm" className="w-36" aria-label="Filter by role">

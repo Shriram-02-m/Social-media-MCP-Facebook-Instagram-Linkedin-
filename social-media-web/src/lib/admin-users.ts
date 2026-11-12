@@ -2,7 +2,14 @@ import { and, asc, count, desc, eq, ilike, or } from "drizzle-orm";
 
 import { logActivity } from "@/lib/activity";
 import { getAdminUserStats } from "@/lib/admin-overview";
-import { activeApprovalCondition } from "@/lib/admin-user-filters";
+import {
+  nonAdminCondition,
+  userStatusCondition,
+} from "@/lib/admin-user-filters";
+import {
+  classifyUserStatus,
+  type UserStatus,
+} from "@/lib/admin-user-status";
 import { ApiError } from "@/lib/api";
 import { db } from "@/lib/db";
 import { isUniqueViolation } from "@/lib/db-errors";
@@ -20,6 +27,7 @@ export interface AdminUserSummary {
   name: string;
   email: string;
   role: UserRole;
+  status: UserStatus;
   approvalStatus: ApprovalStatus;
   banned: boolean;
   createdAt: string;
@@ -39,8 +47,8 @@ export interface AdminUserDetail extends AdminUserSummary {
 export interface AdminUserCounts {
   total: number;
   pending: number;
-  approved: number;
-  rejected: number;
+  active: number;
+  inactive: number;
 }
 
 export interface AdminUserList {
@@ -84,6 +92,11 @@ function toSummary(row: UserRow): AdminUserSummary {
     name: row.name,
     email: row.email,
     role: asRole(row.role),
+    status: classifyUserStatus({
+      approvalStatus: row.approvalStatus,
+      banned: row.banned,
+      deleted: row.deletedAt !== null,
+    }),
     approvalStatus: asApprovalStatus(row.approvalStatus),
     banned: row.banned,
     createdAt: row.createdAt.toISOString(),
@@ -97,11 +110,16 @@ export async function listUsers(filters: UserFilters): Promise<AdminUserList> {
     const pattern = `%${escapeLike(filters.query)}%`;
     conditions.push(or(ilike(user.name, pattern), ilike(user.email, pattern))!);
   }
-  if (filters.approval !== "all") {
-    conditions.push(activeApprovalCondition(filters.approval));
+  if (filters.status !== "all") {
+    conditions.push(userStatusCondition(filters.status));
   }
   if (filters.role !== "all") {
     conditions.push(eq(user.role, filters.role));
+  } else {
+    // The default directory and the dashboard card links are normal-user
+    // views, so they must exclude the Super Admin just like the statistics.
+    // Selecting the "Super Admin" role filter still lists that account.
+    conditions.push(nonAdminCondition());
   }
 
   const rows = (await db
@@ -125,15 +143,16 @@ export async function listUsers(filters: UserFilters): Promise<AdminUserList> {
     .orderBy(desc(user.createdAt), asc(user.email))) as UserRow[];
 
   // Reuse the dashboard aggregate so the cards and the directory can never
-  // disagree: total counts every row, while approved/pending/rejected count
-  // only active accounts. Both queries stay in PostgreSQL.
+  // disagree: total counts every non-admin row, while pending/active/inactive
+  // use the same classification rules as the status filters. Both queries stay
+  // in PostgreSQL.
   const stats = await getAdminUserStats();
 
   const counts: AdminUserCounts = {
     total: stats.total,
     pending: stats.pending,
-    approved: stats.approved,
-    rejected: stats.rejected,
+    active: stats.active,
+    inactive: stats.inactive,
   };
 
   return { users: rows.map(toSummary), counts };

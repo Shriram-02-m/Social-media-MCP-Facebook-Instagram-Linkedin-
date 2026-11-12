@@ -24,29 +24,30 @@ const STATS: {
   {
     key: "total",
     label: "Total Users",
-    description: "Every registered account, including suspended and soft-deleted records.",
+    description:
+      "Every registered user account except the Super Admin, including suspended and soft-deleted records.",
     href: "/users",
     indicator: "bg-sky-500",
   },
   {
-    key: "approved",
-    label: "Approved Users",
-    description: "Active accounts cleared for console access.",
-    href: "/users?approval=approved",
-    indicator: "bg-emerald-500",
-  },
-  {
     key: "pending",
     label: "Pending Users",
-    description: "Users waiting for administrator approval.",
-    href: "/users?approval=pending",
+    description: "Normal users waiting for administrator approval.",
+    href: "/users?status=pending",
     indicator: "bg-amber-500",
   },
   {
-    key: "rejected",
-    label: "Rejected Users",
-    description: "Active registration requests denied by the administrator.",
-    href: "/users?approval=rejected",
+    key: "active",
+    label: "Active Users",
+    description: "Approved, unbanned accounts cleared for console access.",
+    href: "/users?status=active",
+    indicator: "bg-emerald-500",
+  },
+  {
+    key: "inactive",
+    label: "Inactive Users",
+    description: "Rejected, suspended, or soft-deleted accounts.",
+    href: "/users?status=inactive",
     indicator: "bg-destructive",
   },
 ];
@@ -91,7 +92,7 @@ export default async function AdminOverviewPage() {
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold">Admin overview</h1>
         <p className="text-sm text-muted-foreground">
-          User registration and approval statistics from live database records.
+          User registration and status statistics from live database records.
           Select a card to open the matching user list.
         </p>
       </div>
@@ -103,8 +104,10 @@ export default async function AdminOverviewPage() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Total includes every registered account. Approved, pending, and rejected
-        counts exclude suspended and soft-deleted accounts.
+        Total includes every registered user account except the Super Admin.
+        Active counts only approved, unbanned, non-deleted accounts; inactive
+        counts rejected, suspended, or soft-deleted accounts. Pending accounts
+        are counted separately.
       </p>
     </>
   );

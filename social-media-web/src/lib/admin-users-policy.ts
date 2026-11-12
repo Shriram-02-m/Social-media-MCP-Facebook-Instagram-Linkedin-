@@ -2,6 +2,11 @@
 // guard. Kept free of database imports so it can be unit-tested without a
 // connection and reused by both the API routes and server pages.
 
+import {
+  USER_STATUSES,
+  type UserStatus,
+} from "@/lib/admin-user-status";
+
 export const USER_ROLES = ["admin", "user"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
@@ -17,7 +22,7 @@ export type FilterValue<T extends string> = T | "all";
 
 export interface UserFilters {
   query: string;
-  approval: FilterValue<ApprovalStatus>;
+  status: FilterValue<UserStatus>;
   role: FilterValue<UserRole>;
 }
 
@@ -53,18 +58,29 @@ function readParam(
   return value ?? "";
 }
 
+// Older dashboard links used `approval=approved|rejected`. Keep accepting
+// them (mapped to the new console-facing terms) so bookmarks and any external
+// links keep working.
+const LEGACY_STATUS_PARAMS: Record<string, UserStatus> = {
+  approved: "active",
+  rejected: "inactive",
+};
+
 /** Normalise and whitelist the list filters coming from a URL. */
 export function parseUserFilters(
   input: URLSearchParams | Record<string, string | string[] | undefined> | null | undefined,
 ): UserFilters {
   const query = readParam(input, "q").trim().slice(0, MAX_QUERY_LENGTH);
-  const approvalRaw = readParam(input, "approval").trim().toLowerCase();
+  const statusRaw = readParam(input, "status").trim().toLowerCase();
+  const legacyStatusRaw = readParam(input, "approval").trim().toLowerCase();
+  const statusCandidate = LEGACY_STATUS_PARAMS[statusRaw || legacyStatusRaw]
+    ?? (statusRaw || legacyStatusRaw);
   const roleRaw = readParam(input, "role").trim().toLowerCase();
 
   return {
     query,
-    approval: (APPROVAL_STATUSES as readonly string[]).includes(approvalRaw)
-      ? (approvalRaw as ApprovalStatus)
+    status: (USER_STATUSES as readonly string[]).includes(statusCandidate)
+      ? (statusCandidate as UserStatus)
       : "all",
     role: (USER_ROLES as readonly string[]).includes(roleRaw)
       ? (roleRaw as UserRole)

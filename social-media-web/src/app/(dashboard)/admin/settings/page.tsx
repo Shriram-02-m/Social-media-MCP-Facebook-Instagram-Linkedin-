@@ -15,6 +15,7 @@ import {
   listAdminSessions,
 } from "@/lib/admin-security";
 import { requireAdminPage } from "@/lib/admin-page";
+import { classifyUserStatus } from "@/lib/admin-user-status";
 import { readAccountState } from "@/lib/session";
 
 import { SessionActions } from "./session-actions";
@@ -42,7 +43,7 @@ function device(userAgent: string | null): string {
         ? "Chrome"
         : /Safari\//.test(userAgent)
           ? "Safari"
-          : "Browser";
+          : "Unknown";
   const os = /Windows/.test(userAgent)
     ? "Windows"
     : /Mac OS X|Macintosh/.test(userAgent)
@@ -69,6 +70,16 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 export default async function AdminSettingsPage() {
   const session = await requireAdminPage();
   const state = readAccountState(session);
+  const status = state
+    ? classifyUserStatus({
+        approvalStatus: state.approvalStatus,
+        banned: state.banActive,
+        deleted: state.deleted,
+      })
+    : null;
+  const statusLabel = status
+    ? `${status.charAt(0).toUpperCase()}${status.slice(1)}`
+    : "Unknown";
 
   const [profile, recovery, sessions] = await Promise.all([
     getAdminProfile(session.user.id),
@@ -138,7 +149,7 @@ export default async function AdminSettingsPage() {
               <Row label="Name">{profile.name}</Row>
               <Row label="Email">{profile.email}</Row>
               <Row label="Role">{state?.isAdmin ? "Super Admin" : state?.role}</Row>
-              <Row label="Approval">{state?.approvalStatus}</Row>
+              <Row label="Status">{statusLabel}</Row>
             </dl>
           </CardContent>
         </Card>
@@ -190,7 +201,7 @@ export default async function AdminSettingsPage() {
             <ul className="flex list-disc flex-col gap-2 pl-4 text-sm text-muted-foreground">
               <li>Social tokens stay encrypted and are never displayed.</li>
               <li>Activity metadata is sanitized before it is stored.</li>
-              <li>Only approved users can access the application.</li>
+              <li>Only active users can access the application.</li>
               <li>Every admin API verifies the Super Admin server-side.</li>
             </ul>
           </CardContent>
