@@ -478,6 +478,22 @@ describe("activity logging coverage", () => {
       expect(source).toMatch(/sanitize(Activity)?Metadata/);
     }
   });
+
+  it("searches jsonb metadata through an explicit text cast", () => {
+    const lib = readFile("src/lib/admin-activity.ts");
+    expect(lib).toContain("activityLog.metadata}::text");
+    expect(lib).not.toMatch(/ilike\(activityLog\.metadata/);
+  });
+
+  it("declares activity metadata as jsonb to match the shared DDL", () => {
+    expect(readFile("src/lib/db/schema.ts")).toMatch(/metadata:\s*jsonb\("metadata"\)/);
+  });
+
+  it("renders a retry state when the session store is unavailable", () => {
+    const page = readFile("src/app/(dashboard)/admin/activity/page.tsx");
+    expect(page).toMatch(/SessionUnavailableError/);
+    expect(page).toMatch(/<SessionUnavailable \/>/);
+  });
 });
 
 describe("RLS audit migration", () => {

@@ -1,5 +1,6 @@
 import { AdminPagination } from "@/components/admin/admin-pagination";
 import { DateRangeFilter } from "@/components/admin/date-range-filter";
+import { SessionUnavailable } from "@/components/session-unavailable";
 import {
   Card,
   CardContent,
@@ -18,6 +19,7 @@ import {
 import { listActivity } from "@/lib/admin-activity";
 import { requireAdminPage } from "@/lib/admin-page";
 import { parseActivityFilters } from "@/lib/admin-policy";
+import { SessionUnavailableError } from "@/lib/session";
 
 import { ActivityFiltersForm } from "./activity-filters";
 
@@ -30,12 +32,14 @@ const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
 });
 
 function dateTime(value: string): string {
-  return dateTimeFormatter.format(new Date(value));
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return dateTimeFormatter.format(date);
 }
 
 function metadataPreview(metadata: unknown): string {
   try {
-    const text = JSON.stringify(metadata);
+    const text = typeof metadata === "string" ? metadata : JSON.stringify(metadata);
     if (!text || text === "{}") return "—";
     return text.length > 160 ? `${text.slice(0, 160)}…` : text;
   } catch {
@@ -48,7 +52,16 @@ export default async function AdminActivityPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireAdminPage();
+  // The dashboard layout already renders a retry state when its own session
+  // lookup fails. The page performs a second lookup, so handle the same
+  // infrastructure outage here instead of letting it reach the admin error
+  // boundary (which masks it as a generic production error).
+  try {
+    await requireAdminPage();
+  } catch (error) {
+    if (error instanceof SessionUnavailableError) return <SessionUnavailable />;
+    throw error;
+  }
   const params = await searchParams;
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {

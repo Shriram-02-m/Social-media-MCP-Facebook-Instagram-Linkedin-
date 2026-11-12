@@ -56,7 +56,9 @@ export async function logActivity(
       action: entry.action,
       resourceType: entry.resourceType,
       resourceId: entry.resourceId ?? null,
-      metadata: JSON.stringify(sanitizeActivityMetadata(entry.metadata ?? {})),
+      // Pass the object through: the column is jsonb, so Drizzle serialises it
+      // exactly once. Pre-stringifying would store a JSON string literal.
+      metadata: sanitizeActivityMetadata(entry.metadata ?? {}) as Record<string, unknown>,
     });
   } catch (error) {
     console.error("[activity] failed to write activity log entry:", error instanceof Error ? error.message : error);

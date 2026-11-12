@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
-import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -75,8 +76,12 @@ export const activityLog = pgTable("activity_log", {
   action: text("action").notNull(),
   resourceType: text("resource_type").notNull(),
   resourceId: text("resource_id"),
-  metadata: text("metadata")
+  // The shared DDL (web migration 0002 and MCP migration 013) declares this
+  // column as jsonb. Declaring it as text here made reads return a parsed
+  // object and made ILIKE searches fail with `operator does not exist`.
+  metadata: jsonb("metadata")
+    .$type<Record<string, unknown>>()
     .notNull()
-    .default("{}"),
+    .default(sql`'{}'::jsonb`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

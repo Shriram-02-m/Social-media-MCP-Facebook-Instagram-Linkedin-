@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, ilike, inArray, lte, or } from "drizzle-orm";
+import { and, count, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
 
 import type { ActivityFilters } from "@/lib/admin-policy";
 import { db } from "@/lib/db";
@@ -32,11 +32,16 @@ function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (character) => `\\${character}`);
 }
 
-function parseMetadata(value: string): unknown {
+function parseMetadata(value: unknown): unknown {
+  // The pg driver already parses jsonb into an object. Tolerate string values
+  // too (for example if the column is ever text) and never let malformed
+  // legacy text take down the whole page.
+  if (value === null || value === undefined) return {};
+  if (typeof value !== "string") return value;
   try {
     return JSON.parse(value) as unknown;
   } catch {
-    return {};
+    return value;
   }
 }
 
@@ -63,7 +68,10 @@ export async function listActivity(
       ilike(activityLog.resourceId, pattern),
       ilike(activityLog.actorUserId, pattern),
       ilike(activityLog.targetUserId, pattern),
-      ilike(activityLog.metadata, pattern),
+      // metadata is jsonb, which has no ILIKE operator. Cast explicitly so the
+      // search works against the canonical JSON text instead of throwing
+      // `operator does not exist: jsonb ~~* unknown` and failing the page.
+      ilike(sql`${activityLog.metadata}::text`, pattern),
     )!);
   }
 
@@ -111,7 +119,10 @@ export async function listActivity(
         targetName: target?.name ?? null,
         targetEmail: target?.email ?? null,
         metadata: parseMetadata(row.metadata),
-        createdAt: row.createdAt.toISOString(),
+        createdAt:
+          row.createdAt instanceof Date && !Number.isNaN(row.createdAt.getTime())
+            ? row.createdAt.toISOString()
+            : "",
       };
     }),
     total: Number(totalRow?.total ?? 0),
