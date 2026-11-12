@@ -19,6 +19,22 @@ const pool = globalForDb.scheduledMediaDbPool ?? new Pool({
   keepAlive: true,
 });
 
+// `pg` emits `error` on the pool when an idle client's connection dies (for
+// example Supabase closing an idle TCP connection with ECONNRESET). Without a
+// listener that becomes an uncaughtException and takes down the server process
+// / serverless invocation. Log it and let the pool establish a replacement,
+// matching the backend pool in social-media-mcp/src/database.ts.
+pool.on("error", (error: Error & { code?: string }) => {
+  console.error(
+    JSON.stringify({
+      event: "database_pool_error",
+      code: error.code ?? "UNKNOWN",
+      message:
+        "An idle PostgreSQL connection failed; the pool will establish a replacement as needed.",
+    }),
+  );
+});
+
 if (process.env.NODE_ENV !== "production") {
   globalForDb.scheduledMediaDbPool = pool;
 }

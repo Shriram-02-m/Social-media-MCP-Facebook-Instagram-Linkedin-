@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import {
   ApprovalRequiredError,
+  SessionUnavailableError,
   requireApprovedUser,
   UnauthorizedError,
 } from "@/lib/session";
@@ -38,6 +39,11 @@ export function apiErrorResponse(error: unknown): Response {
   }
   if (error instanceof ApprovalRequiredError) {
     return Response.json({ error: error.message, code: error.code }, { status: 403 });
+  }
+  if (error instanceof SessionUnavailableError) {
+    // 503, not 500 or 401: the caller is still authenticated; the session
+    // store is temporarily unreachable. Clients may retry.
+    return Response.json({ error: error.message, code: error.code }, { status: 503 });
   }
   console.error("[api] unhandled error:", error);
   const message = error instanceof Error ? error.message : "Unexpected error.";

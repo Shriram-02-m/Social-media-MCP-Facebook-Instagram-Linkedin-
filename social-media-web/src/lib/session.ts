@@ -1,12 +1,58 @@
 import { headers } from "next/headers";
+import { unstable_rethrow } from "next/navigation";
 
 import { auth, ADMIN_ROLE, type AppUser } from "@/lib/auth";
 
 export type AdminSession = NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>;
 
+/**
+ * Thrown when the session lookup itself fails (database unreachable, connection
+ * pool exhausted, adapter error) as opposed to a session being absent, expired,
+ * or invalid. Better Auth returns `null` for those cases and only throws an
+ * `APIError` (`FAILED_TO_GET_SESSION`) when the lookup cannot be completed.
+ *
+ * Callers must not treat this as "signed out": an infrastructure outage must
+ * never silently sign a user out or render the dashboard as unauthenticated.
+ */
+export class SessionUnavailableError extends Error {
+  readonly status = 503;
+  readonly code = "SESSION_UNAVAILABLE";
+
+  constructor() {
+    super("Your session could not be verified because the authentication service is temporarily unavailable.");
+    this.name = "SessionUnavailableError";
+  }
+}
+
+// Log only non-sensitive identifying fields. The underlying database error can
+// carry the bound session token in its query parameters, so the cause is never
+// logged or forwarded to the client.
+function logSessionLookupFailure(error: unknown): void {
+  const details =
+    error instanceof Error
+      ? {
+          name: error.name,
+          message: error.message
+            .replace(/postgres(?:ql)?:\/\/[^\s"'<>]+/gi, "[database URL redacted]")
+            .slice(0, 300),
+          code: (error as { body?: { code?: unknown } }).body?.code,
+        }
+      : { name: typeof error };
+  console.error(JSON.stringify({ event: "session_lookup_failed", ...details }));
+}
+
 export async function getSession(): Promise<AdminSession | null> {
-  const result = await auth.api.getSession({ headers: await headers() });
-  return result ?? null;
+  try {
+    const result = await auth.api.getSession({ headers: await headers() });
+    return result ?? null;
+  } catch (error) {
+    // Never intercept Next.js control-flow errors (dynamic-usage from
+    // `headers()`, redirect/notFound, prerender bailouts). They must reach the
+    // framework; during `next build` they are how a route is marked dynamic.
+    unstable_rethrow(error);
+    logSessionLookupFailure(error);
+    throw new SessionUnavailableError();
+  }
 }
 
 export class UnauthorizedError extends Error {

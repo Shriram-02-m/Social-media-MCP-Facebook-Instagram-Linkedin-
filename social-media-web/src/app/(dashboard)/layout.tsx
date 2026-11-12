@@ -1,13 +1,30 @@
 import { redirect } from "next/navigation";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { SessionUnavailable } from "@/components/session-unavailable";
 import { SignOutButton } from "@/components/sign-out-button";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { getSession, readAccountState } from "@/lib/session";
+import {
+  SessionUnavailableError,
+  getSession,
+  readAccountState,
+  type AdminSession,
+} from "@/lib/session";
 
 export default async function DashboardLayout({ children }: LayoutProps<"/">) {
-  const session = await getSession();
+  let session: AdminSession | null;
+  try {
+    session = await getSession();
+  } catch (error) {
+    // A failed session lookup (database unreachable, timeout, pool exhausted)
+    // is an infrastructure outage, not an invalid session. Without this catch
+    // it escapes the layout - which the sibling `error.tsx` cannot wrap - and
+    // Next replaces the entire app with its built-in global error page. Render
+    // a retryable state instead, and never treat the outage as a logout.
+    if (error instanceof SessionUnavailableError) return <SessionUnavailable />;
+    throw error;
+  }
   if (!session) redirect("/login");
 
   // Server-side account lifecycle enforcement: pending and rejected users
