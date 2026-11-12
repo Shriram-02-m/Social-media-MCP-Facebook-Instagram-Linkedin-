@@ -438,6 +438,26 @@ describe("user-management wiring", () => {
     expect(sidebar).toMatch(/<SidebarGroupLabel>Administration<\/SidebarGroupLabel>/);
   });
 
+  it("orders Administration above Workspace for Super Admins only", () => {
+    const sidebar = readFile("src/components/app-sidebar.tsx");
+    const administration = sidebar.indexOf(
+      "<SidebarGroupLabel>Administration</SidebarGroupLabel>",
+    );
+    const workspace = sidebar.indexOf(
+      "<SidebarGroupLabel>Workspace</SidebarGroupLabel>",
+    );
+
+    expect(administration).toBeGreaterThan(-1);
+    expect(workspace).toBeGreaterThan(-1);
+    expect(administration).toBeLessThan(workspace);
+
+    // Administration is gated on isAdmin, so regular users keep a
+    // Workspace-only sidebar in its original order.
+    const adminGate = sidebar.indexOf("{isAdmin ? (");
+    expect(adminGate).toBeGreaterThan(-1);
+    expect(adminGate).toBeLessThan(administration);
+  });
+
   it("applies the shared status filter to status lists", () => {
     const lib = readFile("src/lib/admin-users.ts");
 
