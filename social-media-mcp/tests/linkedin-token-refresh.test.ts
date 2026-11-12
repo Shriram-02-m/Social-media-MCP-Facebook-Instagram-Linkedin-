@@ -119,5 +119,5 @@ test("refresh surfaces an actionable error when the resolved app is incomplete",
     clientSecret: "",
     fingerprint: "0".repeat(64),
   });
-  await assert.rejects(linkedinTokenForUse(OWNER, resolver), /Configure them in Developer App Settings/);
+  await assert.rejects(linkedinTokenForUse(OWNER, resolver), /Configure them on the Accounts page/);
 });

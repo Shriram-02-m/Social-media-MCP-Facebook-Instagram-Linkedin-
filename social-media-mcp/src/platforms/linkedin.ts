@@ -36,7 +36,7 @@ export async function linkedinTokenForUse(
   // configured their own app gets that app; everyone else keeps the shared app.
   const credentials = await resolveCredentials(ownerId);
   if (!credentials.clientId || !credentials.clientSecret) {
-    throw new Error("LinkedIn token refresh requires the LinkedIn app client ID and secret. Configure them in Developer App Settings, or set LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET for the shared app.");
+    throw new Error("LinkedIn token refresh requires the LinkedIn app client ID and secret. Configure them on the Accounts page, or set LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET for the shared app.");
   }
   const inFlight = refreshInFlight.get(ownerId);
   if (inFlight) return inFlight;

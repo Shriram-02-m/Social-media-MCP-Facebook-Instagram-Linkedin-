@@ -118,7 +118,7 @@ function safeErrorMessage(error: unknown): string {
 function requireClientSecret(credentials: ResolvedAppCredentials, provider: string): void {
   if (credentials.clientSecret) return;
   if (credentials.source === "user") {
-    throw new Error(`Your saved ${provider} app secret could not be read on this server. Re-save it in Developer App Settings, or check APP_CREDENTIAL_ENCRYPTION_KEY.`);
+    throw new Error(`Your saved ${provider} app secret could not be read on this server. Re-save it on the Accounts page, or check APP_CREDENTIAL_ENCRYPTION_KEY.`);
   }
   throw new Error(`Set the shared ${provider} app secret environment variable before completing this authorization.`);
 }
@@ -312,14 +312,14 @@ export function validateAuthorizationConfiguration(platform: Platform, credentia
   const cloud = config.oauthCallbackMode === "cloud";
   if (!credentials.clientId) {
     throw new Error(credentials.source === "user"
-      ? `Your saved ${appLabel(platform)} app/client ID is missing. Re-save it in Developer App Settings.`
+      ? `Your saved ${appLabel(platform)} app/client ID is missing. Re-save it on the Accounts page.`
       : `Set the shared ${appLabel(platform)} app/client ID before connecting.`);
   }
   // In cloud mode the secret is only needed by the worker that runs the code
   // exchange, never by the request that builds the consent URL.
   if (!cloud && !credentials.clientSecret) {
     throw new Error(credentials.source === "user"
-      ? `Your saved ${appLabel(platform)} app secret is not available on this server. Re-save it in Developer App Settings.`
+      ? `Your saved ${appLabel(platform)} app secret is not available on this server. Re-save it on the Accounts page.`
       : `Set the shared ${appLabel(platform)} app secret before connecting.`);
   }
   const redirectUri = oauthCallbackUrl(platform);
