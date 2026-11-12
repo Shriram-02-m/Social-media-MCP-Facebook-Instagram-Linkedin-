@@ -342,6 +342,35 @@ describe("social account monitoring", () => {
     expect(page).toMatch(/Last sync/);
     expect(page).toMatch(/Token expiry/);
   });
+
+  it("groups connections by owner id before paginating", () => {
+    expect(social).toMatch(/groupConnectionsByOwner\(filtered\)/);
+    expect(social).toMatch(/filteredUsers: ownerRows\.length/);
+    // Statistics keep counting individual connections, not unique owners.
+    expect(social).toMatch(/totalConnections: allRows\.length/);
+    expect(social).toMatch(/filteredConnections: filtered\.length/);
+  });
+
+  it("renders one row per owner with platform details in every column", () => {
+    expect(page).toMatch(/result\.rows\.map\(\(row\) => \(/);
+    expect(page).toMatch(/key=\{row\.userId\}/);
+    expect(page).toMatch(/row\.connections\.map/);
+    expect(page).toMatch(/total=\{result\.filteredUsers\}/);
+    expect(page).toMatch(/table-fixed/);
+    expect(page).toMatch(/<colgroup>/);
+
+    for (const column of [
+      "Owner",
+      "Platform",
+      "Connected account",
+      "Status",
+      "Last sync",
+      "Token expiry",
+      "Last error",
+    ]) {
+      expect(page).toContain(`>${column}<`);
+    }
+  });
 });
 
 describe("global scheduler", () => {

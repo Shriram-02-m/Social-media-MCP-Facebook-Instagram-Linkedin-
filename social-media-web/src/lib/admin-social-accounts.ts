@@ -5,34 +5,26 @@ import type {
   SocialAccountFilters,
   SocialAccountStatus,
 } from "@/lib/admin-policy";
+import {
+  groupConnectionsByOwner,
+  type AdminSocialConnectionRow,
+  type AdminSocialOwnerRow,
+} from "@/lib/admin-social-grouping";
 import { loadTokenMetadata } from "@/lib/backend";
 import { db, pool } from "@/lib/db";
 import { user } from "@/lib/db/schema";
 
-export interface AdminSocialConnectionRow {
-  userId: string;
-  userName: string;
-  userEmail: string;
-  userStatus: "pending" | "approved" | "rejected" | "suspended" | "deleted";
-  platform: AdminPlatform;
-  status: SocialAccountStatus;
-  accountName: string | null;
-  accountId: string | null;
-  expiresAt: string | null;
-  expired: boolean;
-  scopes: string[];
-  pageCount: number;
-  connectedAt: string | null;
-  lastSyncAt: string | null;
-  lastError: string | null;
-  lastErrorAt: string | null;
-}
+export { groupConnectionsByOwner };
+export type { AdminSocialConnectionRow, AdminSocialOwnerRow };
 
 export interface AdminSocialAccountsResult {
-  rows: AdminSocialConnectionRow[];
+  /** One entry per unique owner for the current page. */
+  rows: AdminSocialOwnerRow[];
   totalConnections: number;
   filteredConnections: number;
   totalUsers: number;
+  /** Unique owners remaining after platform/status filters; drives pagination. */
+  filteredUsers: number;
   counts: Record<SocialAccountStatus, number>;
   page: number;
   pageSize: number;
@@ -193,11 +185,17 @@ export async function listSocialAccounts(
     return true;
   });
 
+  // Filtering happens per connection, then the surviving connections are
+  // grouped by owner. Pagination is applied to owners so a user's platforms
+  // are never split across pages.
+  const ownerRows = groupConnectionsByOwner(filtered);
+
   return {
-    rows: filtered.slice(filters.offset, filters.offset + filters.pageSize),
+    rows: ownerRows.slice(filters.offset, filters.offset + filters.pageSize),
     totalConnections: allRows.length,
     filteredConnections: filtered.length,
     totalUsers: users.length,
+    filteredUsers: ownerRows.length,
     counts,
     page: filters.page,
     pageSize: filters.pageSize,
