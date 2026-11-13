@@ -290,33 +290,6 @@ export default async function AdminSocialAccountsPage({
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card>
-          <CardHeader>
-            <CardDescription>Total connections</CardDescription>
-            <CardTitle className="text-2xl">{result.totalConnections}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Connected</CardDescription>
-            <CardTitle className="text-2xl">{result.counts.connected}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Expired</CardDescription>
-            <CardTitle className="text-2xl">{result.counts.expired}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Errors</CardDescription>
-            <CardTitle className="text-2xl">{result.counts.error}</CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
-
       <Card>
         <CardHeader>
           <CardTitle>Connections</CardTitle>
