@@ -3,6 +3,7 @@ import {
   BadgeCheck,
   CalendarClock,
   ChevronRight,
+  FileDown,
   Link2,
   LockKeyhole,
   Monitor,
@@ -264,13 +265,34 @@ export default async function AdminSettingsPage() {
       {/* Informational reference: intentionally quieter than the editable
           settings above so the two groups read differently at a glance. */}
       <section aria-label="Administration reference" className="flex flex-col gap-3">
-        <div className="flex flex-col gap-0.5">
-          <h2 className="text-sm font-medium">How this console protects your account</h2>
-          <p className="text-xs text-muted-foreground">
-            Reference only — these policies are enforced by the server and
-            cannot be changed here.
-          </p>
-        </div>
+        <a
+          href="/Social-Console-Security-Guide.pdf"
+          download="Social-Console-Security-Guide.pdf"
+          className="-mx-2 flex items-start gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+        >
+          <span
+            className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300"
+            aria-hidden="true"
+          >
+            <FileDown className="size-4" />
+          </span>
+          <span className="flex flex-col gap-0.5">
+            <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
+              How this console protects your account
+              <Badge
+                variant="secondary"
+                className="text-[10px] font-semibold uppercase tracking-wide"
+              >
+                PDF
+              </Badge>
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Read our security and account protection guide (PDF) — it downloads
+              automatically. Reference only: these policies are enforced by the
+              server and cannot be changed here.
+            </span>
+          </span>
+        </a>
         <div className="grid gap-4 md:grid-cols-2">
           <ReferenceCard
             title="Signed-in administrator"

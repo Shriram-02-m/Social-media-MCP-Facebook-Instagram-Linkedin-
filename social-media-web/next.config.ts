@@ -9,6 +9,23 @@ const monorepoRoot = path.resolve(process.cwd(), "..");
 const nextConfig: NextConfig = {
   cacheComponents: false,
   serverExternalPackages: ["pg"],
+  // Serve the pre-generated security guide as a download, not inline. The
+  // settings page link also carries a `download` attribute; this header makes
+  // direct navigation (or a shared URL) behave identically.
+  async headers() {
+    return [
+      {
+        source: "/Social-Console-Security-Guide.pdf",
+        headers: [
+          { key: "Content-Type", value: "application/pdf" },
+          {
+            key: "Content-Disposition",
+            value: 'attachment; filename="Social-Console-Security-Guide.pdf"',
+          },
+        ],
+      },
+    ];
+  },
   // Next's file tracing defaults to the project directory and misses files
   // outside it. Runtime-read files (see below) must be named explicitly.
   outputFileTracingRoot: monorepoRoot,

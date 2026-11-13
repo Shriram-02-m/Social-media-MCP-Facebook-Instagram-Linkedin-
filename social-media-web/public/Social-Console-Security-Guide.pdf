@@ -1,0 +1,442 @@
+%PDF-1.7
+%âãÏÓ
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R /Outlines 32 0 R /PageMode /UseOutlines >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [8 0 R 10 0 R 12 0 R 14 0 R 16 0 R 18 0 R 20 0 R 22 0 R 24 0 R] /Count 9 /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Title (Social Console - Security & Account Protection Guide) /Author (Social Console) /Subject (How the Social Console protects accounts, authentication, sessions, social connections, publishing, and data) /Creator (Social Console) /Producer (Social Console security guide generator) >>
+endobj
+7 0 obj
+<< /Length 1332 >>
+stream
+0.145 0.388 0.922 rg 0.00 834.89 595.28 7.00 re f
+0.145 0.388 0.922 rg 64.00 692.00 52.00 52.00 re f
+BT /F2 20 Tf 1 1 1 rg 0.5 Tc 77.50 710.00 Td (SC) Tj ET
+BT /F2 10 Tf 0.145 0.388 0.922 rg 2.2 Tc 64.00 662.00 Td (SOCIAL CONSOLE) Tj ET
+BT /F2 34 Tf 0.067 0.094 0.153 rg 64.00 604.00 Td (Security & Account) Tj ET
+BT /F2 34 Tf 0.067 0.094 0.153 rg 64.00 564.00 Td (Protection Guide) Tj ET
+0.145 0.388 0.922 rg 64.00 538.00 40.00 3.00 re f
+BT /F1 11.5 Tf 0.420 0.447 0.502 rg 64.00 508.00 Td (Understanding how your account, data, authentication, and publishing activities) Tj ET
+BT /F1 11.5 Tf 0.420 0.447 0.502 rg 64.00 491.00 Td (are protected.) Tj ET
+BT /F1 9.5 Tf 0.420 0.447 0.502 rg 64.00 466.00 Td (This guide describes the protections implemented in the Social Console admin application and its) Tj ET
+BT /F1 9.5 Tf 0.420 0.447 0.502 rg 64.00 452.00 Td (publishing worker. Sections marked 'Enforced by the application' describe server-side behavior.) Tj ET
+BT /F1 9.5 Tf 0.420 0.447 0.502 rg 64.00 438.00 Td (Section 7 lists recommended administrator practices, which are marked separately.) Tj ET
+0.898 0.906 0.922 RG 0.8 w 64.00 92.00 m 531.28 92.00 l S
+BT /F1 8 Tf 0.420 0.447 0.502 rg 64.00 78.00 Td (Document version 1.0) Tj ET
+BT /F1 8 Tf 0.420 0.447 0.502 rg 408.58 78.00 Td (Social-Console-Security-Guide.pdf) Tj ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 7 0 R >>
+endobj
+9 0 obj
+<< /Length 2537 >>
+stream
+BT /F2 20 Tf 0.067 0.094 0.153 rg 64.00 780.00 Td (Contents) Tj ET
+0.145 0.388 0.922 rg 64.00 766.00 40.00 3.00 re f
+BT /F1 11 Tf 0.067 0.094 0.153 rg 64.00 728.00 Td (1.  Account Security) Tj ET
+BT /F1 11 Tf 0.420 0.447 0.502 rg 525.16 728.00 Td (3) Tj ET
+0.898 0.906 0.922 RG 0.6 w 171.82 731.20 m 515.16 731.20 l S
+BT /F1 11 Tf 0.067 0.094 0.153 rg 64.00 701.00 Td (2.  Authentication & Password Protection) Tj ET
+BT /F1 11 Tf 0.420 0.447 0.502 rg 525.16 701.00 Td (4) Tj ET
+0.898 0.906 0.922 RG 0.6 w 273.32 704.20 m 515.16 704.20 l S
+BT /F1 11 Tf 0.067 0.094 0.153 rg 64.00 674.00 Td (3.  Session Management) Tj ET
+BT /F1 11 Tf 0.420 0.447 0.502 rg 525.16 674.00 Td (5) Tj ET
+0.898 0.906 0.922 RG 0.6 w 195.67 677.20 m 515.16 677.20 l S
+BT /F1 11 Tf 0.067 0.094 0.153 rg 64.00 647.00 Td (4.  Social Account & OAuth Security) Tj ET
+BT /F1 11 Tf 0.420 0.447 0.502 rg 525.16 647.00 Td (6) Tj ET
+0.898 0.906 0.922 RG 0.6 w 249.47 650.20 m 515.16 650.20 l S
+BT /F1 11 Tf 0.067 0.094 0.153 rg 64.00 620.00 Td (5.  Publishing Safety) Tj ET
+BT /F1 11 Tf 0.420 0.447 0.502 rg 525.16 620.00 Td (7) Tj ET
+0.898 0.906 0.922 RG 0.6 w 174.28 623.20 m 515.16 623.20 l S
+BT /F1 11 Tf 0.067 0.094 0.153 rg 64.00 593.00 Td (6.  Data Protection & Privacy) Tj ET
+BT /F1 11 Tf 0.420 0.447 0.502 rg 525.16 593.00 Td (8) Tj ET
+0.898 0.906 0.922 RG 0.6 w 214.61 596.20 m 515.16 596.20 l S
+BT /F1 11 Tf 0.067 0.094 0.153 rg 64.00 566.00 Td (7.  Administrative Responsibilities) Tj ET
+BT /F1 11 Tf 0.420 0.447 0.502 rg 525.16 566.00 Td (9) Tj ET
+0.898 0.906 0.922 RG 0.6 w 237.82 569.20 m 515.16 569.20 l S
+BT /F2 12 Tf 0.067 0.094 0.153 rg 64.00 533.00 Td (About this guide) Tj ET
+BT /F1 9.5 Tf 0.420 0.447 0.502 rg 64.00 517.00 Td (This document is generated from the Social Console project and describes behavior that is implemented and) Tj ET
+BT /F1 9.5 Tf 0.420 0.447 0.502 rg 64.00 503.00 Td (enforced in the admin web application and its publishing worker. It contains no credentials, tokens, or private) Tj ET
+BT /F1 9.5 Tf 0.420 0.447 0.502 rg 64.00 489.00 Td (account data.) Tj ET
+BT /F2 7 Tf 0.145 0.388 0.922 rg 1.4 Tc 64.00 813.00 Td (SOCIAL CONSOLE) Tj ET
+BT /F1 7 Tf 0.420 0.447 0.502 rg 365.16 813.00 Td (Social Console - Security & Account Protection Guide) Tj ET
+0.898 0.906 0.922 RG 0.6 w 64.00 806.00 m 531.28 806.00 l S
+0.898 0.906 0.922 RG 0.6 w 64.00 52.00 m 531.28 52.00 l S
+BT /F1 7 Tf 0.420 0.447 0.502 rg 64.00 40.00 Td (Social-Console-Security-Guide.pdf) Tj ET
+BT /F1 7 Tf 0.420 0.447 0.502 rg 495.47 40.00 Td (Page 2 of 9) Tj ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 9 0 R >>
+endobj
+11 0 obj
+<< /Length 3438 >>
+stream
+BT /F2 8 Tf 0.145 0.388 0.922 rg 1.8 Tc 64.00 780.00 Td (SECTION 1) Tj ET
+BT /F2 21 Tf 0.067 0.094 0.153 rg 64.00 756.00 Td (Account Security) Tj ET
+0.145 0.388 0.922 rg 64.00 742.00 34.00 2.50 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 64.00 716.00 Td (Social Console is administered by a single administrator account: the Super Admin. The protections in) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 64.00 701.00 Td (this section are built into the application and its database schema, so they hold without any optional) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 64.00 686.00 Td (configuration.) Tj ET
+BT /F2 13 Tf 0.067 0.094 0.153 rg 64.00 651.00 Td (What is enforced) Tj ET
+0.145 0.388 0.922 rg 65.50 647.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 645.00 Td (Only one Super Admin account can exist. A database-level unique index on the administrator role) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 630.50 Td (prevents a second admin account from ever being created.) Tj ET
+0.145 0.388 0.922 rg 65.50 615.10 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 612.50 Td (New registrations do not receive access automatically. Every new account starts in a pending state) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 598.00 Td (and must be approved by the Super Admin before it can sign in.) Tj ET
+0.145 0.388 0.922 rg 65.50 582.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 580.00 Td (Suspended and deleted accounts cannot use the application. When an account is suspended or) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 565.50 Td (soft-deleted, its sessions are revoked and its scheduled posts are held so nothing is published on its) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 551.00 Td (behalf.) Tj ET
+0.145 0.388 0.922 rg 65.50 535.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 533.00 Td (The Super Admin account cannot be suspended, deleted, or downgraded. Safeguards protect the) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 518.50 Td (only account able to administer the console.) Tj ET
+0.145 0.388 0.922 rg 65.50 503.10 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 500.50 Td (Admin privileges are verified server-side on every request. The role is never trusted from the browser:) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 486.00 Td (admin pages and admin APIs re-check the live session and the account state before doing any work.) Tj ET
+0.937 0.965 1 rg 64.00 412.00 467.28 61.00 re f
+0.145 0.388 0.922 rg 64.00 412.00 3.00 61.00 re f
+BT /F2 9 Tf 0.067 0.094 0.153 rg 78.00 458.00 Td (Enforced by the application) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 78.00 445.00 Td (Everything in this section is enforced by the server and the database. No administrator action is required) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 78.00 431.50 Td (to keep these protections active.) Tj ET
+BT /F3 9 Tf 0.420 0.447 0.502 rg 64.00 396.00 Td (Administrative changes to individual user accounts are made from the Users pages, not from Settings.) Tj ET
+BT /F2 7 Tf 0.145 0.388 0.922 rg 1.4 Tc 64.00 813.00 Td (SOCIAL CONSOLE) Tj ET
+BT /F1 7 Tf 0.420 0.447 0.502 rg 478.76 813.00 Td (Account Security) Tj ET
+0.898 0.906 0.922 RG 0.6 w 64.00 806.00 m 531.28 806.00 l S
+0.898 0.906 0.922 RG 0.6 w 64.00 52.00 m 531.28 52.00 l S
+BT /F1 7 Tf 0.420 0.447 0.502 rg 64.00 40.00 Td (Social-Console-Security-Guide.pdf) Tj ET
+BT /F1 7 Tf 0.420 0.447 0.502 rg 495.47 40.00 Td (Page 3 of 9) Tj ET
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 11 0 R >>
+endobj
+13 0 obj
+<< /Length 4606 >>
+stream
+BT /F2 8 Tf 0.145 0.388 0.922 rg 1.8 Tc 64.00 780.00 Td (SECTION 2) Tj ET
+BT /F2 21 Tf 0.067 0.094 0.153 rg 64.00 756.00 Td (Authentication & Password Protection) Tj ET
+0.145 0.388 0.922 rg 64.00 742.00 34.00 2.50 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 64.00 716.00 Td (Authentication is provided by Better Auth. Passwords are stored only in hashed form and are verified by) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 64.00 701.00 Td (the authentication library at sign-in. Plain-text passwords are never persisted, displayed, or returned by) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 64.00 686.00 Td (an API.) Tj ET
+BT /F2 13 Tf 0.067 0.094 0.153 rg 64.00 651.00 Td (Password requirements) Tj ET
+0.145 0.388 0.922 rg 65.50 647.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 645.00 Td (A password must be at least 12 characters long \(up to 128\).) Tj ET
+0.145 0.388 0.922 rg 65.50 629.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 627.00 Td (It must contain characters from at least three of these four classes: lowercase letters, uppercase) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 612.50 Td (letters, numbers, and symbols.) Tj ET
+0.145 0.388 0.922 rg 65.50 597.10 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 594.50 Td (The rules are checked instantly in the settings form and are validated again on the server before any) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 580.00 Td (password change is accepted.) Tj ET
+BT /F2 13 Tf 0.067 0.094 0.153 rg 64.00 550.00 Td (Changing your password) Tj ET
+0.145 0.388 0.922 rg 65.50 546.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 544.00 Td (Changing the password requires your current password, so a stolen unlocked browser alone is not) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 529.50 Td (enough.) Tj ET
+0.145 0.388 0.922 rg 65.50 514.10 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 511.50 Td (Better Auth performs the update and revokes every other signed-in session in the same operation, so) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 497.00 Td (a password change immediately signs out unknown devices.) Tj ET
+0.145 0.388 0.922 rg 65.50 481.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 479.00 Td (The change is recorded in the activity infrastructure as an administrative security event.) Tj ET
+BT /F2 13 Tf 0.067 0.094 0.153 rg 64.00 449.00 Td (Email one-time codes) Tj ET
+0.145 0.388 0.922 rg 65.50 445.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 443.00 Td (Where email verification is configured, the console uses 6-digit one-time codes that expire after 5) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 428.50 Td (minutes, allow at most 3 attempts, and enforce a 60-second cooldown between resend requests.) Tj ET
+0.145 0.388 0.922 rg 65.50 413.10 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 410.50 Td (One-time codes are stored in hashed form and are never written to logs or audit metadata.) Tj ET
+0.145 0.388 0.922 rg 65.50 395.10 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 392.50 Td (Codes are delivered by email through the configured transport \(Resend or a generic HTTPS delivery) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 378.00 Td (webhook\). Delivery failures are deliberately indistinguishable from an unknown email address, so) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 363.50 Td (responses do not reveal whether an account exists.) Tj ET
+0.145 0.388 0.922 rg 65.50 348.10 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 345.50 Td (Completing a password reset through a one-time code revokes every existing session once the new) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 331.00 Td (password is set.) Tj ET
+0.937 0.965 1 rg 64.00 257.00 467.28 61.00 re f
+0.145 0.388 0.922 rg 64.00 257.00 3.00 61.00 re f
+BT /F2 9 Tf 0.067 0.094 0.153 rg 78.00 303.00 Td (Enforced by the application) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 78.00 290.00 Td (Password rules, hashed credential storage, one-time-code limits, and session revocation on password) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 78.00 276.50 Td (changes and resets are all enforced server-side.) Tj ET
+BT /F2 7 Tf 0.145 0.388 0.922 rg 1.4 Tc 64.00 813.00 Td (SOCIAL CONSOLE) Tj ET
+BT /F1 7 Tf 0.420 0.447 0.502 rg 414.17 813.00 Td (Authentication & Password Protection) Tj ET
+0.898 0.906 0.922 RG 0.6 w 64.00 806.00 m 531.28 806.00 l S
+0.898 0.906 0.922 RG 0.6 w 64.00 52.00 m 531.28 52.00 l S
+BT /F1 7 Tf 0.420 0.447 0.502 rg 64.00 40.00 Td (Social-Console-Security-Guide.pdf) Tj ET
+BT /F1 7 Tf 0.420 0.447 0.502 rg 495.47 40.00 Td (Page 4 of 9) Tj ET
+endstream
+endobj
+14 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 13 0 R >>
+endobj
+15 0 obj
+<< /Length 2924 >>
+stream
+BT /F2 8 Tf 0.145 0.388 0.922 rg 1.8 Tc 64.00 780.00 Td (SECTION 3) Tj ET
+BT /F2 21 Tf 0.067 0.094 0.153 rg 64.00 756.00 Td (Session Management) Tj ET
+0.145 0.388 0.922 rg 64.00 742.00 34.00 2.50 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 64.00 716.00 Td (Every sign-in creates an independent server-side session. The browser only holds a signed session) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 64.00 701.00 Td (cookie; the session record itself lives in the database and can be inspected and revoked from Settings.) Tj ET
+0.145 0.388 0.922 rg 65.50 680.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 678.00 Td (Sessions expire after 7 days, and end earlier when you sign out, change your password, or complete) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 663.50 Td (a password reset.) Tj ET
+0.145 0.388 0.922 rg 65.50 648.10 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 645.50 Td (The Active sessions list in Settings shows every browser currently signed in, with the device and) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 631.00 Td (browser, the last active time, and the expiration time.) Tj ET
+0.145 0.388 0.922 rg 65.50 615.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 613.00 Td (Your current device is marked as the current session so you can tell it apart from other devices at a) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 598.50 Td (glance.) Tj ET
+0.145 0.388 0.922 rg 65.50 583.10 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 580.50 Td (The Sign out other sessions action revokes every session except the one you are using, after a) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 566.00 Td (confirmation step.) Tj ET
+0.145 0.388 0.922 rg 65.50 550.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 548.00 Td (Every request re-validates the session server-side. A revoked or expired session is rejected) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 533.50 Td (immediately, even if the browser still holds the cookie.) Tj ET
+0.937 0.965 1 rg 64.00 459.50 467.28 61.00 re f
+0.145 0.388 0.922 rg 64.00 459.50 3.00 61.00 re f
+BT /F2 9 Tf 0.067 0.094 0.153 rg 78.00 505.50 Td (Enforced by the application) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 78.00 492.50 Td (Session creation, expiration, server-side validation, and revocation are handled by the authentication) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 78.00 479.00 Td (library and verified on every admin request. Session tokens are never displayed in the dashboard.) Tj ET
+BT /F2 7 Tf 0.145 0.388 0.922 rg 1.4 Tc 64.00 813.00 Td (SOCIAL CONSOLE) Tj ET
+BT /F1 7 Tf 0.420 0.447 0.502 rg 463.58 813.00 Td (Session Management) Tj ET
+0.898 0.906 0.922 RG 0.6 w 64.00 806.00 m 531.28 806.00 l S
+0.898 0.906 0.922 RG 0.6 w 64.00 52.00 m 531.28 52.00 l S
+BT /F1 7 Tf 0.420 0.447 0.502 rg 64.00 40.00 Td (Social-Console-Security-Guide.pdf) Tj ET
+BT /F1 7 Tf 0.420 0.447 0.502 rg 495.47 40.00 Td (Page 5 of 9) Tj ET
+endstream
+endobj
+16 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 15 0 R >>
+endobj
+17 0 obj
+<< /Length 2881 >>
+stream
+BT /F2 8 Tf 0.145 0.388 0.922 rg 1.8 Tc 64.00 780.00 Td (SECTION 4) Tj ET
+BT /F2 21 Tf 0.067 0.094 0.153 rg 64.00 756.00 Td (Social Account & OAuth Security) Tj ET
+0.145 0.388 0.922 rg 64.00 742.00 34.00 2.50 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 64.00 716.00 Td (Publishing works through social accounts that you connect from Facebook, Instagram, and LinkedIn.) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 64.00 701.00 Td (Connections are authorized with OAuth: you approve access on the provider's site, and the console never) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 64.00 686.00 Td (sees your social network password.) Tj ET
+0.145 0.388 0.922 rg 65.50 665.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 663.00 Td (OAuth access tokens and refresh tokens are encrypted with AES-256-GCM before they are stored.) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 648.50 Td (The encryption key is held in server-side environment configuration and is never written to the) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 634.00 Td (database.) Tj ET
+0.145 0.388 0.922 rg 65.50 618.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 616.00 Td (Tokens and app credentials are never displayed in the dashboard and are never returned by an API) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 601.50 Td (response.) Tj ET
+0.145 0.388 0.922 rg 65.50 586.10 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 583.50 Td (Only non-secret connection metadata, such as the account or page name, the platform, and the) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 569.00 Td (connection status, is shown in the console.) Tj ET
+0.145 0.388 0.922 rg 65.50 553.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 551.00 Td (Expired or invalid connections fail safely. A publish attempt against a bad connection fails and is) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 536.50 Td (recorded instead of silently continuing; the account can then be reconnected.) Tj ET
+0.937 0.965 1 rg 64.00 462.50 467.28 61.00 re f
+0.145 0.388 0.922 rg 64.00 462.50 3.00 61.00 re f
+BT /F2 9 Tf 0.067 0.094 0.153 rg 78.00 508.50 Td (Enforced by the application) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 78.00 495.50 Td (Encryption of social tokens at rest and the omission of secrets from every dashboard and API response) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 78.00 482.00 Td (are implemented in the publishing worker and its credential store.) Tj ET
+BT /F2 7 Tf 0.145 0.388 0.922 rg 1.4 Tc 64.00 813.00 Td (SOCIAL CONSOLE) Tj ET
+BT /F1 7 Tf 0.420 0.447 0.502 rg 429.35 813.00 Td (Social Account & OAuth Security) Tj ET
+0.898 0.906 0.922 RG 0.6 w 64.00 806.00 m 531.28 806.00 l S
+0.898 0.906 0.922 RG 0.6 w 64.00 52.00 m 531.28 52.00 l S
+BT /F1 7 Tf 0.420 0.447 0.502 rg 64.00 40.00 Td (Social-Console-Security-Guide.pdf) Tj ET
+BT /F1 7 Tf 0.420 0.447 0.502 rg 495.47 40.00 Td (Page 6 of 9) Tj ET
+endstream
+endobj
+18 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 17 0 R >>
+endobj
+19 0 obj
+<< /Length 2941 >>
+stream
+BT /F2 8 Tf 0.145 0.388 0.922 rg 1.8 Tc 64.00 780.00 Td (SECTION 5) Tj ET
+BT /F2 21 Tf 0.067 0.094 0.153 rg 64.00 756.00 Td (Publishing Safety) Tj ET
+0.145 0.388 0.922 rg 64.00 742.00 34.00 2.50 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 64.00 716.00 Td (Scheduling is backed by PostgreSQL. The publishing worker claims due posts with row-level locks so) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 64.00 701.00 Td (that a post is processed by exactly one worker, exactly once.) Tj ET
+0.145 0.388 0.922 rg 65.50 680.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 678.00 Td (Due posts are claimed with SELECT ... FOR UPDATE SKIP LOCKED. The row lock makes duplicate) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 663.50 Td (publishing impossible, even if several workers run at the same time.) Tj ET
+0.145 0.388 0.922 rg 65.50 648.10 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 645.50 Td (The claim query refuses posts that belong to suspended or deleted accounts. This hold is enforced at) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 631.00 Td (the database level, so a suspension and a worker claim cannot race each other.) Tj ET
+0.145 0.388 0.922 rg 65.50 615.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 613.00 Td (Held posts stay held until an administrator resumes them. Resuming an overdue held post is blocked;) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 598.50 Td (the post must be rescheduled instead of being published immediately, which prevents surprise) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 584.00 Td (duplicate or late publishing.) Tj ET
+0.145 0.388 0.922 rg 65.50 568.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 566.00 Td (Every create, hold, resume, retry, publish, and failure is recorded in the activity infrastructure with a) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 551.50 Td (scheduled_post action.) Tj ET
+0.937 0.965 1 rg 64.00 477.50 467.28 61.00 re f
+0.145 0.388 0.922 rg 64.00 477.50 3.00 61.00 re f
+BT /F2 9 Tf 0.067 0.094 0.153 rg 78.00 523.50 Td (Enforced by the application) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 78.00 510.50 Td (Row-level claim locking, account-state enforcement, hold behavior, and audit logging of publishing) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 78.00 497.00 Td (actions are part of the scheduler's core transaction logic.) Tj ET
+BT /F3 9 Tf 0.420 0.447 0.502 rg 64.00 461.50 Td (Administrators can review every scheduled post, including held and failed ones, from the Scheduler page.) Tj ET
+BT /F2 7 Tf 0.145 0.388 0.922 rg 1.4 Tc 64.00 813.00 Td (SOCIAL CONSOLE) Tj ET
+BT /F1 7 Tf 0.420 0.447 0.502 rg 477.20 813.00 Td (Publishing Safety) Tj ET
+0.898 0.906 0.922 RG 0.6 w 64.00 806.00 m 531.28 806.00 l S
+0.898 0.906 0.922 RG 0.6 w 64.00 52.00 m 531.28 52.00 l S
+BT /F1 7 Tf 0.420 0.447 0.502 rg 64.00 40.00 Td (Social-Console-Security-Guide.pdf) Tj ET
+BT /F1 7 Tf 0.420 0.447 0.502 rg 495.47 40.00 Td (Page 7 of 9) Tj ET
+endstream
+endobj
+20 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 19 0 R >>
+endobj
+21 0 obj
+<< /Length 2852 >>
+stream
+BT /F2 8 Tf 0.145 0.388 0.922 rg 1.8 Tc 64.00 780.00 Td (SECTION 6) Tj ET
+BT /F2 21 Tf 0.067 0.094 0.153 rg 64.00 756.00 Td (Data Protection & Privacy) Tj ET
+0.145 0.388 0.922 rg 64.00 742.00 34.00 2.50 re f
+0.145 0.388 0.922 rg 65.50 718.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 716.00 Td (Sensitive values such as social tokens, OAuth secrets, and passwords are never displayed in the) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 701.50 Td (dashboard and are never returned by an admin API.) Tj ET
+0.145 0.388 0.922 rg 65.50 686.10 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 683.50 Td (Social account tokens remain encrypted at rest with AES-256-GCM.) Tj ET
+0.145 0.388 0.922 rg 65.50 668.10 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 665.50 Td (Activity metadata is sanitized before it is stored. Passwords, tokens, secrets, and encryption keys) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 651.00 Td (never enter activity records.) Tj ET
+0.145 0.388 0.922 rg 65.50 635.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 633.00 Td (Every admin API request verifies the Super Admin session server-side before it processes data.) Tj ET
+0.145 0.388 0.922 rg 65.50 617.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 615.00 Td (Database access runs server-side through an authorized service connection. An optional hardening) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 600.50 Td (migration additionally enables row-level security on the scheduling and authentication tables and) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 586.00 Td (revokes direct browser-facing access to them.) Tj ET
+0.145 0.388 0.922 rg 65.50 570.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 568.00 Td (Deleting a user is a soft delete that preserves audit history, and account relationships are protected) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 553.50 Td (by database foreign keys.) Tj ET
+0.937 0.965 1 rg 64.00 479.50 467.28 61.00 re f
+0.145 0.388 0.922 rg 64.00 479.50 3.00 61.00 re f
+BT /F2 9 Tf 0.067 0.094 0.153 rg 78.00 525.50 Td (Enforced by the application) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 78.00 512.50 Td (Sanitization, encryption, server-side authorization, and audit-preserving deletion are implemented in the) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 78.00 499.00 Td (application code and reviewed by the automated test suite.) Tj ET
+BT /F2 7 Tf 0.145 0.388 0.922 rg 1.4 Tc 64.00 813.00 Td (SOCIAL CONSOLE) Tj ET
+BT /F1 7 Tf 0.420 0.447 0.502 rg 451.53 813.00 Td (Data Protection & Privacy) Tj ET
+0.898 0.906 0.922 RG 0.6 w 64.00 806.00 m 531.28 806.00 l S
+0.898 0.906 0.922 RG 0.6 w 64.00 52.00 m 531.28 52.00 l S
+BT /F1 7 Tf 0.420 0.447 0.502 rg 64.00 40.00 Td (Social-Console-Security-Guide.pdf) Tj ET
+BT /F1 7 Tf 0.420 0.447 0.502 rg 495.47 40.00 Td (Page 8 of 9) Tj ET
+endstream
+endobj
+22 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 21 0 R >>
+endobj
+23 0 obj
+<< /Length 3093 >>
+stream
+BT /F2 8 Tf 0.145 0.388 0.922 rg 1.8 Tc 64.00 780.00 Td (SECTION 7) Tj ET
+BT /F2 21 Tf 0.067 0.094 0.153 rg 64.00 756.00 Td (Administrative Responsibilities) Tj ET
+0.145 0.388 0.922 rg 64.00 742.00 34.00 2.50 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 64.00 716.00 Td (Most protections described in this guide run automatically. A smaller set of good practices depends on) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 64.00 701.00 Td (you as the administrator. These are recommendations, not enforced features.) Tj ET
+BT /F2 13 Tf 0.067 0.094 0.153 rg 64.00 666.00 Td (Recommended practices) Tj ET
+0.145 0.388 0.922 rg 65.50 662.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 660.00 Td (Use a strong, unique administrator password that meets the console minimum of 12 characters with) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 645.50 Td (three of four character types, and do not reuse it on other services.) Tj ET
+0.145 0.388 0.922 rg 65.50 630.10 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 627.50 Td (Never share administrator credentials or one-time codes with anyone. No legitimate support process) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 613.00 Td (will ask for them.) Tj ET
+0.145 0.388 0.922 rg 65.50 597.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 595.00 Td (Sign out other sessions from Settings when a device is lost, replaced, or no longer used.) Tj ET
+0.145 0.388 0.922 rg 65.50 579.60 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 577.00 Td (Review social account connection statuses periodically and reconnect any expired or invalid) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 562.50 Td (connection before its next scheduled post.) Tj ET
+0.145 0.388 0.922 rg 65.50 547.10 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 544.50 Td (Review scheduled posts before their publish window and hold anything that is not ready to go out.) Tj ET
+0.145 0.388 0.922 rg 65.50 529.10 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 526.50 Td (Keep the authentication and email delivery configuration valid and up to date so one-time codes and) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 80.00 512.00 Td (security messages actually arrive.) Tj ET
+0.965 0.973 0.980 rg 64.00 438.00 467.28 61.00 re f
+0.200 0.251 0.325 rg 64.00 438.00 3.00 61.00 re f
+BT /F2 9 Tf 0.067 0.094 0.153 rg 78.00 484.00 Td (Recommended practice - not enforced) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 78.00 471.00 Td (The items in this section are operational advice for administrators. They complement, but are not) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 78.00 457.50 Td (enforced by, the application.) Tj ET
+BT /F2 7 Tf 0.145 0.388 0.922 rg 1.4 Tc 64.00 813.00 Td (SOCIAL CONSOLE) Tj ET
+BT /F1 7 Tf 0.420 0.447 0.502 rg 436.76 813.00 Td (Administrative Responsibilities) Tj ET
+0.898 0.906 0.922 RG 0.6 w 64.00 806.00 m 531.28 806.00 l S
+0.898 0.906 0.922 RG 0.6 w 64.00 52.00 m 531.28 52.00 l S
+BT /F1 7 Tf 0.420 0.447 0.502 rg 64.00 40.00 Td (Social-Console-Security-Guide.pdf) Tj ET
+BT /F1 7 Tf 0.420 0.447 0.502 rg 495.47 40.00 Td (Page 9 of 9) Tj ET
+endstream
+endobj
+24 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 23 0 R >>
+endobj
+25 0 obj
+<< /Title (1. Account Security) /Parent 32 0 R /Dest [12 0 R /XYZ null 817.89 null] /Next 26 0 R >>
+endobj
+26 0 obj
+<< /Title (2. Authentication & Password Protection) /Parent 32 0 R /Dest [14 0 R /XYZ null 817.89 null] /Prev 25 0 R /Next 27 0 R >>
+endobj
+27 0 obj
+<< /Title (3. Session Management) /Parent 32 0 R /Dest [16 0 R /XYZ null 817.89 null] /Prev 26 0 R /Next 28 0 R >>
+endobj
+28 0 obj
+<< /Title (4. Social Account & OAuth Security) /Parent 32 0 R /Dest [18 0 R /XYZ null 817.89 null] /Prev 27 0 R /Next 29 0 R >>
+endobj
+29 0 obj
+<< /Title (5. Publishing Safety) /Parent 32 0 R /Dest [20 0 R /XYZ null 817.89 null] /Prev 28 0 R /Next 30 0 R >>
+endobj
+30 0 obj
+<< /Title (6. Data Protection & Privacy) /Parent 32 0 R /Dest [22 0 R /XYZ null 817.89 null] /Prev 29 0 R /Next 31 0 R >>
+endobj
+31 0 obj
+<< /Title (7. Administrative Responsibilities) /Parent 32 0 R /Dest [24 0 R /XYZ null 817.89 null] /Prev 30 0 R >>
+endobj
+32 0 obj
+<< /Type /Outlines /First 25 0 R /Last 31 0 R /Count 7 >>
+endobj
+xref
+0 33
+0000000000 65535 f 
+0000000019 00000 n 
+0000000108 00000 n 
+0000000280 00000 n 
+0000000377 00000 n 
+0000000479 00000 n 
+0000000584 00000 n 
+0000000890 00000 n 
+0000002273 00000 n 
+0000002366 00000 n 
+0000004954 00000 n 
+0000005048 00000 n 
+0000008538 00000 n 
+0000008633 00000 n 
+0000013291 00000 n 
+0000013386 00000 n 
+0000016362 00000 n 
+0000016457 00000 n 
+0000019390 00000 n 
+0000019485 00000 n 
+0000022478 00000 n 
+0000022573 00000 n 
+0000025477 00000 n 
+0000025572 00000 n 
+0000028717 00000 n 
+0000028812 00000 n 
+0000028928 00000 n 
+0000029077 00000 n 
+0000029208 00000 n 
+0000029352 00000 n 
+0000029482 00000 n 
+0000029620 00000 n 
+0000029751 00000 n 
+trailer
+<< /Size 33 /Root 1 0 R /Info 6 0 R >>
+startxref
+29825
+%%EOF
