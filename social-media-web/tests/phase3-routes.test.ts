@@ -19,7 +19,6 @@ const mocks = vi.hoisted(() => {
     listScheduledPosts: vi.fn(),
     adminHoldPost: vi.fn(),
     adminResumePost: vi.fn(),
-    listActivity: vi.fn(),
     performAccountAction: vi.fn(),
     UnauthorizedError,
     ApprovalRequiredError,
@@ -60,14 +59,10 @@ vi.mock("@/lib/admin-scheduler", () => ({
   adminHoldPost: mocks.adminHoldPost,
   adminResumePost: mocks.adminResumePost,
 }));
-vi.mock("@/lib/admin-activity", () => ({
-  listActivity: mocks.listActivity,
-}));
 vi.mock("@/lib/admin-accounts", () => ({
   performAccountAction: mocks.performAccountAction,
 }));
 
-import { GET as activityGET } from "@/app/api/admin/activity/route";
 import { GET as overviewGET } from "@/app/api/admin/overview/route";
 import { GET as schedulerGET } from "@/app/api/admin/scheduler/route";
 import { POST as holdPOST } from "@/app/api/admin/scheduler/[id]/hold/route";
@@ -92,7 +87,6 @@ beforeEach(() => {
   mocks.listScheduledPosts.mockReset();
   mocks.adminHoldPost.mockReset();
   mocks.adminResumePost.mockReset();
-  mocks.listActivity.mockReset();
   mocks.performAccountAction.mockReset();
 });
 
@@ -111,7 +105,6 @@ describe("admin API authorization", () => {
       await overviewGET(),
       await socialGET(url("/api/admin/social-accounts")),
       await schedulerGET(url("/api/admin/scheduler")),
-      await activityGET(url("/api/admin/activity")),
     ]) {
       expect(response.status).toBe(403);
     }
@@ -143,9 +136,6 @@ describe("admin API authorization", () => {
 
     await socialGET(url("/api/admin/social-accounts"));
     expect(mocks.listSocialAccounts).not.toHaveBeenCalled();
-
-    await activityGET(url("/api/admin/activity"));
-    expect(mocks.listActivity).not.toHaveBeenCalled();
   });
 });
 

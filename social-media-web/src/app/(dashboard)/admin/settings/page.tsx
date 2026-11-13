@@ -229,12 +229,6 @@ export default async function AdminSettingsPage() {
           >
             Open scheduler
           </Link>
-          <Link
-            href="/admin/activity"
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            Review activity logs
-          </Link>
         </CardContent>
       </Card>
     </>

@@ -9,7 +9,6 @@ import {
   Link2,
   ListChecks,
   PenSquare,
-  ScrollText,
   Settings,
   ShieldCheck,
   Users,
@@ -44,7 +43,6 @@ const ADMIN_NAV_ITEMS = [
   { title: "Users", href: "/users", icon: Users, exact: false },
   { title: "Social Accounts", href: "/admin/social-accounts", icon: Link2, exact: false },
   { title: "Scheduler", href: "/admin/scheduler", icon: CalendarClock, exact: false },
-  { title: "Activity Logs", href: "/admin/activity", icon: ScrollText, exact: false },
   { title: "Settings", href: "/admin/settings", icon: Settings, exact: false },
 ];
 

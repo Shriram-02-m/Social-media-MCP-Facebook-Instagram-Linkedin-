@@ -57,14 +57,6 @@ export interface PostFilters extends Pagination {
   range: DateRange;
 }
 
-export interface ActivityFilters extends Pagination {
-  query: string;
-  action: string;
-  /** Matches either the actor or the target of the event. */
-  userId: string;
-  range: DateRange;
-}
-
 export interface SocialAccountFilters extends Pagination {
   query: string;
   platform: FilterAll<AdminPlatform>;
@@ -85,7 +77,6 @@ export interface PolicyViolation {
 }
 
 const MAX_QUERY_LENGTH = 100;
-const MAX_USER_ID_LENGTH = 128;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function readParam(
@@ -191,18 +182,6 @@ export function parsePostFilters(
     platform: (PLATFORMS as readonly string[]).includes(platformRaw)
       ? (platformRaw as AdminPlatform)
       : "all",
-    range: parseDateRange(input, { defaultDays: 30, maxDays: 366 }),
-  };
-}
-
-export function parseActivityFilters(
-  input: URLSearchParams | Record<string, string | string[] | undefined> | null | undefined,
-): ActivityFilters {
-  return {
-    ...parsePagination(input),
-    query: readParam(input, "q").trim().slice(0, MAX_QUERY_LENGTH),
-    action: readParam(input, "action").trim().slice(0, 80).toLowerCase(),
-    userId: readParam(input, "userId").trim().slice(0, MAX_USER_ID_LENGTH),
     range: parseDateRange(input, { defaultDays: 30, maxDays: 366 }),
   };
 }

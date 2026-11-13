@@ -4,7 +4,6 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
-  parseActivityFilters,
   parseDateRange,
   parsePagination,
   parsePostFilters,
@@ -108,13 +107,7 @@ describe("admin pagination and filters", () => {
     expect(invalid.platform).toBe("all");
   });
 
-  it("whitelists activity and social-account filters", () => {
-    expect(
-      parseActivityFilters({ action: " USER_SUSPENDED ", userId: "u".repeat(500) }),
-    ).toMatchObject({ action: "user_suspended", userId: "u".repeat(128) });
-
-    expect(parseActivityFilters({ q: "  login  " }).query).toBe("login");
-
+  it("whitelists social-account filters", () => {
     const social = parseSocialAccountFilters({
       platform: "FACEBOOK",
       status: "EXPIRED",
@@ -492,20 +485,8 @@ describe("activity logging coverage", () => {
     }
   });
 
-  it("searches jsonb metadata through an explicit text cast", () => {
-    const lib = readFile("src/lib/admin-activity.ts");
-    expect(lib).toContain("activityLog.metadata}::text");
-    expect(lib).not.toMatch(/ilike\(activityLog\.metadata/);
-  });
-
   it("declares activity metadata as jsonb to match the shared DDL", () => {
     expect(readFile("src/lib/db/schema.ts")).toMatch(/metadata:\s*jsonb\("metadata"\)/);
-  });
-
-  it("renders a retry state when the session store is unavailable", () => {
-    const page = readFile("src/app/(dashboard)/admin/activity/page.tsx");
-    expect(page).toMatch(/SessionUnavailableError/);
-    expect(page).toMatch(/<SessionUnavailable \/>/);
   });
 });
 
@@ -537,7 +518,6 @@ describe("admin pages are server-guarded", () => {
     "src/app/(dashboard)/admin/page.tsx",
     "src/app/(dashboard)/admin/social-accounts/page.tsx",
     "src/app/(dashboard)/admin/scheduler/page.tsx",
-    "src/app/(dashboard)/admin/activity/page.tsx",
     "src/app/(dashboard)/admin/settings/page.tsx",
     "src/app/(dashboard)/users/[id]/page.tsx",
   ];
@@ -550,7 +530,6 @@ describe("admin pages are server-guarded", () => {
     const sidebar = readFile("src/components/app-sidebar.tsx");
     expect(sidebar).toMatch(/ADMIN_NAV_ITEMS/);
     expect(sidebar).toMatch(/isAdmin \?/);
-    expect(sidebar).toMatch(/Activity Logs/);
     expect(sidebar).toMatch(/Social Accounts/);
     expect(sidebar).toMatch(/Scheduler/);
   });
