@@ -371,6 +371,19 @@ describe("social account monitoring", () => {
       expect(page).toContain(`>${column}<`);
     }
   });
+
+  it("covers every registered user, including users without connections", () => {
+    // Owners without any connection are appended as empty rows when no
+    // platform/status filter is active.
+    expect(social).toMatch(
+      /filters\.platform === "all" && filters\.status === "all"/,
+    );
+    expect(social).toMatch(/connections: \[\]/);
+    expect(social).toMatch(/userStatus\(owner\)/);
+    // The table renders the fixed platform list with a "Not connected" badge.
+    expect(page).toMatch(/PLATFORMS\.map/);
+    expect(page).toMatch(/Not connected/);
+  });
 });
 
 describe("global scheduler", () => {

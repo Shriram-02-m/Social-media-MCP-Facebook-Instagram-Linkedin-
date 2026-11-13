@@ -190,6 +190,31 @@ export async function listSocialAccounts(
   // are never split across pages.
   const ownerRows = groupConnectionsByOwner(filtered);
 
+  // Connection monitoring must cover every registered user, so owners without
+  // any social connection are appended as empty rows (the table renders one
+  // row per owner with a "Not connected" placeholder per platform). Platform
+  // and status filters select real connections, so while a filter is active a
+  // user with no matching connection has nothing to show and stays excluded.
+  if (filters.platform === "all" && filters.status === "all") {
+    const withConnections = new Set(ownerRows.map((row) => row.userId));
+    for (const owner of users) {
+      if (withConnections.has(owner.id)) continue;
+      ownerRows.push({
+        userId: owner.id,
+        userName: owner.name,
+        userEmail: owner.email,
+        userStatus: userStatus(owner),
+        connections: [],
+      });
+    }
+    // Preserve the deterministic owner ordering of the connection rows.
+    ownerRows.sort(
+      (left, right) =>
+        left.userEmail.localeCompare(right.userEmail) ||
+        left.userName.localeCompare(right.userName),
+    );
+  }
+
   return {
     rows: ownerRows.slice(filters.offset, filters.offset + filters.pageSize),
     totalConnections: allRows.length,

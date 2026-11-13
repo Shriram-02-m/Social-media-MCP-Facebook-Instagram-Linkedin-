@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { AdminPagination } from "@/components/admin/admin-pagination";
 import { SocialStatusBadge, UserStatusBadge } from "@/components/admin/status-badge";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -20,6 +21,7 @@ import {
 import { requireAdminPage } from "@/lib/admin-page";
 import {
   parseSocialAccountFilters,
+  PLATFORMS,
   type AdminPlatform,
 } from "@/lib/admin-policy";
 import {
@@ -104,6 +106,12 @@ function PlatformBadge({ platform }: { platform: AdminPlatform }) {
 }
 
 function OwnerRow({ row }: { row: AdminSocialOwnerRow }) {
+  // Every user row always shows all three platforms; connections that do not
+  // exist render "Not connected" with "—" placeholders in the detail columns.
+  const connectionByPlatform = new Map(
+    row.connections.map((connection) => [connection.platform, connection] as const),
+  );
+
   return (
     <TableRow>
       <TableCell className="whitespace-normal px-3 py-3 align-top">
@@ -129,12 +137,12 @@ function OwnerRow({ row }: { row: AdminSocialOwnerRow }) {
 
       <TableCell className="whitespace-normal px-3 py-3 align-top">
         <div className="flex flex-col gap-1">
-          {row.connections.map((connection) => (
+          {PLATFORMS.map((platform) => (
             <div
-              key={connection.platform}
+              key={platform}
               className="flex h-9 items-center"
             >
-              <PlatformBadge platform={connection.platform} />
+              <PlatformBadge platform={platform} />
             </div>
           ))}
         </div>
@@ -142,123 +150,140 @@ function OwnerRow({ row }: { row: AdminSocialOwnerRow }) {
 
       <TableCell className="whitespace-normal px-3 py-3 align-top">
         <div className="flex flex-col gap-1">
-          {row.connections.map((connection) => (
-            <div
-              key={connection.platform}
-              className="flex h-9 min-w-0 items-center gap-1.5"
-            >
-              <span
-                className="w-5 shrink-0 text-[10px] font-semibold text-muted-foreground"
-                title={PLATFORM_META[connection.platform].label}
+          {PLATFORMS.map((platform) => {
+            const connection = connectionByPlatform.get(platform);
+            return (
+              <div
+                key={platform}
+                className="flex h-9 min-w-0 items-center gap-1.5"
               >
-                {PLATFORM_META[connection.platform].short}
-              </span>
-              <span
-                className="min-w-0 truncate text-sm"
-                title={accountLabel(connection)}
-              >
-                {accountLabel(connection)}
-              </span>
-              {connection.pageCount > 0 ? (
                 <span
-                  className="shrink-0 text-[11px] text-muted-foreground"
-                  title={`${connection.pageCount} connected page(s)`}
+                  className="w-5 shrink-0 text-[10px] font-semibold text-muted-foreground"
+                  title={PLATFORM_META[platform].label}
                 >
-                  · {connection.pageCount} pages
+                  {PLATFORM_META[platform].short}
                 </span>
-              ) : null}
-            </div>
-          ))}
+                <span
+                  className="min-w-0 truncate text-sm"
+                  title={connection ? accountLabel(connection) : undefined}
+                >
+                  {connection ? accountLabel(connection) : "—"}
+                </span>
+                {connection && connection.pageCount > 0 ? (
+                  <span
+                    className="shrink-0 text-[11px] text-muted-foreground"
+                    title={`${connection.pageCount} connected page(s)`}
+                  >
+                    · {connection.pageCount} pages
+                  </span>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       </TableCell>
 
       <TableCell className="whitespace-normal px-3 py-3 align-top">
         <div className="flex flex-col gap-1">
-          {row.connections.map((connection) => (
-            <div key={connection.platform} className="flex h-9 items-center">
-              <SocialStatusBadge status={connection.status} />
-            </div>
-          ))}
+          {PLATFORMS.map((platform) => {
+            const connection = connectionByPlatform.get(platform);
+            return (
+              <div key={platform} className="flex h-9 items-center">
+                {connection ? (
+                  <SocialStatusBadge status={connection.status} />
+                ) : (
+                  <Badge variant="secondary">Not connected</Badge>
+                )}
+              </div>
+            );
+          })}
         </div>
       </TableCell>
 
       <TableCell className="whitespace-normal px-3 py-3 align-top">
         <div className="flex flex-col gap-1">
-          {row.connections.map((connection) => (
-            <div
-              key={connection.platform}
-              className="flex h-9 min-w-0 flex-col justify-center"
-            >
-              <span
-                className="truncate text-xs font-medium tabular-nums"
-                title={dateTime(connection.lastSyncAt)}
+          {PLATFORMS.map((platform) => {
+            const connection = connectionByPlatform.get(platform);
+            return (
+              <div
+                key={platform}
+                className="flex h-9 min-w-0 flex-col justify-center"
               >
-                {formatDate(connection.lastSyncAt)}
-              </span>
-              {connection.lastSyncAt ? (
-                <span className="truncate text-[11px] tabular-nums text-muted-foreground">
-                  {formatTime(connection.lastSyncAt)} UTC
+                <span
+                  className="truncate text-xs font-medium tabular-nums"
+                  title={connection ? dateTime(connection.lastSyncAt) : undefined}
+                >
+                  {connection ? formatDate(connection.lastSyncAt) : "—"}
                 </span>
-              ) : null}
-            </div>
-          ))}
+                {connection?.lastSyncAt ? (
+                  <span className="truncate text-[11px] tabular-nums text-muted-foreground">
+                    {formatTime(connection.lastSyncAt)} UTC
+                  </span>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       </TableCell>
 
       <TableCell className="whitespace-normal px-3 py-3 align-top">
         <div className="flex flex-col gap-1">
-          {row.connections.map((connection) => (
-            <div
-              key={connection.platform}
-              className="flex h-9 min-w-0 items-center"
-            >
-              {connection.expiresAt ? (
-                <div
-                  className={`flex h-9 min-w-0 flex-col justify-center ${
-                    connection.expired
-                      ? "text-destructive"
-                      : "text-muted-foreground"
-                  }`}
-                  title={`${dateTime(connection.expiresAt)}${
-                    connection.expired ? " (expired)" : ""
-                  }`}
-                >
-                  <span className="truncate text-xs font-medium tabular-nums">
-                    {formatDate(connection.expiresAt)}
-                  </span>
-                  <span className="truncate text-[11px] tabular-nums">
-                    {formatTime(connection.expiresAt)} UTC
-                  </span>
-                </div>
-              ) : (
-                <span className="text-xs text-muted-foreground">
-                  No expiry
-                </span>
-              )}
-            </div>
-          ))}
+          {PLATFORMS.map((platform) => {
+            const connection = connectionByPlatform.get(platform);
+            return (
+              <div key={platform} className="flex h-9 min-w-0 items-center">
+                {connection ? (
+                  connection.expiresAt ? (
+                    <div
+                      className={`flex h-9 min-w-0 flex-col justify-center ${
+                        connection.expired
+                          ? "text-destructive"
+                          : "text-muted-foreground"
+                      }`}
+                      title={`${dateTime(connection.expiresAt)}${
+                        connection.expired ? " (expired)" : ""
+                      }`}
+                    >
+                      <span className="truncate text-xs font-medium tabular-nums">
+                        {formatDate(connection.expiresAt)}
+                      </span>
+                      <span className="truncate text-[11px] tabular-nums">
+                        {formatTime(connection.expiresAt)} UTC
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      No expiry
+                    </span>
+                  )
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       </TableCell>
 
       <TableCell className="whitespace-normal px-3 py-3 align-top">
         <div className="flex flex-col gap-1">
-          {row.connections.map((connection) => (
-            <div
-              key={connection.platform}
-              className="flex h-9 min-w-0 items-center"
-            >
-              {connection.lastError ? (
-                <p
-                  className="line-clamp-2 w-full text-[11px] leading-4 break-words text-red-600 dark:text-red-400"
-                  title={connection.lastError}
-                >
-                  {connection.lastError}
-                </p>
-              ) : (
-                <span className="text-xs text-muted-foreground">—</span>
-              )}
-            </div>
-          ))}
+          {PLATFORMS.map((platform) => {
+            const connection = connectionByPlatform.get(platform);
+            return (
+              <div key={platform} className="flex h-9 min-w-0 items-center">
+                {connection?.lastError ? (
+                  <p
+                    className="line-clamp-2 w-full text-[11px] leading-4 break-words text-red-600 dark:text-red-400"
+                    title={connection.lastError}
+                  >
+                    {connection.lastError}
+                  </p>
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       </TableCell>
     </TableRow>
