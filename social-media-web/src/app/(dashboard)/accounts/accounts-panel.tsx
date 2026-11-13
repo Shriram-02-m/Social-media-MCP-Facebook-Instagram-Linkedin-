@@ -13,6 +13,16 @@ import {
 import { cn } from "cn";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -257,6 +267,9 @@ export function AccountsPanel() {
   const [busy, setBusy] = useState<BusyState>(null);
   const [errors, setErrors] = useState<Partial<Record<PlatformId, string>>>({});
   const [messages, setMessages] = useState<Partial<Record<PlatformId, string>>>({});
+  // Removing saved credentials is destructive (the OAuth app config is lost),
+  // so it asks for confirmation with the app's standard dialog.
+  const [removing, setRemoving] = useState<PlatformId | null>(null);
 
   const setCardError = useCallback((platform: PlatformId, message: string | null) => {
     setErrors((current) => {
@@ -593,14 +606,8 @@ export function AccountsPanel() {
 
   const remove = useCallback(
     async (platform: PlatformId) => {
+      setRemoving(null);
       const label = PROVIDERS[platform].label;
-      if (
-        !window.confirm(
-          `Remove the saved ${label} developer credentials? Connected accounts are not disconnected.`,
-        )
-      ) {
-        return;
-      }
       setBusy({ platform, action: "save" });
       setCardError(platform, null);
       try {
@@ -861,7 +868,7 @@ export function AccountsPanel() {
                           size="sm"
                           className="text-destructive hover:text-destructive"
                           disabled={busy !== null}
-                          onClick={() => void remove(platform)}
+                          onClick={() => setRemoving(platform)}
                         >
                           Remove
                         </Button>
@@ -968,6 +975,39 @@ export function AccountsPanel() {
           );
         })}
       </div>
+
+      <AlertDialog
+        open={removing !== null}
+        onOpenChange={(open) => {
+          if (!open) setRemoving(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {removing
+                ? `Remove the saved ${PROVIDERS[removing].label} developer credentials?`
+                : ""}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              The saved app ID and secret will be deleted. Connected accounts
+              are not disconnected, but you will need the credentials again to
+              reconnect later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep credentials</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (removing) void remove(removing);
+              }}
+            >
+              Remove credentials
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

@@ -1,3 +1,6 @@
+import { UserSearch } from "lucide-react";
+
+import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -25,13 +28,43 @@ function RoleBadge({ role }: { role: AdminUserSummary["role"] }) {
 }
 
 function StatusBadge({
-  status,
+  user,
 }: {
-  status: AdminUserSummary["status"];
+  user: AdminUserSummary;
 }) {
-  if (status === "active") return <Badge variant="secondary">Active</Badge>;
-  if (status === "inactive") return <Badge variant="destructive">Inactive</Badge>;
-  return <Badge variant="outline">Pending</Badge>;
+  const label =
+    user.status === "active"
+      ? "Active"
+      : user.status === "inactive"
+        ? "Inactive"
+        : "Pending";
+  const badge =
+    user.status === "active" ? (
+      <Badge variant="secondary">{label}</Badge>
+    ) : user.status === "inactive" ? (
+      <Badge variant="destructive">{label}</Badge>
+    ) : (
+      <Badge variant="outline">{label}</Badge>
+    );
+
+  // Inactive covers three different lifecycle states; naming the exact reason
+  // keeps Suspended and Deleted apart without changing the shared buckets.
+  const reason = user.deletedAt
+    ? "Deleted"
+    : user.banned
+      ? "Suspended"
+      : user.status === "inactive"
+        ? "Rejected"
+        : null;
+
+  return (
+    <div className="flex flex-col gap-1">
+      {badge}
+      {reason ? (
+        <span className="text-[11px] text-muted-foreground">{reason}</span>
+      ) : null}
+    </div>
+  );
 }
 
 export function UsersTable({
@@ -43,9 +76,11 @@ export function UsersTable({
 }) {
   if (users.length === 0) {
     return (
-      <p className="py-8 text-center text-sm text-muted-foreground">
-        No users match these filters.
-      </p>
+      <EmptyState
+        icon={UserSearch}
+        title="No users match these filters"
+        description="Try a different search term, status, or role filter."
+      />
     );
   }
 
@@ -75,7 +110,7 @@ export function UsersTable({
               <RoleBadge role={user.role} />
             </TableCell>
             <TableCell>
-              <StatusBadge status={user.status} />
+              <StatusBadge user={user} />
             </TableCell>
             <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
               {dateFormatter.format(new Date(user.createdAt))}

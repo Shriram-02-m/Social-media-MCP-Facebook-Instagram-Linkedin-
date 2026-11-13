@@ -40,17 +40,19 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
     <SidebarProvider>
       <AppSidebar isAdmin={state?.isAdmin ?? false} />
       <SidebarInset>
-        <header className="flex h-14 items-center gap-2 border-b px-4">
+        <header className="flex h-14 min-w-0 items-center gap-2 border-b px-4">
           <SidebarTrigger />
           <Separator orientation="vertical" className="h-5" />
-          <span className="text-sm text-muted-foreground">
+          <span className="hidden min-w-0 truncate text-sm text-muted-foreground sm:inline">
             {session.user.email}
           </span>
-          <div className="ml-auto">
+          <div className="ml-auto shrink-0">
             <SignOutButton />
           </div>
         </header>
-        <div className="flex flex-1 flex-col gap-6 p-6">{children}</div>
+        <div className="flex flex-1 flex-col gap-4 px-4 py-4 sm:gap-6 sm:p-6">
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );

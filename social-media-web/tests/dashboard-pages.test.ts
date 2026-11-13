@@ -13,6 +13,10 @@ const requireAdminMock = vi.hoisted(() =>
   }),
 );
 const scheduledPostStatusMock = vi.hoisted(() => vi.fn());
+// The Overview also reads display-only token metadata (account name, expiry)
+// to show connected accounts. It must stay stubbed so the test never touches
+// the real token store.
+const loadTokenMetadataMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/session", () => ({
   requireApprovedUser: requireApprovedUserMock,
@@ -21,6 +25,7 @@ vi.mock("@/lib/session", () => ({
 
 vi.mock("@/lib/backend", () => ({
   scheduledPostStatus: scheduledPostStatusMock,
+  loadTokenMetadata: loadTokenMetadataMock,
 }));
 
 import OverviewPage from "@/app/(dashboard)/page";
@@ -36,6 +41,8 @@ beforeEach(() => {
   requireAdminMock.mockClear();
   scheduledPostStatusMock.mockReset();
   scheduledPostStatusMock.mockResolvedValue([]);
+  loadTokenMetadataMock.mockReset();
+  loadTokenMetadataMock.mockResolvedValue([]);
 });
 
 describe("dashboard pages reachable by approved non-admin users", () => {

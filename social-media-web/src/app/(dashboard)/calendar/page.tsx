@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/page-header";
 import { CalendarPanel, type CalendarPost } from "./calendar-panel";
 import { scheduledPostStatus } from "@/lib/backend";
 import { requireApprovedUser } from "@/lib/session";
@@ -20,12 +21,10 @@ export default async function CalendarPage() {
 
   return (
     <>
-      <div>
-        <h1 className="text-2xl font-semibold">Calendar</h1>
-        <p className="text-sm text-muted-foreground">
-          Scheduled and published posts across the month.
-        </p>
-      </div>
+      <PageHeader
+        title="Calendar"
+        description="Scheduled and published posts across the month, one platform per mark."
+      />
       <CalendarPanel posts={entries} />
     </>
   );

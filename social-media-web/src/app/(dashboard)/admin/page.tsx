@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { UsersRound } from "lucide-react";
 
+import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
 import {
   Card,
   CardContent,
@@ -20,35 +23,38 @@ const STATS: {
   description: string;
   href: string;
   indicator: string;
+  /** Highlighted when the count is non-zero (drives attention to work to do). */
+  attention?: string;
 }[] = [
-  {
-    key: "total",
-    label: "Total Users",
-    description:
-      "Every registered user account except the Super Admin, including suspended and soft-deleted records.",
-    href: "/users",
-    indicator: "bg-sky-500",
-  },
   {
     key: "pending",
     label: "Pending Users",
-    description: "Normal users waiting for administrator approval.",
+    description: "Waiting for your approval before they can sign in.",
     href: "/users?status=pending",
     indicator: "bg-amber-500",
+    attention:
+      "ring-2 ring-amber-500/60 dark:ring-amber-400/50 focus-visible:ring-amber-500",
   },
   {
     key: "active",
     label: "Active Users",
-    description: "Approved, unbanned accounts cleared for console access.",
+    description: "Approved accounts with console access.",
     href: "/users?status=active",
     indicator: "bg-emerald-500",
   },
   {
     key: "inactive",
     label: "Inactive Users",
-    description: "Rejected, suspended, or soft-deleted accounts.",
+    description: "Rejected, suspended, or deleted accounts.",
     href: "/users?status=inactive",
     indicator: "bg-destructive",
+  },
+  {
+    key: "total",
+    label: "Total Users",
+    description: "Every registered account except the Super Admin.",
+    href: "/users",
+    indicator: "bg-sky-500",
   },
 ];
 
@@ -59,12 +65,18 @@ function StatCard({
   stat: (typeof STATS)[number];
   value: number;
 }) {
+  // Pending approvals are the one thing an administrator must act on, so the
+  // card is highlighted while work is waiting.
+  const attention = stat.attention && value > 0 ? stat.attention : undefined;
+
   return (
     <Link
       href={stat.href}
       className="group block rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
-      <Card className="h-full transition-colors group-hover:bg-muted/50">
+      <Card
+        className={`h-full transition-colors group-hover:bg-muted/50 ${attention ?? ""}`}
+      >
         <CardHeader>
           <CardDescription className="flex items-center gap-2">
             <span
@@ -88,14 +100,26 @@ export default async function AdminOverviewPage() {
   const stats = await getAdminUserStats();
 
   return (
-    <>
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Admin overview</h1>
-        <p className="text-sm text-muted-foreground">
-          User registration and status statistics from live database records.
-          Select a card to open the matching user list.
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Admin overview"
+        description="User registration and account status at a glance. Select a card to open the matching user list."
+      />
+
+      {stats.pending > 0 ? (
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+          <strong className="font-semibold">
+            {stats.pending} user{stats.pending === 1 ? "" : "s"}
+          </strong>
+          <span>waiting for approval.</span>
+          <Link
+            href="/users?status=pending"
+            className="font-medium underline underline-offset-2 hover:underline"
+          >
+            Review pending users
+          </Link>
         </p>
-      </div>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {STATS.map((stat) => (
@@ -103,12 +127,17 @@ export default async function AdminOverviewPage() {
         ))}
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        Total includes every registered user account except the Super Admin.
-        Active counts only approved, unbanned, non-deleted accounts; inactive
-        counts rejected, suspended, or soft-deleted accounts. Pending accounts
-        are counted separately.
-      </p>
-    </>
+      {stats.total === 0 ? (
+        <Card>
+          <CardContent>
+            <EmptyState
+              icon={UsersRound}
+              title="No registered users yet"
+              description="New sign-ups appear here as pending until you approve them from the Users page."
+            />
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
   );
 }

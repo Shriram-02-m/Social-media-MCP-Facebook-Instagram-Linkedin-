@@ -33,6 +33,7 @@ import type { AdminPlatform } from "@/lib/admin-policy";
 import type { AdminUserPost } from "@/lib/admin-scheduler";
 import type { AdminSocialConnectionRow } from "@/lib/admin-social-accounts";
 import type { UserStatus } from "@/lib/admin-user-status";
+import { PLATFORM_META } from "@/lib/platform-meta";
 
 import { AccountActions } from "./account-actions";
 import { PostDetails } from "./post-details";
@@ -127,30 +128,6 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
-const PLATFORM_META: Record<
-  AdminPlatform,
-  { label: string; mark: string; className: string }
-> = {
-  facebook: {
-    label: "Facebook",
-    mark: "f",
-    className:
-      "bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:ring-blue-900",
-  },
-  instagram: {
-    label: "Instagram",
-    mark: "ig",
-    className:
-      "bg-pink-50 text-pink-700 ring-pink-200 dark:bg-pink-950/50 dark:text-pink-300 dark:ring-pink-900",
-  },
-  linkedin: {
-    label: "LinkedIn",
-    mark: "in",
-    className:
-      "bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-950/50 dark:text-sky-300 dark:ring-sky-900",
-  },
-};
-
 const PLATFORMS: AdminPlatform[] = ["facebook", "instagram", "linkedin"];
 
 function InfoItem({
@@ -206,7 +183,7 @@ function SocialConnectionCard({
             aria-hidden="true"
             className={`flex size-9 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold uppercase ring-1 ${meta.className}`}
           >
-            {meta.mark}
+            {meta.short}
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">{meta.label}</p>
@@ -280,7 +257,7 @@ function PostRow({ post }: { post: AdminUserPost }) {
             aria-hidden="true"
             className={`flex size-[18px] shrink-0 items-center justify-center rounded-full text-[8px] font-semibold ring-1 ${PLATFORM_META[post.platform].className}`}
           >
-            {PLATFORM_META[post.platform].mark}
+            {PLATFORM_META[post.platform].short}
           </span>
           <span className="truncate text-xs">
             {PLATFORM_META[post.platform].label}

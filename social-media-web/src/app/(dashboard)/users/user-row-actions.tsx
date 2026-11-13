@@ -5,6 +5,16 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import type { AdminUserSummary } from "@/lib/admin-users";
 
@@ -19,6 +29,7 @@ export function UserRowActions({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
 
   async function setApproval(next: "approved" | "rejected") {
     setBusy(true);
@@ -35,7 +46,12 @@ export function UserRowActions({
         toast.error(body.error ?? "Could not update the user.");
         return;
       }
-      toast.success(next === "approved" ? "User approved." : "User rejected.");
+      toast.success(
+        next === "approved"
+          ? "User approved. They can now sign in."
+          : "User rejected. They cannot sign in.",
+      );
+      setRejectOpen(false);
       router.refresh();
     } catch (error) {
       toast.error(
@@ -59,14 +75,36 @@ export function UserRowActions({
         </Button>
       ) : null}
       {!isSelf && approvalStatus !== "rejected" ? (
-        <Button
-          size="sm"
-          variant="destructive"
-          disabled={busy}
-          onClick={() => void setApproval("rejected")}
-        >
-          Reject
-        </Button>
+        <>
+          <Button
+            size="sm"
+            variant="destructive"
+            disabled={busy}
+            onClick={() => setRejectOpen(true)}
+          >
+            Reject
+          </Button>
+          <AlertDialog open={rejectOpen} onOpenChange={setRejectOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reject this user?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  The account stays registered but cannot sign in. You can
+                  approve it again later from this list.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={busy}
+                  onClick={() => void setApproval("rejected")}
+                >
+                  {busy ? "Working…" : "Reject user"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
       ) : null}
       <Link
         href={`/users/${id}`}

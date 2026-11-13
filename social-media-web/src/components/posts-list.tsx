@@ -1,10 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import {
+  CircleAlert,
+  History,
+  LoaderCircle,
+  ListChecks,
+} from "lucide-react";
 import { toast } from "sonner";
 
+import { PostStatusBadge } from "@/components/admin/status-badge";
+import { EmptyState } from "@/components/empty-state";
+import { PlatformChip } from "@/components/platform-chip";
 import { RescheduleDialog } from "@/components/reschedule-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -29,6 +37,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export interface ScheduledPostSummary {
   id: string;
@@ -43,15 +61,6 @@ export interface ScheduledPostSummary {
   failureStage?: "token_validation" | "image_validation" | "document_validation" | "publishing";
 }
 
-const STATUS_TONES: Record<ScheduledPostSummary["status"], "default" | "secondary" | "destructive" | "outline"> = {
-  scheduled: "secondary",
-  publishing: "default",
-  published: "default",
-  failed: "destructive",
-  cancelled: "outline",
-  held: "outline",
-};
-
 const PLATFORM_LABELS: Record<ScheduledPostSummary["platform"], string> = {
   facebook: "Facebook",
   instagram: "Instagram",
@@ -65,6 +74,14 @@ const STATUS_LABELS: Record<ScheduledPostSummary["status"], string> = {
   failed: "Failed",
   cancelled: "Cancelled",
   held: "Held",
+};
+
+const MEDIA_LABELS: Record<ScheduledPostSummary["mediaType"], string> = {
+  none: "Text only",
+  image: "Image",
+  video: "Video",
+  carousel: "Carousel",
+  document: "Document",
 };
 
 const PLATFORM_ORDER: ScheduledPostSummary["platform"][] = [
@@ -92,14 +109,24 @@ export function PostsList({
   statuses,
   showWorkerButton = false,
   showFilters = false,
+  variant = "queue",
+  emptyTitle = "No posts to show",
+  emptyDescription,
 }: {
   statuses: ScheduledPostSummary["status"][];
   showWorkerButton?: boolean;
   showFilters?: boolean;
+  /** Selects the empty-state icon inside this client component (icons cannot
+   * be passed from server pages to client components). */
+  variant?: "queue" | "history";
+  emptyTitle?: string;
+  emptyDescription?: string;
 }) {
+  const EmptyIcon = variant === "history" ? History : ListChecks;
   const [posts, setPosts] = useState<ScheduledPostSummary[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rescheduling, setRescheduling] = useState<ScheduledPostSummary | null>(null);
+  const [cancelling, setCancelling] = useState<ScheduledPostSummary | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("all");
 
@@ -169,16 +196,27 @@ export function PostsList({
         error?: string;
       };
       if (!response.ok) {
-        toast.error(body.error ?? "Worker run failed.");
+        toast.error(body.error ?? "Could not check due posts.");
         return;
       }
-      toast.success(`Processed ${body.processed ?? 0} due post(s).`);
+      toast.success(
+        body.processed
+          ? `Published ${body.processed} due post${body.processed === 1 ? "" : "s"}.`
+          : "No posts were due right now.",
+      );
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Worker run failed.");
+      toast.error(error instanceof Error ? error.message : "Could not check due posts.");
     } finally {
       setBusyId(null);
     }
+  }
+
+  async function cancelPost() {
+    if (!cancelling) return;
+    const post = cancelling;
+    setCancelling(null);
+    await runAction(post.id, `/api/posts/${post.id}/cancel`, "Post cancelled. It will not be published.");
   }
 
   return (
@@ -188,20 +226,30 @@ export function PostsList({
           <CardTitle>Posts</CardTitle>
           <CardDescription>Live status from the publishing scheduler.</CardDescription>
         </div>
-        <div className="flex gap-2">
-          {showWorkerButton ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={runWorker}
-              disabled={busyId !== null}
-            >
-              Run worker now
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex gap-2">
+            {showWorkerButton ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={runWorker}
+                disabled={busyId !== null}
+              >
+                {busyId === "worker" ? (
+                  <LoaderCircle className="animate-spin" aria-hidden="true" />
+                ) : null}
+                Check due posts
+              </Button>
+            ) : null}
+            <Button size="sm" variant="ghost" onClick={load} disabled={busyId !== null}>
+              Refresh
             </Button>
+          </div>
+          {showWorkerButton ? (
+            <span className="text-[11px] text-muted-foreground">
+              The worker also runs automatically.
+            </span>
           ) : null}
-          <Button size="sm" variant="ghost" onClick={load} disabled={busyId !== null}>
-            Refresh
-          </Button>
         </div>
       </CardHeader>
       <CardContent>
@@ -244,18 +292,18 @@ export function PostsList({
                 <SelectTrigger
                   size="sm"
                   className="w-full sm:w-40"
-                  aria-label="Filter by app"
+                  aria-label="Filter by platform"
                 >
                   <SelectValue>
                     {(value) =>
                       value === "all" || value == null
-                        ? "All Apps"
+                        ? "All Platforms"
                         : PLATFORM_LABELS[value as ScheduledPostSummary["platform"]]
                     }
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Apps</SelectItem>
+                  <SelectItem value="all">All Platforms</SelectItem>
                   {PLATFORM_ORDER.map((platform) => (
                     <SelectItem key={platform} value={platform}>
                       {PLATFORM_LABELS[platform]}
@@ -284,24 +332,33 @@ export function PostsList({
             <Skeleton className="h-8 w-full" />
           </div>
         ) : visible.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No posts to show.</p>
+          <EmptyState
+            icon={EmptyIcon}
+            title={emptyTitle}
+            description={
+              emptyDescription ??
+              "When you create a post it appears here with its current publishing status."
+            }
+          />
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <p className="text-sm text-muted-foreground">
-              No posts match the selected filters.
-            </p>
-            <Button size="sm" variant="outline" onClick={resetFilters}>
-              Reset filters
-            </Button>
-          </div>
+          <EmptyState
+            icon={EmptyIcon}
+            title="No posts match the selected filters"
+            description="Try a different status or platform, or reset the filters."
+            action={
+              <Button size="sm" variant="outline" onClick={resetFilters}>
+                Reset filters
+              </Button>
+            }
+          />
         ) : (
-          <Table>
+          <Table className="min-w-[640px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Platform</TableHead>
-                <TableHead>Text</TableHead>
+                <TableHead>Post</TableHead>
                 <TableHead>When</TableHead>
-                <TableHead>Media</TableHead>
+                <TableHead className="hidden md:table-cell">Media</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -310,26 +367,27 @@ export function PostsList({
               {filtered.map((post) => (
                 <TableRow key={post.id}>
                   <TableCell className="whitespace-nowrap">
-                    {PLATFORM_LABELS[post.platform]}
+                    <PlatformChip platform={post.platform} showLabel />
                   </TableCell>
                   <TableCell className="max-w-[24rem]">
                     <span className="line-clamp-2 text-sm">
                       {post.text || "—"}
                     </span>
                     {post.error ? (
-                      <span className="mt-1 block text-xs text-destructive">
+                      <span className="mt-1 flex items-start gap-1 text-xs text-destructive">
+                        <CircleAlert className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
                         {post.error}
                       </span>
                     ) : null}
                   </TableCell>
-                  <TableCell className="whitespace-nowrap text-sm">
+                  <TableCell className="whitespace-nowrap text-sm tabular-nums">
                     {new Date(post.publishedAt ?? post.scheduledAt).toLocaleString()}
                   </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{post.mediaType}</Badge>
+                  <TableCell className="hidden whitespace-nowrap text-sm text-muted-foreground md:table-cell">
+                    {MEDIA_LABELS[post.mediaType]}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={STATUS_TONES[post.status]}>{post.status}</Badge>
+                    <PostStatusBadge status={post.status} />
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
@@ -339,10 +397,14 @@ export function PostsList({
                           variant="outline"
                           disabled={busyId !== null}
                           onClick={() =>
-                            void runAction(post.id, `/api/posts/${post.id}/retry`, "Post retried.")
+                            void runAction(
+                              post.id,
+                              `/api/posts/${post.id}/retry`,
+                              "Retrying publishing now.",
+                            )
                           }
                         >
-                          Retry
+                          Retry Publishing
                         </Button>
                       ) : null}
                       {canReschedule(post) ? (
@@ -360,9 +422,7 @@ export function PostsList({
                           size="sm"
                           variant="outline"
                           disabled={busyId !== null}
-                          onClick={() =>
-                            void runAction(post.id, `/api/posts/${post.id}/cancel`, "Post cancelled.")
-                          }
+                          onClick={() => setCancelling(post)}
                         >
                           Cancel
                         </Button>
@@ -375,6 +435,37 @@ export function PostsList({
           </Table>
         )}
       </CardContent>
+
+      {/* Cancel is destructive: it stops a scheduled post from ever publishing. */}
+      <AlertDialog
+        open={cancelling !== null}
+        onOpenChange={(open) => {
+          if (!open) setCancelling(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel this post?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {cancelling
+                ? `The scheduled ${PLATFORM_LABELS[cancelling.platform]} post will not be published. This cannot be undone, but you can always create a new post.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busyId !== null}>
+              Keep post
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busyId !== null}
+              onClick={() => void cancelPost()}
+            >
+              Cancel post
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {rescheduling ? (
         <RescheduleDialog
           key={rescheduling.id}

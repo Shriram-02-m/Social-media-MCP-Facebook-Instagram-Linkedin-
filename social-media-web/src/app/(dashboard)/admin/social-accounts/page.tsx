@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import { AdminPagination } from "@/components/admin/admin-pagination";
 import { SocialStatusBadge, UserStatusBadge } from "@/components/admin/status-badge";
+import { EmptyState } from "@/components/empty-state";
+import { UserSearch } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -24,6 +26,7 @@ import {
   PLATFORMS,
   type AdminPlatform,
 } from "@/lib/admin-policy";
+import { PLATFORM_META } from "@/lib/platform-meta";
 import {
   listSocialAccounts,
   type AdminSocialConnectionRow,
@@ -64,30 +67,6 @@ function dateTime(value: string | null): string {
   if (!value) return "—";
   return dateTimeFormatter.format(new Date(value));
 }
-
-const PLATFORM_META: Record<
-  AdminPlatform,
-  { label: string; short: string; className: string }
-> = {
-  facebook: {
-    label: "Facebook",
-    short: "FB",
-    className:
-      "bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:ring-blue-900",
-  },
-  instagram: {
-    label: "Instagram",
-    short: "IG",
-    className:
-      "bg-pink-50 text-pink-700 ring-pink-200 dark:bg-pink-950/50 dark:text-pink-300 dark:ring-pink-900",
-  },
-  linkedin: {
-    label: "LinkedIn",
-    short: "LI",
-    className:
-      "bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-950/50 dark:text-sky-300 dark:ring-sky-900",
-  },
-};
 
 function accountLabel(connection: AdminSocialConnectionRow): string {
   return connection.accountName ?? connection.accountId ?? "—";
@@ -333,9 +312,11 @@ export default async function AdminSocialAccountsPage({
           />
 
           {result.rows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No social connections match these filters.
-            </p>
+            <EmptyState
+              icon={UserSearch}
+              title="No users match these filters"
+              description="Try a different search term, platform, or status filter."
+            />
           ) : (
             <Table className="min-w-[960px] table-fixed">
               <colgroup>

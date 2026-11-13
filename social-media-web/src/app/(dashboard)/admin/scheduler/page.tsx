@@ -11,6 +11,8 @@ import {
 import { AdminPagination } from "@/components/admin/admin-pagination";
 import { DateRangeFilter } from "@/components/admin/date-range-filter";
 import { PostStatusBadge } from "@/components/admin/status-badge";
+import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
 import {
   Card,
   CardContent,
@@ -27,10 +29,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { requireAdminPage } from "@/lib/admin-page";
-import {
-  parsePostFilters,
-  type AdminPlatform,
-} from "@/lib/admin-policy";
+import { parsePostFilters } from "@/lib/admin-policy";
+import { PLATFORM_META } from "@/lib/platform-meta";
 import { listScheduledPosts } from "@/lib/admin-scheduler";
 
 import { ErrorCell } from "./error-cell";
@@ -59,30 +59,6 @@ function formatTime(value: string | null): string {
   if (!value) return "—";
   return timeFormatter.format(new Date(value));
 }
-
-const PLATFORM_META: Record<
-  AdminPlatform,
-  { label: string; short: string; className: string }
-> = {
-  facebook: {
-    label: "Facebook",
-    short: "f",
-    className:
-      "bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:ring-blue-900",
-  },
-  instagram: {
-    label: "Instagram",
-    short: "ig",
-    className:
-      "bg-pink-50 text-pink-700 ring-pink-200 dark:bg-pink-950/50 dark:text-pink-300 dark:ring-pink-900",
-  },
-  linkedin: {
-    label: "LinkedIn",
-    short: "in",
-    className:
-      "bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-950/50 dark:text-sky-300 dark:ring-sky-900",
-  },
-};
 
 function StatCard({
   label,
@@ -129,13 +105,10 @@ export default async function AdminSchedulerPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-1.5">
-        <h1 className="text-2xl font-semibold tracking-tight">Scheduler</h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          Manage scheduled posts across all connected social accounts, monitor
-          publishing status, and handle failed or held posts.
-        </p>
-      </header>
+      <PageHeader
+        title="Scheduler"
+        description="Manage scheduled posts across all connected social accounts, monitor publishing status, and handle failed or held posts."
+      />
 
       <section
         aria-label="Scheduler statistics"
@@ -192,16 +165,11 @@ export default async function AdminSchedulerPage({
 
         <CardContent className="p-0">
           {result.posts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center">
-              <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                <CalendarClock className="size-5" aria-hidden="true" />
-              </span>
-              <p className="text-sm font-medium">No scheduled posts</p>
-              <p className="max-w-sm text-sm text-muted-foreground">
-                No posts match the current filters in this date range. Try
-                adjusting the search, status, platform, or date range.
-              </p>
-            </div>
+            <EmptyState
+              icon={CalendarClock}
+              title="No scheduled posts"
+              description="No posts match the current filters in this date range. Try adjusting the search, status, platform, or date range."
+            />
           ) : (
             <Table className="min-w-[1024px] table-fixed">
               <colgroup>

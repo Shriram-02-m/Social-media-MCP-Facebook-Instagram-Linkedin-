@@ -1,17 +1,22 @@
+import { CloudUpload } from "lucide-react";
+
+import { PageHeader } from "@/components/page-header";
+
 import { MediaUploader } from "./media-uploader";
 
 export default function MediaPage() {
   return (
     <>
-      <div>
-        <h1 className="text-2xl font-semibold">Media Library</h1>
-        <p className="text-sm text-muted-foreground">
-          Upload images, videos, and PDFs to private storage and receive a permanent
-          <code className="mx-1 rounded bg-muted px-1 py-0.5 text-xs">storagePath</code>
-          to use in the Composer or in Claude.
-        </p>
-      </div>
+      <PageHeader
+        title="Media Library"
+        description="Upload images, videos, and documents to your private storage, then use them in the Composer or in Claude."
+      />
       <MediaUploader />
+      <p className="flex items-start gap-2 text-xs text-muted-foreground">
+        <CloudUpload className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        Files stay private to your account. Uploads are permanent references;
+        expiring links are generated fresh only when a post is published.
+      </p>
     </>
   );
 }
