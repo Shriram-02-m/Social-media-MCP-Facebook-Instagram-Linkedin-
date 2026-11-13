@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Circle, Loader2 } from "lucide-react";
+import { Check, Circle, KeyRound, Loader2, Lock, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -33,6 +33,24 @@ interface ApiBody {
   error?: string;
   name?: string;
   revoked?: number;
+}
+
+/** Small tinted icon chip used as the card identity marker. */
+function CardIcon({
+  icon: Icon,
+  className,
+}: {
+  icon: typeof User;
+  className: string;
+}) {
+  return (
+    <span
+      className={`flex size-7 shrink-0 items-center justify-center rounded-lg ${className}`}
+      aria-hidden="true"
+    >
+      <Icon className="size-4" />
+    </span>
+  );
 }
 
 function Requirement({ met, children }: { met: boolean; children: React.ReactNode }) {
@@ -138,15 +156,21 @@ export function SettingsClient({ profile }: SettingsClientProps) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
-      <Card>
-        <CardHeader>
-          <CardTitle>Profile information</CardTitle>
+      <Card className="gap-4">
+        <CardHeader className="gap-1 border-b px-4 py-4 lg:px-5">
+          <CardTitle className="flex items-center gap-2.5">
+            <CardIcon
+              icon={User}
+              className="bg-sky-50 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300"
+            />
+            Profile information
+          </CardTitle>
           <CardDescription>
-            Your display name appears across the console. Email and role are
-            managed separately and cannot be changed here.
+            Your display name appears across the console and can be changed
+            here.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 lg:px-5">
           <form className="flex flex-col gap-4" onSubmit={saveProfile}>
             <div className="flex flex-col gap-2">
               <Label htmlFor="profile-name">Display name</Label>
@@ -163,10 +187,21 @@ export function SettingsClient({ profile }: SettingsClientProps) {
             <div className="flex flex-col gap-2">
               <Label htmlFor="profile-email">Email</Label>
               <Input id="profile-email" value={profile.email} readOnly disabled />
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Lock className="size-3" aria-hidden="true" />
+                Read-only — managed by your sign-in provider and cannot be
+                changed here.
+              </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2">
               <span className="text-sm font-medium">Role</span>
-              <Badge variant="secondary">Super Admin</Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">Super Admin</Badge>
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Lock className="size-3" aria-hidden="true" />
+                  Fixed — there is exactly one Super Admin.
+                </span>
+              </div>
             </div>
             {profileError ? (
               <p id="profile-error" className="text-sm text-destructive" role="alert">
@@ -188,15 +223,21 @@ export function SettingsClient({ profile }: SettingsClientProps) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Change password</CardTitle>
+      <Card className="gap-4">
+        <CardHeader className="gap-1 border-b px-4 py-4 lg:px-5">
+          <CardTitle className="flex items-center gap-2.5">
+            <CardIcon
+              icon={KeyRound}
+              className="bg-violet-50 text-violet-600 dark:bg-violet-950/50 dark:text-violet-300"
+            />
+            Change password
+          </CardTitle>
           <CardDescription>
             Use at least {PASSWORD_MIN_LENGTH} characters with three of four
             character types. Every other signed-in device is signed out.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 lg:px-5">
           <form className="flex flex-col gap-4" onSubmit={changePassword}>
             <div className="flex flex-col gap-2">
               <Label htmlFor="current-password">Current password</Label>
@@ -228,15 +269,23 @@ export function SettingsClient({ profile }: SettingsClientProps) {
                 onChange={(event) => setConfirmPassword(event.target.value)}
               />
             </div>
-            <ul className="grid gap-1 sm:grid-cols-2" aria-label="Password requirements">
-              <Requirement met={requirements.length}>
-                At least {PASSWORD_MIN_LENGTH} characters
-              </Requirement>
-              <Requirement met={requirements.lowercase}>Lowercase letter</Requirement>
-              <Requirement met={requirements.uppercase}>Uppercase letter</Requirement>
-              <Requirement met={requirements.digit}>Number</Requirement>
-              <Requirement met={requirements.symbol}>Symbol</Requirement>
-            </ul>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">
+                Password requirements
+              </span>
+              <ul
+                className="grid gap-x-4 gap-y-1.5 rounded-lg bg-muted/50 p-3 sm:grid-cols-2"
+                aria-label="Password requirements"
+              >
+                <Requirement met={requirements.length}>
+                  At least {PASSWORD_MIN_LENGTH} characters
+                </Requirement>
+                <Requirement met={requirements.lowercase}>Lowercase letter</Requirement>
+                <Requirement met={requirements.uppercase}>Uppercase letter</Requirement>
+                <Requirement met={requirements.digit}>Number</Requirement>
+                <Requirement met={requirements.symbol}>Symbol</Requirement>
+              </ul>
+            </div>
             {passwordError ? (
               <p className="text-sm text-destructive" role="alert">
                 {passwordError}

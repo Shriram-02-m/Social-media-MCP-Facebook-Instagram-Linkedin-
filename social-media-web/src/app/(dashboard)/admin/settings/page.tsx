@@ -1,11 +1,24 @@
 import Link from "next/link";
+import {
+  BadgeCheck,
+  CalendarClock,
+  ChevronRight,
+  Link2,
+  LockKeyhole,
+  Monitor,
+  ShieldCheck,
+  Smartphone,
+  Users,
+  UsersRound,
+  type LucideIcon,
+} from "lucide-react";
 
-import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -57,11 +70,81 @@ function device(userAgent: string | null): string {
   return os ? `${browser} on ${os}` : browser;
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function isMobileDevice(userAgent: string | null): boolean {
+  return /Android|iPhone|iPad|iOS/.test(userAgent ?? "");
+}
+
+/** Small muted icon chip for informational/reference cards. */
+function InfoIcon({ icon: Icon }: { icon: LucideIcon }) {
   return (
-    <div className="flex flex-col gap-1 border-b py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
-      <dt className="text-sm font-medium">{label}</dt>
-      <dd className="text-sm text-muted-foreground">{children}</dd>
+    <span
+      className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"
+      aria-hidden="true"
+    >
+      <Icon className="size-4" />
+    </span>
+  );
+}
+
+/** Compact, visually quiet reference card for non-interactive information. */
+function ReferenceCard({
+  title,
+  description,
+  icon,
+  children,
+}: {
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card size="sm" className="h-full gap-3">
+      <CardHeader className="gap-2">
+        <CardTitle className="flex items-center gap-2.5 text-sm">
+          <InfoIcon icon={icon} />
+          {title}
+        </CardTitle>
+        <CardDescription className="text-xs">{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {children}
+      </CardContent>
+    </Card>
+  );
+}
+
+const QUICK_ACTIONS: Array<{
+  href: string;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+}> = [
+  {
+    href: "/users",
+    label: "Manage users",
+    description: "Approve, suspend, and review accounts.",
+    icon: UsersRound,
+  },
+  {
+    href: "/admin/social-accounts",
+    label: "Review social accounts",
+    description: "Audit connected Facebook, Instagram, and LinkedIn accounts.",
+    icon: Link2,
+  },
+  {
+    href: "/admin/scheduler",
+    label: "Open scheduler",
+    description: "Monitor and manage scheduled posts.",
+    icon: CalendarClock,
+  },
+];
+
+function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-0.5 border-b py-2 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <dt className="text-xs font-medium">{label}</dt>
+      <dd className="text-xs text-muted-foreground sm:text-right">{children}</dd>
     </div>
   );
 }
@@ -88,147 +171,192 @@ export default async function AdminSettingsPage() {
   const otherSessions = sessions.filter((item) => !item.current);
 
   return (
-    <>
-      <div>
-        <h1 className="text-2xl font-semibold">Administration settings</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage your profile and password. Changes to individual accounts are
-          made from the Users pages.
+    <div className="flex flex-col gap-8">
+      <header className="flex flex-col gap-1.5">
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Administration settings
+        </h1>
+        <p className="max-w-3xl text-sm text-muted-foreground">
+          Update your profile, secure your account, and review how this console
+          protects publishing. Changes to individual user accounts are made from
+          the Users pages.
         </p>
-      </div>
+      </header>
 
+      {/* Editable settings get the strongest visual priority. */}
       <SettingsClient profile={profile} />
 
-      <Card>
-        <CardHeader>
+      <Card className="gap-0 py-0">
+        <CardHeader className="gap-1 border-b px-4 py-4 lg:px-5">
           <CardTitle>Active sessions</CardTitle>
           <CardDescription>
             Every browser currently signed in as this administrator. Session
             tokens are never displayed.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <ul className="flex flex-col gap-3">
-            {sessions.map((item) => (
-              <li
-                key={item.id}
-                className="flex flex-col gap-2 border-b pb-3 last:border-b-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="flex flex-col gap-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium">{device(item.userAgent)}</span>
-                    {item.current ? <Badge variant="secondary">This device</Badge> : null}
+        <CardContent className="p-0">
+          {sessions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
+              <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <Monitor className="size-5" aria-hidden="true" />
+              </span>
+              <p className="text-sm font-medium">No active sessions</p>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                You are not signed in on any device right now.
+              </p>
+            </div>
+          ) : (
+            <ul>
+              {sessions.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex flex-col gap-2 border-b px-4 py-3.5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between lg:px-5"
+                >
+                  <div className="flex items-start gap-3">
+                    <span
+                      className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg ${
+                        item.current
+                          ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                      aria-hidden="true"
+                    >
+                      {isMobileDevice(item.userAgent) ? (
+                        <Smartphone className="size-4" />
+                      ) : (
+                        <Monitor className="size-4" />
+                      )}
+                    </span>
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium">
+                          {device(item.userAgent)}
+                          {item.current ? " (this device)" : ""}
+                        </span>
+                        {item.current ? (
+                          <Badge className="border-transparent bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 ring-inset dark:bg-emerald-950/50 dark:text-emerald-300 dark:ring-emerald-900">
+                            Current session
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        Last active {dateTime(item.updatedAt)} · Expires{" "}
+                        {dateTime(item.expiresAt)}
+                        {item.ipAddress ? ` · ${item.ipAddress}` : ""}
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    Last active {dateTime(item.updatedAt)} · Expires {dateTime(item.expiresAt)}
-                    {item.ipAddress ? ` · ${item.ipAddress}` : ""}
-                  </span>
-                </div>
-              </li>
-            ))}
-            {sessions.length === 0 ? (
-              <li className="text-sm text-muted-foreground">No active sessions.</li>
-            ) : null}
-          </ul>
-          <SessionActions otherSessionCount={otherSessions.length} />
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
+        <CardFooter className="flex-col items-start gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:px-5">
+          <p className="text-xs text-muted-foreground">
+            {otherSessions.length === 0
+              ? "No other devices are signed in to this account."
+              : `${otherSessions.length} other device(s) are signed in to this account.`}
+          </p>
+          <SessionActions otherSessionCount={otherSessions.length} />
+        </CardFooter>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Signed-in administrator</CardTitle>
-            <CardDescription>
-              The verified server-side session for this console.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+      {/* Informational reference: intentionally quieter than the editable
+          settings above so the two groups read differently at a glance. */}
+      <section aria-label="Administration reference" className="flex flex-col gap-3">
+        <div className="flex flex-col gap-0.5">
+          <h2 className="text-sm font-medium">How this console protects your account</h2>
+          <p className="text-xs text-muted-foreground">
+            Reference only — these policies are enforced by the server and
+            cannot be changed here.
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <ReferenceCard
+            title="Signed-in administrator"
+            description="The verified server-side session for this console."
+            icon={BadgeCheck}
+          >
             <dl>
-              <Row label="Name">{profile.name}</Row>
-              <Row label="Email">{profile.email}</Row>
-              <Row label="Role">{state?.isAdmin ? "Super Admin" : state?.role}</Row>
-              <Row label="Status">{statusLabel}</Row>
+              <InfoRow label="Name">{profile.name}</InfoRow>
+              <InfoRow label="Email">{profile.email}</InfoRow>
+              <InfoRow label="Role">
+                {state?.isAdmin ? "Super Admin" : state?.role}
+              </InfoRow>
+              <InfoRow label="Status">{statusLabel}</InfoRow>
             </dl>
-          </CardContent>
-        </Card>
+          </ReferenceCard>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Account model</CardTitle>
-            <CardDescription>
-              Exactly one Super Admin is allowed by a database unique index.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="flex list-disc flex-col gap-2 pl-4 text-sm text-muted-foreground">
+          <ReferenceCard
+            title="Account model"
+            description="Exactly one Super Admin is allowed by a database unique index."
+            icon={Users}
+          >
+            <ul className="flex list-disc flex-col gap-1.5 pl-4 text-xs text-muted-foreground">
               <li>New registrations start as pending until approved.</li>
               <li>Suspension revokes sessions and holds scheduled posts.</li>
               <li>Deletion is a soft delete that preserves audit history.</li>
               <li>The Super Admin cannot be suspended or deleted.</li>
               <li>Admins cannot suspend, delete, or revoke their own sessions.</li>
             </ul>
-          </CardContent>
-        </Card>
+          </ReferenceCard>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Publishing safety</CardTitle>
-            <CardDescription>
-              Controls that prevent duplicate or unauthorized publishing.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="flex list-disc flex-col gap-2 pl-4 text-sm text-muted-foreground">
+          <ReferenceCard
+            title="Publishing safety"
+            description="Controls that prevent duplicate or unauthorized publishing."
+            icon={ShieldCheck}
+          >
+            <ul className="flex list-disc flex-col gap-1.5 pl-4 text-xs text-muted-foreground">
               <li>The worker claims due posts with row-level locks.</li>
               <li>Suspended or deleted accounts cannot claim posts.</li>
               <li>Held posts are skipped until an administrator resumes them.</li>
               <li>Overdue held posts stay held to avoid immediate duplicates.</li>
               <li>Every hold, resume, retry, and publish is activity-logged.</li>
             </ul>
-          </CardContent>
-        </Card>
+          </ReferenceCard>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Data handling</CardTitle>
-            <CardDescription>
-              Secrets never appear in the admin console or audit trail.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="flex list-disc flex-col gap-2 pl-4 text-sm text-muted-foreground">
+          <ReferenceCard
+            title="Data handling"
+            description="Secrets never appear in the admin console or audit trail."
+            icon={LockKeyhole}
+          >
+            <ul className="flex list-disc flex-col gap-1.5 pl-4 text-xs text-muted-foreground">
               <li>Social tokens stay encrypted and are never displayed.</li>
               <li>Activity metadata is sanitized before it is stored.</li>
               <li>Only active users can access the application.</li>
               <li>Every admin API verifies the Super Admin server-side.</li>
             </ul>
-          </CardContent>
-        </Card>
-      </div>
+          </ReferenceCard>
+        </div>
+      </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick links</CardTitle>
+      <Card className="gap-0 py-0">
+        <CardHeader className="gap-1 border-b px-4 py-4 lg:px-5">
+          <CardTitle>Quick actions</CardTitle>
           <CardDescription>Common administration tasks.</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          <Link href="/users" className={buttonVariants({ variant: "outline", size: "sm" })}>
-            Manage users
-          </Link>
-          <Link
-            href="/admin/social-accounts"
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            Review social accounts
-          </Link>
-          <Link
-            href="/admin/scheduler"
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            Open scheduler
-          </Link>
+        <CardContent className="grid gap-3 p-4 sm:grid-cols-3 lg:p-5">
+          {QUICK_ACTIONS.map((action) => (
+            <Link
+              key={action.href}
+              href={action.href}
+              className="group flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+            >
+              <InfoIcon icon={action.icon} />
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-sm font-medium">{action.label}</span>
+                <span className="text-xs text-muted-foreground">
+                  {action.description}
+                </span>
+              </span>
+              <ChevronRight
+                className="ml-auto size-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+            </Link>
+          ))}
         </CardContent>
       </Card>
-    </>
+    </div>
   );
 }

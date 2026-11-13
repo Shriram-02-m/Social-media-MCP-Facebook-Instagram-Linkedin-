@@ -47,22 +47,15 @@ export function SessionActions({ otherSessionCount }: { otherSessionCount: numbe
 
   return (
     <div className="flex flex-col gap-2">
-      <div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={otherSessionCount === 0}
-          onClick={() => setOpen(true)}
-        >
-          Sign out other sessions
-        </Button>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        {otherSessionCount === 0
-          ? "No other active sessions."
-          : `${otherSessionCount} other active session(s).`}
-      </p>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={otherSessionCount === 0}
+        onClick={() => setOpen(true)}
+      >
+        Sign out other sessions
+      </Button>
 
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent>
