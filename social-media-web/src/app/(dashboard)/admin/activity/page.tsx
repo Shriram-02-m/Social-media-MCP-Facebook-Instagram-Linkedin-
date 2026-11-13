@@ -16,14 +16,48 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { listActivity } from "@/lib/admin-activity";
+import { listActivity, type AdminActivityResult } from "@/lib/admin-activity";
 import { requireAdminPage } from "@/lib/admin-page";
-import { parseActivityFilters } from "@/lib/admin-policy";
+import { parseActivityFilters, type ActivityFilters } from "@/lib/admin-policy";
 import { SessionUnavailableError } from "@/lib/session";
 
 import { ActivityFiltersForm } from "./activity-filters";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Loads the audit trail with structured error logging before the failure
+ * reaches the admin error boundary. Production masks the real error behind a
+ * generated digest reference, so this log line is what makes that reference
+ * matchable: it carries the page's filter context and the error's name/message
+ * and PostgreSQL error code — never credentials, tokens, or connection URLs.
+ */
+async function loadActivity(
+  filters: ActivityFilters,
+): Promise<AdminActivityResult> {
+  try {
+    return await listActivity(filters);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "admin_activity_load_failed",
+        page: filters.page,
+        pageSize: filters.pageSize,
+        rangeDays: filters.range.days,
+        hasQuery: Boolean(filters.query),
+        actionFilter: filters.action || null,
+        hasUserFilter: Boolean(filters.userId),
+        errorName: error instanceof Error ? error.name : typeof error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorCode:
+          error instanceof Error && "code" in error
+            ? String((error as { code?: unknown }).code)
+            : null,
+      }),
+    );
+    throw error;
+  }
+}
 
 const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
   dateStyle: "medium",
@@ -69,7 +103,7 @@ export default async function AdminActivityPage({
     else if (Array.isArray(value) && value[0]) query.set(key, value[0]);
   }
   const filters = parseActivityFilters(query);
-  const result = await listActivity(filters);
+  const result = await loadActivity(filters);
 
   return (
     <>

@@ -32,7 +32,8 @@ function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (character) => `\\${character}`);
 }
 
-function parseMetadata(value: unknown): unknown {
+/** Tolerant jsonb/text metadata normalisation; exported for regression tests. */
+export function parseMetadata(value: unknown): unknown {
   // The pg driver already parses jsonb into an object. Tolerate string values
   // too (for example if the column is ever text) and never let malformed
   // legacy text take down the whole page.
