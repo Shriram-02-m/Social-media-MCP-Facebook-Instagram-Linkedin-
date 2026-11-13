@@ -503,9 +503,19 @@ describe("settings and recovery UI", () => {
     expect(client).toMatch(/readOnly/);
   });
 
-  it("links login to the forgot-password flow", () => {
-    expect(login).toMatch(/href="\/forgot-password"/);
-    expect(login).toMatch(/Forgot password/);
+  it("keeps login free of forgot-password links and adds a password visibility toggle", () => {
+    // The forgot-password route itself remains available (self-service reset
+    // and the email-OTP endpoint stay wired), but the login page must not
+    // surface the link.
+    expect(login).not.toMatch(/href="\/forgot-password"/);
+    expect(login).not.toMatch(/Forgot password/);
+    // The password field starts hidden and toggles through an accessible,
+    // keyboard-operable button without losing the entered value.
+    expect(login).toMatch(/type=\{showPassword \? "text" : "password"\}/);
+    expect(login).toMatch(/aria-label=\{showPassword \? "Hide password" : "Show password"\}/);
+    expect(login).toMatch(/EyeOff/);
+    expect(login).toMatch(/Eye/);
+    expect(login).toMatch(/autoComplete="current-password"/);
   });
 
   it("requests and consumes recovery OTPs without revealing account existence", () => {
