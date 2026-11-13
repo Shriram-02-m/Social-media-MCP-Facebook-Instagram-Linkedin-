@@ -67,12 +67,6 @@ export function otpEmailContent(
   }
 }
 
-export function isEmailDeliveryConfigured(): boolean {
-  return Boolean(
-    process.env.RESEND_API_KEY?.trim() || process.env.EMAIL_DELIVERY_URL?.trim(),
-  );
-}
-
 /**
  * Best-effort delivery. This function never throws: the caller is an auth
  * endpoint that must keep its non-enumerating success response even when the

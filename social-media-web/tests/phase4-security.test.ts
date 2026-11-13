@@ -40,9 +40,6 @@ const mocks = vi.hoisted(() => {
     listAdminSessions: vi.fn(),
     revokeOtherAdminSessions: vi.fn(),
     changeAdminPassword: vi.fn(),
-    getRecoveryStatus: vi.fn(),
-    sendRecoveryVerification: vi.fn(),
-    verifyRecoveryOtp: vi.fn(),
     UnauthorizedError,
     ApprovalRequiredError,
     ApiError,
@@ -77,9 +74,6 @@ vi.mock("@/lib/admin-security", () => ({
   listAdminSessions: mocks.listAdminSessions,
   revokeOtherAdminSessions: mocks.revokeOtherAdminSessions,
   changeAdminPassword: mocks.changeAdminPassword,
-  getRecoveryStatus: mocks.getRecoveryStatus,
-  sendRecoveryVerification: mocks.sendRecoveryVerification,
-  verifyRecoveryOtp: mocks.verifyRecoveryOtp,
 }));
 
 vi.mock("next/headers", () => ({
@@ -88,7 +82,6 @@ vi.mock("next/headers", () => ({
 
 import { GET as profileGET, PATCH as profilePATCH } from "@/app/api/admin/profile/route";
 import { POST as passwordPOST } from "@/app/api/admin/security/password/route";
-import { GET as recoveryGET, POST as recoveryPOST } from "@/app/api/admin/security/recovery/route";
 import {
   DELETE as sessionsDELETE,
   GET as sessionsGET,
@@ -334,12 +327,6 @@ describe("admin security helpers", () => {
     expect(profileBlock).not.toMatch(/\.set\(\{[^}]*email:/);
   });
 
-  it("uses the session email for recovery, never a client address", () => {
-    const recoveryRoute = readFile("src/app/api/admin/security/recovery/route.ts");
-    expect(recoveryRoute).toMatch(/session\.user\.email/);
-    expect(recoveryRoute).not.toMatch(/body\.data\.email/);
-    expect(recoveryRoute).not.toMatch(/body\.email/);
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -475,55 +462,6 @@ describe("sessions API", () => {
   });
 });
 
-describe("recovery API", () => {
-  it("returns the recovery status for the signed-in administrator", async () => {
-    mocks.getRecoveryStatus.mockResolvedValue({
-      email: "admin@example.com",
-      emailVerified: true,
-      deliveryConfigured: true,
-    });
-    const response = await recoveryGET();
-    expect(response.status).toBe(200);
-    expect(mocks.getRecoveryStatus).toHaveBeenCalledWith("admin-1");
-  });
-
-  it("rejects a client-supplied recovery email", async () => {
-    const response = await recoveryPOST(
-      request("/api/admin/security/recovery", "POST", {
-        action: "send",
-        email: "attacker@example.com",
-      }),
-    );
-    expect(response.status).toBe(400);
-    expect(mocks.sendRecoveryVerification).not.toHaveBeenCalled();
-  });
-
-  it("sends the code to the session email only", async () => {
-    mocks.sendRecoveryVerification.mockResolvedValue({ success: true });
-    const response = await recoveryPOST(
-      request("/api/admin/security/recovery", "POST", { action: "send" }),
-    );
-    expect(response.status).toBe(200);
-    expect(mocks.sendRecoveryVerification).toHaveBeenCalledWith(
-      "admin-1",
-      "admin@example.com",
-    );
-  });
-
-  it("verifies the OTP against the session email only", async () => {
-    mocks.verifyRecoveryOtp.mockResolvedValue({ success: true });
-    const response = await recoveryPOST(
-      request("/api/admin/security/recovery", "POST", { action: "verify", otp: "123456" }),
-    );
-    expect(response.status).toBe(200);
-    expect(mocks.verifyRecoveryOtp).toHaveBeenCalledWith(
-      "admin-1",
-      "admin@example.com",
-      "123456",
-    );
-  });
-});
-
 // ---------------------------------------------------------------------------
 // UI wiring
 // ---------------------------------------------------------------------------
@@ -535,11 +473,10 @@ describe("settings and recovery UI", () => {
   const login = readFile("src/app/(auth)/login/login-form.tsx");
   const forgot = readFile("src/app/(auth)/forgot-password/forgot-password-form.tsx");
 
-  it("loads profile, sessions, and recovery data behind the admin page guard", () => {
+  it("loads profile and sessions data behind the admin page guard", () => {
     expect(page).toMatch(/requireAdminPage/);
     expect(page).toMatch(/getAdminProfile/);
     expect(page).toMatch(/listAdminSessions/);
-    expect(page).toMatch(/getRecoveryStatus/);
     expect(page).toMatch(/<SettingsClient/);
     expect(page).toMatch(/<SessionActions/);
   });
@@ -547,7 +484,7 @@ describe("settings and recovery UI", () => {
   it("organizes the settings screen into the required sections", () => {
     expect(client).toMatch(/Profile information/);
     expect(client).toMatch(/Change password/);
-    expect(client).toMatch(/Account recovery/);
+    expect(client).not.toMatch(/Account recovery/);
     expect(page).toMatch(/Active sessions/);
   });
 

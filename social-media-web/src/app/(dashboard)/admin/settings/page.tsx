@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/card";
 import {
   getAdminProfile,
-  getRecoveryStatus,
   listAdminSessions,
 } from "@/lib/admin-security";
 import { requireAdminPage } from "@/lib/admin-page";
@@ -81,9 +80,8 @@ export default async function AdminSettingsPage() {
     ? `${status.charAt(0).toUpperCase()}${status.slice(1)}`
     : "Unknown";
 
-  const [profile, recovery, sessions] = await Promise.all([
+  const [profile, sessions] = await Promise.all([
     getAdminProfile(session.user.id),
-    getRecoveryStatus(session.user.id),
     listAdminSessions(session.user.id, session.session.id),
   ]);
 
@@ -94,12 +92,12 @@ export default async function AdminSettingsPage() {
       <div>
         <h1 className="text-2xl font-semibold">Administration settings</h1>
         <p className="text-sm text-muted-foreground">
-          Manage your profile, password, and account recovery. Changes to
-          individual accounts are made from the Users pages.
+          Manage your profile and password. Changes to individual accounts are
+          made from the Users pages.
         </p>
       </div>
 
-      <SettingsClient profile={profile} recovery={recovery} />
+      <SettingsClient profile={profile} />
 
       <Card>
         <CardHeader>

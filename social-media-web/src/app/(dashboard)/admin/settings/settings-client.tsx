@@ -2,7 +2,7 @@
 
 import { Check, Circle, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -16,20 +16,17 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { AdminProfile, RecoveryStatus } from "@/lib/admin-security";
+import type { AdminProfile } from "@/lib/admin-security";
 import {
   DISPLAY_NAME_MAX_LENGTH,
-  OTP_RESEND_COOLDOWN_SECONDS,
   PASSWORD_MIN_LENGTH,
   passwordRequirements,
   validateDisplayName,
-  validateOtp,
   validatePasswordChange,
 } from "@/lib/security-policy";
 
 interface SettingsClientProps {
   profile: AdminProfile;
-  recovery: RecoveryStatus;
 }
 
 interface ApiBody {
@@ -50,7 +47,7 @@ function Requirement({ met, children }: { met: boolean; children: React.ReactNod
   );
 }
 
-export function SettingsClient({ profile, recovery }: SettingsClientProps) {
+export function SettingsClient({ profile }: SettingsClientProps) {
   const router = useRouter();
 
   const [name, setName] = useState(profile.name);
@@ -63,27 +60,7 @@ export function SettingsClient({ profile, recovery }: SettingsClientProps) {
   const [passwordPending, setPasswordPending] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
-  const [verified, setVerified] = useState(recovery.emailVerified);
-  const [otp, setOtp] = useState("");
-  const [codeSent, setCodeSent] = useState(false);
-  const [recoveryPending, setRecoveryPending] = useState(false);
-  const [verifyPending, setVerifyPending] = useState(false);
-  const [recoveryError, setRecoveryError] = useState<string | null>(null);
-  const [resendAt, setResendAt] = useState(0);
-  const [now, setNow] = useState(() => Date.now());
-
   const requirements = passwordRequirements(newPassword);
-  const secondsUntilResend = Math.max(0, Math.ceil((resendAt - now) / 1000));
-
-  useEffect(() => {
-    if (resendAt <= Date.now()) return;
-    const timer = window.setInterval(() => {
-      const current = Date.now();
-      setNow(current);
-      if (current >= resendAt) window.clearInterval(timer);
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [resendAt]);
 
   async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -156,65 +133,6 @@ export function SettingsClient({ profile, recovery }: SettingsClientProps) {
       setPasswordError("Could not change your password.");
     } finally {
       setPasswordPending(false);
-    }
-  }
-
-  async function sendRecoveryCode() {
-    setRecoveryError(null);
-    setRecoveryPending(true);
-    try {
-      const response = await fetch("/api/admin/security/recovery", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "send" }),
-      });
-      const body = (await response.json().catch(() => ({}))) as ApiBody;
-      if (!response.ok) {
-        setRecoveryError(body.error ?? "Could not send the verification code.");
-        return;
-      }
-      setCodeSent(true);
-      setResendAt(Date.now() + OTP_RESEND_COOLDOWN_SECONDS * 1000);
-      setNow(Date.now());
-      toast.success("Verification code sent to your recovery email.");
-    } catch {
-      setRecoveryError("Could not send the verification code.");
-    } finally {
-      setRecoveryPending(false);
-    }
-  }
-
-  async function verifyRecoveryCode(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setRecoveryError(null);
-
-    const parsed = validateOtp(otp);
-    if (!parsed.ok) {
-      setRecoveryError(parsed.message);
-      return;
-    }
-
-    setVerifyPending(true);
-    try {
-      const response = await fetch("/api/admin/security/recovery", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "verify", otp: parsed.value }),
-      });
-      const body = (await response.json().catch(() => ({}))) as ApiBody;
-      if (!response.ok) {
-        setRecoveryError(body.error ?? "Could not verify the code.");
-        return;
-      }
-      setVerified(true);
-      setCodeSent(false);
-      setOtp("");
-      toast.success("Recovery email verified.");
-      router.refresh();
-    } catch {
-      setRecoveryError("Could not verify the code.");
-    } finally {
-      setVerifyPending(false);
     }
   }
 
@@ -336,113 +254,6 @@ export function SettingsClient({ profile, recovery }: SettingsClientProps) {
               </Button>
             </div>
           </form>
-        </CardContent>
-      </Card>
-
-      <Card className="lg:col-span-2">
-        <CardHeader>
-          <CardTitle>Account recovery</CardTitle>
-          <CardDescription>
-            Password recovery sends a 6-digit code to your verified email. Codes
-            expire after 5 minutes, allow three attempts, and are rate limited.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="font-medium">Recovery email</span>
-            <span className="text-muted-foreground">{recovery.email}</span>
-            {verified ? (
-              <Badge variant="secondary">Verified</Badge>
-            ) : (
-              <Badge variant="outline">Not verified</Badge>
-            )}
-          </div>
-
-          {!recovery.deliveryConfigured ? (
-            <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-              Email delivery is not configured on this server. Set
-              <code className="mx-1">RESEND_API_KEY</code>
-              or
-              <code className="mx-1">EMAIL_DELIVERY_URL</code>
-              before relying on recovery.
-            </p>
-          ) : null}
-
-          {verified ? (
-            <p className="text-sm text-muted-foreground">
-              Your recovery address is verified. If you ever lose your password,
-              use <span className="font-medium text-foreground">Forgot password</span> on
-              the sign-in page to receive a one-time code.
-            </p>
-          ) : (
-            <div className="flex flex-col gap-4">
-              <p className="text-sm text-muted-foreground">
-                Verify this address so a password-recovery code can reach you.
-                The code is sent to the email already on your account; it cannot
-                be redirected from this form.
-              </p>
-
-              {!codeSent ? (
-                <div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={recoveryPending}
-                    onClick={() => void sendRecoveryCode()}
-                  >
-                    {recoveryPending ? (
-                      <>
-                        <Loader2 className="animate-spin" aria-hidden /> Sending...
-                      </>
-                    ) : (
-                      "Send verification code"
-                    )}
-                  </Button>
-                </div>
-              ) : (
-                <form className="flex max-w-sm flex-col gap-3" onSubmit={verifyRecoveryCode}>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="recovery-otp">Verification code</Label>
-                    <Input
-                      id="recovery-otp"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={6}
-                      value={otp}
-                      onChange={(event) => setOtp(event.target.value)}
-                    />
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button type="submit" disabled={verifyPending}>
-                      {verifyPending ? (
-                        <>
-                          <Loader2 className="animate-spin" aria-hidden /> Verifying...
-                        </>
-                      ) : (
-                        "Verify email"
-                      )}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      disabled={recoveryPending || secondsUntilResend > 0}
-                      onClick={() => void sendRecoveryCode()}
-                    >
-                      {secondsUntilResend > 0
-                        ? `Resend in ${secondsUntilResend}s`
-                        : "Resend code"}
-                    </Button>
-                  </div>
-                </form>
-              )}
-            </div>
-          )}
-
-          {recoveryError ? (
-            <p className="text-sm text-destructive" role="alert">
-              {recoveryError}
-            </p>
-          ) : null}
         </CardContent>
       </Card>
     </div>
