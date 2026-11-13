@@ -1,4 +1,4 @@
-import { and, desc, eq, gt } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 
 import { logActivity } from "@/lib/activity";
 import { ApiError } from "@/lib/api";
@@ -14,16 +14,6 @@ export interface AdminProfile {
   emailVerified: boolean;
   role: string;
   approvalStatus: string;
-}
-
-export interface AdminSessionSummary {
-  id: string;
-  current: boolean;
-  createdAt: string;
-  updatedAt: string;
-  expiresAt: string;
-  ipAddress: string | null;
-  userAgent: string | null;
 }
 
 function mapAuthError(error: unknown, fallback: string): ApiError {
@@ -123,35 +113,6 @@ export async function updateAdminProfile(
   });
 }
 
-export async function listAdminSessions(
-  userId: string,
-  currentSessionId: string,
-): Promise<AdminSessionSummary[]> {
-  const rows = await db
-    .select({
-      id: session.id,
-      createdAt: session.createdAt,
-      updatedAt: session.updatedAt,
-      expiresAt: session.expiresAt,
-      ipAddress: session.ipAddress,
-      userAgent: session.userAgent,
-    })
-    .from(session)
-    .where(and(eq(session.userId, userId), gt(session.expiresAt, new Date())))
-    .orderBy(desc(session.updatedAt));
-
-  // Tokens are intentionally not selected or returned to the client.
-  return rows.map((row) => ({
-    id: row.id,
-    current: row.id === currentSessionId,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-    expiresAt: row.expiresAt.toISOString(),
-    ipAddress: row.ipAddress,
-    userAgent: row.userAgent,
-  }));
-}
-
 async function countOtherSessions(
   userId: string,
   currentSessionId: string,
@@ -161,36 +122,6 @@ async function countOtherSessions(
     .from(session)
     .where(and(eq(session.userId, userId), gt(session.expiresAt, new Date())));
   return rows.filter((row) => row.id !== currentSessionId).length;
-}
-
-/**
- * Revokes every other session for the signed-in administrator through Better
- * Auth's own endpoint. The current session is preserved, so the UI stays
- * usable while any other device is signed out immediately.
- */
-export async function revokeOtherAdminSessions(
-  headers: Headers,
-  userId: string,
-  currentSessionId: string,
-): Promise<{ revoked: number }> {
-  const revoked = await countOtherSessions(userId, currentSessionId);
-
-  try {
-    await auth.api.revokeOtherSessions({ headers });
-  } catch (error) {
-    throw mapAuthError(error, "Unable to revoke other sessions.");
-  }
-
-  await logActivity({
-    actorUserId: userId,
-    targetUserId: userId,
-    action: "admin_sessions_revoked",
-    resourceType: "session",
-    resourceId: userId,
-    metadata: { revokedCount: revoked },
-  });
-
-  return { revoked };
 }
 
 export interface ChangeAdminPasswordInput {

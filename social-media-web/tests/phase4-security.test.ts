@@ -37,8 +37,6 @@ const mocks = vi.hoisted(() => {
     requireAdmin: vi.fn(),
     getAdminProfile: vi.fn(),
     updateAdminProfile: vi.fn(),
-    listAdminSessions: vi.fn(),
-    revokeOtherAdminSessions: vi.fn(),
     changeAdminPassword: vi.fn(),
     UnauthorizedError,
     ApprovalRequiredError,
@@ -71,8 +69,6 @@ vi.mock("@/lib/api", () => ({
 vi.mock("@/lib/admin-security", () => ({
   getAdminProfile: mocks.getAdminProfile,
   updateAdminProfile: mocks.updateAdminProfile,
-  listAdminSessions: mocks.listAdminSessions,
-  revokeOtherAdminSessions: mocks.revokeOtherAdminSessions,
   changeAdminPassword: mocks.changeAdminPassword,
 }));
 
@@ -82,10 +78,6 @@ vi.mock("next/headers", () => ({
 
 import { GET as profileGET, PATCH as profilePATCH } from "@/app/api/admin/profile/route";
 import { POST as passwordPOST } from "@/app/api/admin/security/password/route";
-import {
-  DELETE as sessionsDELETE,
-  GET as sessionsGET,
-} from "@/app/api/admin/security/sessions/route";
 
 const adminSession = {
   session: { id: "sess-admin", token: "tok" },
@@ -307,24 +299,22 @@ describe("admin security helpers", () => {
     expect(security).not.toMatch(/body\.token/);
   });
 
-  it("lists sessions without selecting tokens", () => {
-    const sessionsBlock = security.slice(
-      security.indexOf("export async function listAdminSessions"),
-      security.indexOf("async function countOtherSessions"),
-    );
-    expect(sessionsBlock).not.toMatch(/\btoken:/);
-    expect(sessionsBlock).toMatch(/ipAddress/);
-    expect(sessionsBlock).toMatch(/userAgent/);
-  });
-
   it("only writes the name during a profile update", () => {
     const profileBlock = security.slice(
       security.indexOf("export async function updateAdminProfile"),
-      security.indexOf("export async function listAdminSessions"),
+      security.indexOf("async function countOtherSessions"),
     );
     expect(profileBlock).toMatch(/\.set\(\{\s*name:/);
     expect(profileBlock).not.toMatch(/\.set\(\{[^}]*role:/);
     expect(profileBlock).not.toMatch(/\.set\(\{[^}]*email:/);
+  });
+
+  it("keeps the countOtherSessions helper for password-change session rotation", () => {
+    // The helper is shared by changeAdminPassword (Better Auth performs the
+    // actual revocation); only the standalone list/revoke endpoints were
+    // removed with the settings Active Sessions UI.
+    expect(security).toMatch(/function countOtherSessions/);
+    expect(security).toMatch(/countOtherSessions\(/);
   });
 
 });
@@ -434,34 +424,6 @@ describe("password API", () => {
   });
 });
 
-describe("sessions API", () => {
-  it("requires an admin session", async () => {
-    mocks.requireAdmin.mockRejectedValue(new mocks.UnauthorizedError("Authentication required."));
-    const response = await sessionsGET();
-    expect(response.status).toBe(401);
-    expect(mocks.listAdminSessions).not.toHaveBeenCalled();
-  });
-
-  it("lists sessions scoped to the signed-in administrator", async () => {
-    mocks.listAdminSessions.mockResolvedValue([]);
-    const response = await sessionsGET();
-    expect(response.status).toBe(200);
-    expect(mocks.listAdminSessions).toHaveBeenCalledWith("admin-1", "sess-admin");
-  });
-
-  it("revokes other sessions with the verified session identity", async () => {
-    mocks.revokeOtherAdminSessions.mockResolvedValue({ revoked: 2 });
-    const response = await sessionsDELETE();
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ revoked: 2 });
-    expect(mocks.revokeOtherAdminSessions).toHaveBeenCalledWith(
-      expect.any(Headers),
-      "admin-1",
-      "sess-admin",
-    );
-  });
-});
-
 // ---------------------------------------------------------------------------
 // UI wiring
 // ---------------------------------------------------------------------------
@@ -469,31 +431,40 @@ describe("sessions API", () => {
 describe("settings and recovery UI", () => {
   const page = readFile("src/app/(dashboard)/admin/settings/page.tsx");
   const client = readFile("src/app/(dashboard)/admin/settings/settings-client.tsx");
-  const sessionActions = readFile("src/app/(dashboard)/admin/settings/session-actions.tsx");
   const login = readFile("src/app/(auth)/login/login-form.tsx");
   const forgot = readFile("src/app/(auth)/forgot-password/forgot-password-form.tsx");
 
-  it("loads profile and sessions data behind the admin page guard", () => {
+  it("loads profile data behind the admin page guard", () => {
     expect(page).toMatch(/requireAdminPage/);
     expect(page).toMatch(/getAdminProfile/);
-    expect(page).toMatch(/listAdminSessions/);
     expect(page).toMatch(/<SettingsClient/);
-    expect(page).toMatch(/<SessionActions/);
   });
 
   it("organizes the settings screen into the required sections", () => {
     expect(client).toMatch(/Profile information/);
     expect(client).toMatch(/Change password/);
     expect(client).not.toMatch(/Account recovery/);
-    expect(page).toMatch(/Active sessions/);
+    expect(page).toMatch(/Quick actions/);
+  });
+
+  it("no longer renders the Active Sessions management section", () => {
+    // The settings page must not list sessions, show device/IP metadata, or
+    // offer session revocation; Better Auth session handling itself is
+    // untouched.
+    expect(page).not.toMatch(/Active sessions/i);
+    expect(page).not.toMatch(/SessionActions/);
+    expect(page).not.toMatch(/listAdminSessions/);
+    expect(page).not.toMatch(/Sign out other sessions/);
+    expect(page).not.toMatch(/Current session/);
+    expect(page).not.toMatch(/Last active/);
+    expect(page).not.toMatch(/ipAddress/);
+    expect(page).not.toMatch(/other device/);
   });
 
   it("uses toasts, dialogs, and loading/error states", () => {
     expect(client).toMatch(/toast\.success/);
     expect(client).toMatch(/toast\.error|setProfileError|setPasswordError/);
     expect(client).toMatch(/Loader2/);
-    expect(sessionActions).toMatch(/AlertDialog/);
-    expect(sessionActions).toMatch(/toast\.success/);
   });
 
   it("does not allow role or email editing through the profile form", () => {
@@ -527,9 +498,9 @@ describe("settings and recovery UI", () => {
     expect(forgot).toMatch(/OTP_RESEND_COOLDOWN_SECONDS/);
   });
 
-  it("revokes other sessions through the dedicated API", () => {
-    expect(sessionActions).toMatch(/\/api\/admin\/security\/sessions/);
-    expect(sessionActions).toMatch(/method:\s*"DELETE"/);
+  it("keeps profile and password APIs for the settings sections that remain", () => {
+    expect(page).toMatch(/getAdminProfile/);
+    expect(client).toMatch(/Change password/);
   });
 });
 
