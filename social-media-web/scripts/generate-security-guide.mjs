@@ -8,12 +8,27 @@
 // outline bookmarks. Every security statement in the copy is reviewed against
 // the implemented application behavior; see tests/security-guide.test.ts.
 //
+// Layout engine rules (fixed after the v1 overlap/overflow bugs):
+//   * Every text operation states its full text state explicitly (Tc is always
+//     emitted, even when 0). PDF text state persists across BT/ET, so an op
+//     that omits Tc would inherit letter spacing from an earlier op and render
+//     wider than measured — the original right-margin overflow bug.
+//   * Every block (paragraph, bullet, heading, callout) is measured before it
+//     is drawn. `ensure(height)` starts a new page when the block does not fit,
+//     so nothing can overlap the header, footer, or page bottom.
+//   * Subheadings keep at least two lines of the following block on the same
+//     page (keep-with-next); bullets are never split; paragraphs flow across
+//     pages but never leave a single orphan line behind.
+//   * Wrapping uses real font metrics with a small safety factor so viewers
+//     that substitute Helvetica with slightly wider fonts (e.g. Arial) cannot
+//     push a line past the right margin.
+//
 // Usage: node scripts/generate-security-guide.mjs
 // Output: ../public/Social-Console-Security-Guide.pdf (relative to scripts/).
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.resolve(here, "../public/Social-Console-Security-Guide.pdf");
@@ -22,12 +37,23 @@ const OUT = path.resolve(here, "../public/Social-Console-Security-Guide.pdf");
 // Geometry and palette
 // ---------------------------------------------------------------------------
 
-const PAGE_W = 595.28; // A4 width in points
-const PAGE_H = 841.89; // A4 height in points
-const MARGIN = 64;
+export const GEOM = {
+  PAGE_W: 595.28, // A4 width in points
+  PAGE_H: 841.89, // A4 height in points
+  MARGIN: 64,
+  TOP: 776, // first content baseline on a page
+  BOTTOM: 76, // lowest allowed content baseline
+  HEADER_BASELINE: 813,
+  HEADER_RULE: 806,
+  FOOTER_RULE: 54,
+  FOOTER_BASELINE: 42,
+};
+const { PAGE_W, PAGE_H, MARGIN, TOP, BOTTOM } = GEOM;
 const CONTENT_W = PAGE_W - 2 * MARGIN;
-const TOP = 780; // first baseline on a content page
-const BOTTOM = 72; // lowest allowed baseline before a page break
+// Extra headroom on every wrapped line: PDF viewers frequently substitute
+// Helvetica with Arial, whose glyphs run slightly wider. 1.04 keeps such lines
+// inside the margin; it only makes wraps marginally earlier.
+const WRAP_SAFETY = 1.04;
 
 const COLOR = {
   text: "0.067 0.094 0.153 rg", // near-black slate
@@ -40,6 +66,23 @@ const COLOR = {
   calloutEnforced: "0.937 0.965 1 rg", // light blue
   calloutAdvice: "0.965 0.973 0.980 rg", // light gray
   slate: "0.200 0.251 0.325 RG",
+};
+
+// Vertical rhythm (points). One place defines the document's spacing system.
+const SPACING = {
+  paragraphLeading: 15,
+  paragraphGap: 9, // extra space below a paragraph
+  bulletLeading: 14.5,
+  bulletGap: 4, // between bullets in a list
+  bulletListGap: 10, // after the last bullet of a list
+  h2Above: 13,
+  h2Below: 6,
+  calloutLeading: 13.5,
+  calloutPadTop: 9, // box top above the label baseline
+  calloutLabelGap: 13, // label baseline to first body baseline
+  calloutPadBottom: 9, // box bottom below the last body baseline
+  calloutGap: 13, // after the box
+  noteLeading: 13,
 };
 
 // ---------------------------------------------------------------------------
@@ -66,23 +109,25 @@ const W_BOLD = [
 ];
 const FONT_WIDTHS = { F1: W_HELV, F2: W_BOLD, F3: W_HELV }; // Oblique == regular metrics
 
-function textWidth(str, font, size, letterSpacing = 0) {
-  const table = FONT_WIDTHS[font];
+export function measureText(str, font, size, letterSpacing = 0) {
+  const table = FONT_WIDTHS[font] ?? W_HELV;
   let total = 0;
   for (const ch of str) {
     const code = ch.charCodeAt(0);
     total += code >= 32 && code <= 126 ? table[code - 32] : 500;
   }
-  return ((total / 1000) * size) + Math.max(0, str.length - 1) * letterSpacing;
+  return (total / 1000) * size + Math.max(0, str.length - 1) * letterSpacing;
 }
 
-function wrap(text, font, size, maxWidth) {
+/** Greedy word wrap with real metrics. Never splits words; never exceeds maxWidth. */
+export function wrapText(text, font, size, maxWidth, letterSpacing = 0) {
   const words = text.split(/\s+/).filter(Boolean);
   const lines = [];
   let line = "";
   for (const word of words) {
     const candidate = line ? `${line} ${word}` : word;
-    if (textWidth(candidate, font, size) <= maxWidth || !line) {
+    const measured = measureText(candidate, font, size, letterSpacing) * WRAP_SAFETY;
+    if (measured <= maxWidth || !line) {
       line = candidate;
     } else {
       lines.push(line);
@@ -97,13 +142,17 @@ function esc(str) {
   return str.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 }
 
+export function unescapePdfString(str) {
+  return str.replace(/\\([()\\])/g, "$1");
+}
+
 // ---------------------------------------------------------------------------
-// Content-stream op builders
+// Content-stream op builders. Tc is ALWAYS emitted: text state persists across
+// BT/ET, and an omitted Tc would inherit letter spacing from an earlier op.
 // ---------------------------------------------------------------------------
 
 function txt(x, y, str, font, size, fill, letterSpacing = 0) {
-  const tc = letterSpacing ? `${letterSpacing} Tc ` : "";
-  return `BT /${font} ${size} Tf ${fill} ${tc}${x.toFixed(2)} ${y.toFixed(2)} Td (${esc(str)}) Tj ET\n`;
+  return `BT /${font} ${size} Tf ${fill} ${letterSpacing} Tc ${x.toFixed(2)} ${y.toFixed(2)} Td (${esc(str)}) Tj ET\n`;
 }
 
 function rect(x, y, w, h, fill) {
@@ -114,12 +163,12 @@ function hline(x1, x2, y, widthPt) {
   return `${COLOR.rule} ${widthPt} w ${x1.toFixed(2)} ${y.toFixed(2)} m ${x2.toFixed(2)} ${y.toFixed(2)} l S\n`;
 }
 
-function rightX(str, font, size, right) {
-  return right - textWidth(str, font, size);
+function rightX(str, font, size, right, letterSpacing = 0) {
+  return right - measureText(str, font, size, letterSpacing);
 }
 
 // ---------------------------------------------------------------------------
-// Page flow
+// Page flow: block-based placement with pre-computed heights
 // ---------------------------------------------------------------------------
 
 const pages = []; // { ops, header } — header text shown top-right
@@ -128,80 +177,126 @@ let y = TOP;
 let header = "";
 const sectionStartPage = [];
 
-function pushPage() {
+function beginPage() {
   pages.push({ ops, header });
   ops = "";
   y = TOP;
 }
 
-function need(space) {
-  if (y - space < BOTTOM) pushPage();
+/** Starts a new page unless the block (plus its trailing space) fits. */
+function ensure(height) {
+  if (y - height < BOTTOM) beginPage();
+}
+
+/**
+ * Places wrapped lines top-down, flowing across pages. Orphan control: a
+ * paragraph never starts with a single line at the bottom of a page.
+ */
+function placeLines(lines, x, font, size, fill, leading) {
+  let i = 0;
+  for (;;) {
+    const remaining = lines.length - i;
+    const available = Math.max(0, Math.floor((y - BOTTOM + 0.01) / leading));
+    if (available === 0) {
+      beginPage();
+      continue;
+    }
+    const take = Math.min(remaining, available);
+    if (take === 1 && remaining >= 2 && i === 0) {
+      beginPage(); // orphan line: move the whole start to the next page
+      continue;
+    }
+    let baseline = y;
+    for (let k = 0; k < take; k++) {
+      ops += txt(x, baseline, lines[i + k], font, size, fill);
+      baseline -= leading;
+    }
+    y = baseline;
+    i += take;
+    if (i < lines.length) {
+      beginPage();
+      continue;
+    }
+    return;
+  }
 }
 
 function paragraph(text, opts = {}) {
   const {
     font = "F1",
     size = 10,
-    leading = 15,
+    leading = SPACING.paragraphLeading,
     fill = COLOR.text,
     indent = 0,
-    gapBefore = 0,
-    gapAfter = 8,
+    gapAfter = SPACING.paragraphGap,
     maxWidth = CONTENT_W - indent,
   } = opts;
-  y -= gapBefore;
-  for (const line of wrap(text, font, size, maxWidth)) {
-    need(leading);
-    ops += txt(MARGIN + indent, y, line, font, size, fill);
-    y -= leading;
-  }
+  const lines = wrapText(text, font, size, maxWidth);
+  placeLines(lines, MARGIN + indent, font, size, fill, leading);
   y -= gapAfter;
 }
 
-function heading(text) {
-  y -= 12;
-  need(30);
+/** Subheading: keep-with-next — needs room for itself plus 2 lines below. */
+function heading(text, followMinHeight) {
+  const selfHeight = SPACING.h2Above + SPACING.paragraphLeading + SPACING.h2Below;
+  ensure(selfHeight + (followMinHeight ?? 0));
+  y -= SPACING.h2Above;
   ops += txt(MARGIN, y, text, "F2", 13, COLOR.text);
-  y -= 6;
+  y -= SPACING.paragraphLeading + SPACING.h2Below;
+}
+
+function bullet(item, isLast) {
+  const lines = wrapText(item, "F1", 10, CONTENT_W - 16);
+  const leading = SPACING.bulletLeading;
+  const gap = isLast ? SPACING.bulletListGap : SPACING.bulletGap;
+  ensure(lines.length * leading + gap); // a bullet is never split across pages
+  const markerY = y + 2.2;
+  ops += rect(MARGIN + 1.5, markerY, 3, 3, COLOR.brand);
+  let baseline = y;
+  for (const line of lines) {
+    ops += txt(MARGIN + 16, baseline, line, "F1", 10, COLOR.text);
+    baseline -= leading;
+  }
+  y = baseline - gap;
 }
 
 function bullets(items) {
-  for (const item of items) {
-    const lines = wrap(item, "F1", 10, CONTENT_W - 16);
-    need(lines.length * 14.5 + 3);
-    const markerY = y + 2.6;
-    ops += rect(MARGIN + 1.5, markerY, 3, 3, COLOR.brand);
-    for (const line of lines) {
-      ops += txt(MARGIN + 16, y, line, "F1", 10, COLOR.text);
-      y -= 14.5;
-    }
-    y -= 3.5;
-  }
+  items.forEach((item, index) => bullet(item, index === items.length - 1));
 }
 
+/** Callout box with a height computed from its wrapped content. */
 function callout(label, text, tone) {
   const size = 9.5;
-  const leading = 13.5;
-  const lines = wrap(text, "F1", size, CONTENT_W - 28);
-  const height = 14 + 12 + lines.length * leading + 8;
-  need(height + 10);
-  const top = y + 5;
-  const bottom = top - height;
+  const leading = SPACING.calloutLeading;
+  const lines = wrapText(text, "F1", size, CONTENT_W - 30);
+  const boxHeight =
+    SPACING.calloutPadTop +
+    SPACING.calloutLabelGap +
+    (lines.length - 1) * leading +
+    SPACING.calloutPadBottom;
+  ensure(boxHeight + SPACING.calloutGap);
+  const boxBottom = y - SPACING.calloutLabelGap - (lines.length - 1) * leading - SPACING.calloutPadBottom;
   const bg = tone === "enforced" ? COLOR.calloutEnforced : COLOR.calloutAdvice;
   const barFill = tone === "enforced" ? COLOR.brand : COLOR.slate.replace(" RG", " rg");
-  ops += rect(MARGIN, bottom, CONTENT_W, height, bg);
-  ops += rect(MARGIN, bottom, 3, height, barFill);
-  ops += txt(MARGIN + 14, top - 15, label, "F2", 9, COLOR.text);
-  let ly = top - 15 - 13;
+  ops += rect(MARGIN, boxBottom, CONTENT_W, boxHeight, bg);
+  ops += rect(MARGIN, boxBottom, 3, boxHeight, barFill);
+  ops += txt(MARGIN + 14, y, label, "F2", 9, COLOR.text);
+  let baseline = y - SPACING.calloutLabelGap;
   for (const line of lines) {
-    ops += txt(MARGIN + 14, ly, line, "F1", size, COLOR.text);
-    ly -= leading;
+    ops += txt(MARGIN + 14, baseline, line, "F1", size, COLOR.text);
+    baseline -= leading;
   }
-  y = bottom - 14;
+  y = boxBottom - SPACING.calloutGap;
 }
 
 function note(text) {
-  paragraph(text, { font: "F3", size: 9, leading: 13, fill: COLOR.muted, gapBefore: 2, gapAfter: 8 });
+  paragraph(text, {
+    font: "F3",
+    size: 9,
+    leading: SPACING.noteLeading,
+    fill: COLOR.muted,
+    gapAfter: SPACING.paragraphGap,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -325,7 +420,7 @@ const sections = [
 ];
 
 // ---------------------------------------------------------------------------
-// Cover page
+// Cover page (fixed canvas, all text states explicit)
 // ---------------------------------------------------------------------------
 
 function coverOps() {
@@ -333,24 +428,25 @@ function coverOps() {
   s += rect(0, PAGE_H - 7, PAGE_W, 7, COLOR.brand);
   // Brand mark
   s += rect(MARGIN, 692, 52, 52, COLOR.brand);
-  s += txt(MARGIN + 13.5, 710, "SC", "F2", 20, COLOR.white, 0.5);
+  const scWidth = measureText("SC", "F2", 20, 0.5);
+  s += txt(MARGIN + (52 - scWidth) / 2, 711, "SC", "F2", 20, COLOR.white, 0.5);
   s += txt(MARGIN, 662, "SOCIAL CONSOLE", "F2", 10, COLOR.brand, 2.2);
   // Title
   s += txt(MARGIN, 604, "Security & Account", "F2", 34, COLOR.text);
-  s += txt(MARGIN, 564, "Protection Guide", "F2", 34, COLOR.text);
-  s += rect(MARGIN, 538, 40, 3, COLOR.brand);
+  s += txt(MARGIN, 560, "Protection Guide", "F2", 34, COLOR.text);
+  s += rect(MARGIN, 534, 40, 3, COLOR.brand);
   // Subtitle
-  let sy = 508;
-  for (const line of wrap(
+  let sy = 506;
+  for (const line of wrapText(
     "Understanding how your account, data, authentication, and publishing activities are protected.",
-    "F1", 11.5, CONTENT_W - 60,
+    "F1", 11.5, CONTENT_W - 40,
   )) {
     s += txt(MARGIN, sy, line, "F1", 11.5, COLOR.muted);
     sy -= 17;
   }
   // Scope paragraph
-  sy -= 8;
-  for (const line of wrap(
+  sy -= 10;
+  for (const line of wrapText(
     "This guide describes the protections implemented in the Social Console admin application and its publishing worker. Sections marked 'Enforced by the application' describe server-side behavior. Section 7 lists recommended administrator practices, which are marked separately.",
     "F1", 9.5, CONTENT_W - 40,
   )) {
@@ -366,7 +462,7 @@ function coverOps() {
 }
 
 // ---------------------------------------------------------------------------
-// Table of contents
+// Table of contents (built after the layout pass knows section pages)
 // ---------------------------------------------------------------------------
 
 function tocOps(entries) {
@@ -378,19 +474,20 @@ function tocOps(entries) {
     const label = `${entry.num}.  ${entry.title}`;
     const numStr = String(entry.page);
     s += txt(MARGIN, ty, label, "F1", 11, COLOR.text);
-    s += txt(rightX(numStr, "F1", 11, PAGE_W - MARGIN), ty, numStr, "F1", 11, COLOR.muted);
+    const numX = rightX(numStr, "F1", 11, PAGE_W - MARGIN);
+    s += txt(numX, ty, numStr, "F1", 11, COLOR.muted);
     // thin leader between title and page number
-    const titleW = textWidth(label, "F1", 11);
+    const titleW = measureText(label, "F1", 11);
     const lineStart = MARGIN + titleW + 10;
-    const lineEnd = rightX(numStr, "F1", 11, PAGE_W - MARGIN) - 10;
+    const lineEnd = numX - 10;
     if (lineEnd > lineStart + 8) {
       s += `${COLOR.rule} 0.6 w ${lineStart.toFixed(2)} ${(ty + 3.2).toFixed(2)} m ${lineEnd.toFixed(2)} ${(ty + 3.2).toFixed(2)} l S\n`;
     }
     ty -= 27;
   }
-  s += txt(MARGIN, ty - 6, "About this guide", "F2", 12, COLOR.text);
-  ty -= 22;
-  for (const line of wrap(
+  s += txt(MARGIN, ty - 20, "About this guide", "F2", 12, COLOR.text);
+  ty -= 20 + 16 + 8;
+  for (const line of wrapText(
     "This document is generated from the Social Console project and describes behavior that is implemented and enforced in the admin web application and its publishing worker. It contains no credentials, tokens, or private account data.",
     "F1", 9.5, CONTENT_W,
   )) {
@@ -404,34 +501,34 @@ function tocOps(entries) {
 // Layout pass — sections each start on a fresh page
 // ---------------------------------------------------------------------------
 
-pushPage(); // page 1: cover placeholder
-const coverIndex = 0;
-pushPage(); // page 2: TOC placeholder
-const tocIndex = 1;
+function layout() {
+  beginPage(); // page 1: cover placeholder
+  beginPage(); // page 2: TOC placeholder
 
-sections.forEach((section, index) => {
-  // Fresh page per section.
-  if (ops !== "" || y !== TOP) pushPage();
-  header = section.title;
-  sectionStartPage[index] = pages.length; // page index where this section starts
+  sections.forEach((section, index) => {
+    if (ops !== "" || y !== TOP) beginPage();
+    header = section.title;
+    sectionStartPage[index] = pages.length; // page index where this section starts
 
-  // Section heading block
-  ops += txt(MARGIN, y, `SECTION ${index + 1}`, "F2", 8, COLOR.brand, 1.8);
-  y -= 24;
-  ops += txt(MARGIN, y, section.title, "F2", 21, COLOR.text);
-  y -= 14;
-  ops += rect(MARGIN, y, 34, 2.5, COLOR.brand);
-  y -= 26;
+    // Section heading block (always at the top of a fresh page)
+    ops += txt(MARGIN, y, `SECTION ${index + 1}`, "F2", 8, COLOR.brand, 1.8);
+    y -= 30;
+    ops += txt(MARGIN, y, section.title, "F2", 21, COLOR.text);
+    y -= 16;
+    ops += rect(MARGIN, y, 34, 2.5, COLOR.brand);
+    y -= 24;
 
-  for (const block of section.blocks) {
-    if (block.t === "p") paragraph(block.x);
-    else if (block.t === "h2") heading(block.x);
-    else if (block.t === "note") note(block.x);
-    else if (block.t === "bullets") bullets(block.items);
-    else if (block.t === "callout") callout(block.label, block.x, block.tone);
-  }
-});
-if (ops !== "" || y !== TOP) pushPage();
+    section.blocks.forEach((block, blockIndex) => {
+      const next = section.blocks[blockIndex + 1];
+      if (block.t === "p") paragraph(block.x);
+      else if (block.t === "h2") heading(block.x, next ? 2 * SPACING.paragraphLeading : 0);
+      else if (block.t === "note") note(block.x);
+      else if (block.t === "bullets") bullets(block.items);
+      else if (block.t === "callout") callout(block.label, block.x, block.tone);
+    });
+  });
+  if (ops !== "" || y !== TOP) beginPage();
+}
 
 // ---------------------------------------------------------------------------
 // Render headers/footers (fixed height, so layout is unaffected)
@@ -439,135 +536,206 @@ if (ops !== "" || y !== TOP) pushPage();
 
 const DOC_LABEL = "Social Console - Security & Account Protection Guide";
 const FILE_LABEL = "Social-Console-Security-Guide.pdf";
-const total = pages.length;
 
-const finalPages = pages.map((page, index) => {
-  const pageNumber = index + 1;
+function frameOps(page, pageNumber, total) {
   let frame = "";
-  if (index !== coverIndex) {
-    // Running header
-    frame += txt(MARGIN, 813, "SOCIAL CONSOLE", "F2", 7, COLOR.brand, 1.4);
-    const rightLabel = page.header || DOC_LABEL;
-    let label = rightLabel;
-    while (textWidth(label, "F1", 7) > 200 && label.length > 4) label = label.slice(0, -2);
-    if (label !== rightLabel) label = `${label}...`;
-    frame += txt(rightX(label, "F1", 7, PAGE_W - MARGIN), 813, label, "F1", 7, COLOR.muted);
-    frame += hline(MARGIN, PAGE_W - MARGIN, 806, 0.6);
-    // Running footer
-    frame += hline(MARGIN, PAGE_W - MARGIN, 52, 0.6);
-    frame += txt(MARGIN, 40, FILE_LABEL, "F1", 7, COLOR.muted);
-    const pageLabel = `Page ${pageNumber} of ${total}`;
-    frame += txt(rightX(pageLabel, "F1", 7, PAGE_W - MARGIN), 40, pageLabel, "F1", 7, COLOR.muted);
-  }
-  return page.ops + frame;
-});
-
-// Insert the cover and TOC content now that section start pages are known.
-finalPages[coverIndex] = coverOps();
-finalPages[tocIndex] = tocOps(
-  sections.map((section, i) => ({
-    num: i + 1,
-    title: section.title,
-    // Displayed page numbers count from 1 including the cover.
-    page: sectionStartPage[i] + 1,
-  })),
-) + finalPages[tocIndex];
+  // Running header
+  frame += txt(MARGIN, GEOM.HEADER_BASELINE, "SOCIAL CONSOLE", "F2", 7, COLOR.brand, 1.4);
+  const rightLabel = page.header || DOC_LABEL;
+  const headerTc = 0.3;
+  let label = rightLabel;
+  while (measureText(label, "F1", 7, headerTc) > 200 && label.length > 4) label = label.slice(0, -2);
+  if (label !== rightLabel) label = `${label}...`;
+  frame += txt(rightX(label, "F1", 7, PAGE_W - MARGIN, headerTc), GEOM.HEADER_BASELINE, label, "F1", 7, COLOR.muted, headerTc);
+  frame += hline(MARGIN, PAGE_W - MARGIN, GEOM.HEADER_RULE, 0.6);
+  // Running footer
+  frame += hline(MARGIN, PAGE_W - MARGIN, GEOM.FOOTER_RULE, 0.6);
+  frame += txt(MARGIN, GEOM.FOOTER_BASELINE, FILE_LABEL, "F1", 7, COLOR.muted);
+  const pageLabel = `Page ${pageNumber} of ${total}`;
+  frame += txt(rightX(pageLabel, "F1", 7, PAGE_W - MARGIN), GEOM.FOOTER_BASELINE, pageLabel, "F1", 7, COLOR.muted);
+  return frame;
+}
 
 // ---------------------------------------------------------------------------
 // PDF serialization
 // ---------------------------------------------------------------------------
 
-const objects = []; // { id, body }
+const objects = []; // { body } — index + 1 = object number
 function addObject(body) {
   objects.push(body);
   return objects.length; // 1-based object number
 }
 
-// Reserve: 1 Catalog (filled last), 2 Pages, 3-5 Fonts, 6 Info. Pages follow,
-// then outlines. Filling the reserved bodies in place keeps every reference.
-addObject("CATALOG_PLACEHOLDER"); // 1
-const fontDefs = [
-  "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
-  "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
-  "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>",
-];
-
-const pagesObjNum = addObject("PAGES_PLACEHOLDER"); // 2 — filled after kids known
-for (const def of fontDefs) addObject(def); // 3, 4, 5
-const infoObjNum = addObject(
-  "<< /Title (Social Console - Security & Account Protection Guide) " +
-  "/Author (Social Console) " +
-  "/Subject (How the Social Console protects accounts, authentication, sessions, social connections, publishing, and data) " +
-  `/Creator (Social Console) /Producer (Social Console security guide generator) >>`,
-); // 6
-
-const kids = [];
-const pageObjNums = [];
-for (const content of finalPages) {
-  const stream = Buffer.from(content, "utf8");
-  const contentNum = addObject(
-    `<< /Length ${stream.byteLength} >>\nstream\n${content}endstream`,
-  );
-  const pageNum = addObject(
-    `<< /Type /Page /Parent ${pagesObjNum} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Contents ${contentNum} 0 R >>`,
-  );
-  kids.push(`${pageNum} 0 R`);
-  pageObjNums.push(pageNum);
-}
-
-objects[pagesObjNum - 1] =
-  `<< /Type /Pages /Kids [${kids.join(" ")}] /Count ${kids.length} ` +
-  `/Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> >>`;
-
-// Outline bookmarks (one per section, linking to the section's first page).
-const outlineItems = sections.map((section, i) => ({
-  title: `${i + 1}. ${section.title}`,
-  pageObj: pageObjNums[sectionStartPage[i]],
-}));
-const itemNums = outlineItems.map(() => addObject("OUTLINE_PLACEHOLDER"));
-const outlineRootNum = addObject(
-  `<< /Type /Outlines /First ${itemNums[0]} 0 R /Last ${itemNums[itemNums.length - 1]} 0 R /Count ${itemNums.length} >>`,
-);
-outlineItems.forEach((item, i) => {
-  const parts = [
-    `<< /Title (${esc(item.title)}) /Parent ${outlineRootNum} 0 R`,
-    `/Dest [${item.pageObj} 0 R /XYZ null ${PAGE_H - 24} null]`,
+function serialize(finalPages) {
+  // Reserve: 1 Catalog (filled last), 2 Pages, 3-5 Fonts, 6 Info. Pages follow,
+  // then outlines. Filling the reserved bodies in place keeps every reference.
+  addObject("CATALOG_PLACEHOLDER"); // 1
+  const pagesObjNum = addObject("PAGES_PLACEHOLDER"); // 2
+  const fontDefs = [
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>",
   ];
-  if (i > 0) parts.push(`/Prev ${itemNums[i - 1]} 0 R`);
-  if (i < itemNums.length - 1) parts.push(`/Next ${itemNums[i + 1]} 0 R`);
-  parts.push(">>");
-  objects[itemNums[i] - 1] = parts.join(" ");
-});
+  for (const def of fontDefs) addObject(def); // 3, 4, 5
+  const infoObjNum = addObject(
+    "<< /Title (Social Console - Security & Account Protection Guide) " +
+    "/Author (Social Console) " +
+    "/Subject (How the Social Console protects accounts, authentication, sessions, social connections, publishing, and data) " +
+    "/Creator (Social Console) /Producer (Social Console security guide generator) >>",
+  ); // 6
 
-const catalogObjNum = 1; // catalog placeholder was added first
-objects[catalogObjNum - 1] =
-  `<< /Type /Catalog /Pages ${pagesObjNum} 0 R /Outlines ${outlineRootNum} 0 R /PageMode /UseOutlines >>`;
+  const kids = [];
+  const pageObjNums = [];
+  for (const content of finalPages) {
+    const stream = Buffer.from(content, "utf8");
+    const contentNum = addObject(
+      `<< /Length ${stream.byteLength} >>\nstream\n${content}endstream`,
+    );
+    const pageNum = addObject(
+      `<< /Type /Page /Parent ${pagesObjNum} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Contents ${contentNum} 0 R >>`,
+    );
+    kids.push(`${pageNum} 0 R`);
+    pageObjNums.push(pageNum);
+  }
 
-// Write the file with a correct xref table.
-const chunks = [];
-let offset = 0;
-const offsets = [0]; // object 0 is free
-function write(str) {
-  const buf = Buffer.from(str, "utf8");
-  chunks.push(buf);
-  offset += buf.byteLength;
+  objects[pagesObjNum - 1] =
+    `<< /Type /Pages /Kids [${kids.join(" ")}] /Count ${kids.length} ` +
+    `/Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> >>`;
+
+  // Outline bookmarks (one per section, linking to the section's first page).
+  const outlineItems = sections.map((section, i) => ({
+    title: `${i + 1}. ${section.title}`,
+    pageObj: pageObjNums[sectionStartPage[i]],
+  }));
+  const itemNums = outlineItems.map(() => addObject("OUTLINE_PLACEHOLDER"));
+  const outlineRootNum = addObject(
+    `<< /Type /Outlines /First ${itemNums[0]} 0 R /Last ${itemNums[itemNums.length - 1]} 0 R /Count ${itemNums.length} >>`,
+  );
+  outlineItems.forEach((item, i) => {
+    const parts = [
+      `<< /Title (${esc(item.title)}) /Parent ${outlineRootNum} 0 R`,
+      `/Dest [${item.pageObj} 0 R /XYZ null ${PAGE_H - 24} null]`,
+    ];
+    if (i > 0) parts.push(`/Prev ${itemNums[i - 1]} 0 R`);
+    if (i < itemNums.length - 1) parts.push(`/Next ${itemNums[i + 1]} 0 R`);
+    parts.push(">>");
+    objects[itemNums[i] - 1] = parts.join(" ");
+  });
+
+  objects[0] =
+    `<< /Type /Catalog /Pages ${pagesObjNum} 0 R /Outlines ${outlineRootNum} 0 R /PageMode /UseOutlines >>`;
+
+  // Write the file with a correct xref table.
+  const chunks = [];
+  let offset = 0;
+  const offsets = [0]; // object 0 is free
+  function write(str) {
+    const buf = Buffer.from(str, "utf8");
+    chunks.push(buf);
+    offset += buf.byteLength;
+  }
+
+  write("%PDF-1.7\n%\xE2\xE3\xCF\xD3\n");
+  objects.forEach((body, i) => {
+    offsets.push(offset);
+    write(`${i + 1} 0 obj\n${body}\nendobj\n`);
+  });
+  const xrefPos = offset;
+  let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= objects.length; i++) {
+    xref += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
+  }
+  write(xref);
+  write(`trailer\n<< /Size ${objects.length + 1} /Root 1 0 R /Info ${infoObjNum} 0 R >>\nstartxref\n${xrefPos}\n%%EOF\n`);
+
+  return Buffer.concat(chunks);
 }
 
-write("%PDF-1.7\n%\xE2\xE3\xCF\xD3\n");
-objects.forEach((body, i) => {
-  offsets.push(offset);
-  write(`${i + 1} 0 obj\n${body}\nendobj\n`);
-});
-const xrefPos = offset;
-let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-for (let i = 1; i <= objects.length; i++) {
-  xref += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
-}
-write(xref);
-write(`trailer\n<< /Size ${objects.length + 1} /Root ${catalogObjNum} 0 R /Info ${infoObjNum} 0 R >>\nstartxref\n${xrefPos}\n%%EOF\n`);
+// ---------------------------------------------------------------------------
+// Structured parsing of the generated PDF (shared with tests and the preview
+// renderer so validation always matches the generator's op formats).
+// ---------------------------------------------------------------------------
 
-mkdirSync(path.dirname(OUT), { recursive: true });
-writeFileSync(OUT, Buffer.concat(chunks));
-console.log(`Wrote ${OUT}`);
-console.log(`Pages: ${total} (${sections.length} sections, cover + contents)`);
-console.log(`Size: ${Buffer.concat(chunks).byteLength} bytes`);
+const TEXT_OP = /BT \/(F\d) ([\d.]+) Tf ([\d.]+) ([\d.]+) ([\d.]+) rg (-?[\d.]+) Tc (-?[\d.-]+) (-?[\d.-]+) Td \(((?:[^()\\]|\\.)*)\) Tj ET/g;
+const RECT_OP = /([\d.]+) ([\d.]+) ([\d.]+) rg ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re f/g;
+const LINE_OP = /([\d.]+) ([\d.]+) ([\d.]+) RG ([\d.]+) w (-?[\d.-]+) (-?[\d.-]+) m (-?[\d.-]+) (-?[\d.-]+) l S/g;
+
+export function parseGuidePdf(pdfLatin1) {
+  const streams = [...pdfLatin1.matchAll(/stream\n([\s\S]*?)endstream/g)].map((m) => m[1]);
+  const pdfPages = streams.map((stream) => {
+    const runs = [];
+    for (const m of stream.matchAll(TEXT_OP)) {
+      runs.push({
+        x: Number(m[7]),
+        y: Number(m[8]),
+        size: Number(m[2]),
+        font: m[1],
+        tc: Number(m[6]),
+        fill: [Number(m[3]), Number(m[4]), Number(m[5])],
+        text: unescapePdfString(m[9]),
+      });
+    }
+    const rects = [];
+    for (const m of stream.matchAll(RECT_OP)) {
+      rects.push({
+        x: Number(m[4]),
+        y: Number(m[5]),
+        w: Number(m[6]),
+        h: Number(m[7]),
+        fill: [Number(m[1]), Number(m[2]), Number(m[3])],
+      });
+    }
+    const lines = [];
+    for (const m of stream.matchAll(LINE_OP)) {
+      lines.push({
+        x1: Number(m[5]),
+        y1: Number(m[6]),
+        x2: Number(m[7]),
+        y2: Number(m[8]),
+        widthPt: Number(m[4]),
+        stroke: [Number(m[1]), Number(m[2]), Number(m[3])],
+      });
+    }
+    return { runs, rects, lines, raw: stream };
+  });
+  return { pages: pdfPages, streams };
+}
+
+// ---------------------------------------------------------------------------
+
+function main() {
+  layout();
+
+  const total = pages.length;
+  const finalPages = pages.map((page, index) => {
+    const pageNumber = index + 1;
+    if (index === 0) return coverOps(); // the cover carries no header/footer
+    return page.ops + frameOps(page, pageNumber, total);
+  });
+
+  // Insert the TOC content now that section start pages are known. The frame
+  // ops of the placeholder page are kept so the TOC carries the running
+  // header and footer like every other content page.
+  finalPages[1] = tocOps(
+    sections.map((section, i) => ({
+      num: i + 1,
+      title: section.title,
+      // Displayed page numbers count from 1 including the cover.
+      page: sectionStartPage[i] + 1,
+    })),
+  ) + finalPages[1];
+
+  const pdf = serialize(finalPages);
+  mkdirSync(path.dirname(OUT), { recursive: true });
+  writeFileSync(OUT, pdf);
+  console.log(`Wrote ${OUT}`);
+  console.log(`Pages: ${total} (${sections.length} sections, cover + contents)`);
+  console.log(`Size: ${pdf.byteLength} bytes`);
+}
+
+// Only run when invoked directly (tests import this module for its helpers).
+const invokedDirectly = process.argv[1]
+  && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+if (invokedDirectly) {
+  main();
+}
