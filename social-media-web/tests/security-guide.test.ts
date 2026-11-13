@@ -371,15 +371,14 @@ describe("security guide link integration", () => {
     expect(page).toContain("focus-visible:ring-ring/50");
   });
 
-  it("keeps the four informational reference cards", () => {
-    for (const card of [
-      "Signed-in administrator",
-      "Account model",
-      "Publishing safety",
-      "Data handling",
-    ]) {
-      expect(page).toContain(card);
-    }
+  it("keeps the reference heading as a standalone download link", () => {
+    // The informational card grid was removed; the PDF anchor is standalone.
+    expect(page).not.toContain("Signed-in administrator");
+    expect(page).not.toContain("Account model");
+    expect(page).not.toContain("Publishing safety");
+    expect(page).not.toContain("Data handling");
+    expect(page).not.toContain("ReferenceCard");
+    expect(page).not.toContain("aria-label=\"Administration reference\"");
   });
 
   it("does not reintroduce removed modules", () => {

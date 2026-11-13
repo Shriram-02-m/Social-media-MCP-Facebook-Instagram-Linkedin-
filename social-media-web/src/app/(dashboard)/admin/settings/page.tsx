@@ -1,15 +1,11 @@
 import Link from "next/link";
 import {
-  BadgeCheck,
   CalendarClock,
   ChevronRight,
   FileDown,
   Link2,
-  LockKeyhole,
   Monitor,
-  ShieldCheck,
   Smartphone,
-  Users,
   UsersRound,
   type LucideIcon,
 } from "lucide-react";
@@ -28,8 +24,6 @@ import {
   listAdminSessions,
 } from "@/lib/admin-security";
 import { requireAdminPage } from "@/lib/admin-page";
-import { classifyUserStatus } from "@/lib/admin-user-status";
-import { readAccountState } from "@/lib/session";
 
 import { SessionActions } from "./session-actions";
 import { SettingsClient } from "./settings-client";
@@ -75,7 +69,7 @@ function isMobileDevice(userAgent: string | null): boolean {
   return /Android|iPhone|iPad|iOS/.test(userAgent ?? "");
 }
 
-/** Small muted icon chip for informational/reference cards. */
+/** Small muted icon chip used by the quick action tiles. */
 function InfoIcon({ icon: Icon }: { icon: LucideIcon }) {
   return (
     <span
@@ -84,34 +78,6 @@ function InfoIcon({ icon: Icon }: { icon: LucideIcon }) {
     >
       <Icon className="size-4" />
     </span>
-  );
-}
-
-/** Compact, visually quiet reference card for non-interactive information. */
-function ReferenceCard({
-  title,
-  description,
-  icon,
-  children,
-}: {
-  title: string;
-  description: string;
-  icon: LucideIcon;
-  children: React.ReactNode;
-}) {
-  return (
-    <Card size="sm" className="h-full gap-3">
-      <CardHeader className="gap-2">
-        <CardTitle className="flex items-center gap-2.5 text-sm">
-          <InfoIcon icon={icon} />
-          {title}
-        </CardTitle>
-        <CardDescription className="text-xs">{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {children}
-      </CardContent>
-    </Card>
   );
 }
 
@@ -141,28 +107,8 @@ const QUICK_ACTIONS: Array<{
   },
 ];
 
-function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5 border-b py-2 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-      <dt className="text-xs font-medium">{label}</dt>
-      <dd className="text-xs text-muted-foreground sm:text-right">{children}</dd>
-    </div>
-  );
-}
-
 export default async function AdminSettingsPage() {
   const session = await requireAdminPage();
-  const state = readAccountState(session);
-  const status = state
-    ? classifyUserStatus({
-        approvalStatus: state.approvalStatus,
-        banned: state.banActive,
-        deleted: state.deleted,
-      })
-    : null;
-  const statusLabel = status
-    ? `${status.charAt(0).toUpperCase()}${status.slice(1)}`
-    : "Unknown";
 
   const [profile, sessions] = await Promise.all([
     getAdminProfile(session.user.id),
@@ -262,95 +208,35 @@ export default async function AdminSettingsPage() {
         </CardFooter>
       </Card>
 
-      {/* Informational reference: intentionally quieter than the editable
-          settings above so the two groups read differently at a glance. */}
-      <section aria-label="Administration reference" className="flex flex-col gap-3">
-        <a
-          href="/Social-Console-Security-Guide.pdf"
-          download="Social-Console-Security-Guide.pdf"
-          className="-mx-2 flex items-start gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+      {/* Security guide download: the only reference content kept on the page. */}
+      <a
+        href="/Social-Console-Security-Guide.pdf"
+        download="Social-Console-Security-Guide.pdf"
+        className="-mx-2 flex items-start gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+      >
+        <span
+          className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300"
+          aria-hidden="true"
         >
-          <span
-            className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300"
-            aria-hidden="true"
-          >
-            <FileDown className="size-4" />
+          <FileDown className="size-4" />
+        </span>
+        <span className="flex flex-col gap-0.5">
+          <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
+            How this console protects your account
+            <Badge
+              variant="secondary"
+              className="text-[10px] font-semibold uppercase tracking-wide"
+            >
+              PDF
+            </Badge>
           </span>
-          <span className="flex flex-col gap-0.5">
-            <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
-              How this console protects your account
-              <Badge
-                variant="secondary"
-                className="text-[10px] font-semibold uppercase tracking-wide"
-              >
-                PDF
-              </Badge>
-            </span>
-            <span className="text-xs text-muted-foreground">
-              Read our security and account protection guide (PDF) — it downloads
-              automatically. Reference only: these policies are enforced by the
-              server and cannot be changed here.
-            </span>
+          <span className="text-xs text-muted-foreground">
+            Read our security and account protection guide (PDF) — it downloads
+            automatically. Reference only: these policies are enforced by the
+            server and cannot be changed here.
           </span>
-        </a>
-        <div className="grid gap-4 md:grid-cols-2">
-          <ReferenceCard
-            title="Signed-in administrator"
-            description="The verified server-side session for this console."
-            icon={BadgeCheck}
-          >
-            <dl>
-              <InfoRow label="Name">{profile.name}</InfoRow>
-              <InfoRow label="Email">{profile.email}</InfoRow>
-              <InfoRow label="Role">
-                {state?.isAdmin ? "Super Admin" : state?.role}
-              </InfoRow>
-              <InfoRow label="Status">{statusLabel}</InfoRow>
-            </dl>
-          </ReferenceCard>
-
-          <ReferenceCard
-            title="Account model"
-            description="Exactly one Super Admin is allowed by a database unique index."
-            icon={Users}
-          >
-            <ul className="flex list-disc flex-col gap-1.5 pl-4 text-xs text-muted-foreground">
-              <li>New registrations start as pending until approved.</li>
-              <li>Suspension revokes sessions and holds scheduled posts.</li>
-              <li>Deletion is a soft delete that preserves audit history.</li>
-              <li>The Super Admin cannot be suspended or deleted.</li>
-              <li>Admins cannot suspend, delete, or revoke their own sessions.</li>
-            </ul>
-          </ReferenceCard>
-
-          <ReferenceCard
-            title="Publishing safety"
-            description="Controls that prevent duplicate or unauthorized publishing."
-            icon={ShieldCheck}
-          >
-            <ul className="flex list-disc flex-col gap-1.5 pl-4 text-xs text-muted-foreground">
-              <li>The worker claims due posts with row-level locks.</li>
-              <li>Suspended or deleted accounts cannot claim posts.</li>
-              <li>Held posts are skipped until an administrator resumes them.</li>
-              <li>Overdue held posts stay held to avoid immediate duplicates.</li>
-              <li>Every hold, resume, retry, and publish is activity-logged.</li>
-            </ul>
-          </ReferenceCard>
-
-          <ReferenceCard
-            title="Data handling"
-            description="Secrets never appear in the admin console or audit trail."
-            icon={LockKeyhole}
-          >
-            <ul className="flex list-disc flex-col gap-1.5 pl-4 text-xs text-muted-foreground">
-              <li>Social tokens stay encrypted and are never displayed.</li>
-              <li>Activity metadata is sanitized before it is stored.</li>
-              <li>Only active users can access the application.</li>
-              <li>Every admin API verifies the Super Admin server-side.</li>
-            </ul>
-          </ReferenceCard>
-        </div>
-      </section>
+        </span>
+      </a>
 
       <Card className="gap-0 py-0">
         <CardHeader className="gap-1 border-b px-4 py-4 lg:px-5">
