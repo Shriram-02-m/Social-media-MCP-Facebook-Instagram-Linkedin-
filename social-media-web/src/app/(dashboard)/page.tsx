@@ -1,8 +1,10 @@
 import {
   CalendarClock,
+  CalendarDays,
   CheckCircle2,
   CircleAlert,
   PenSquare,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -152,8 +154,13 @@ export default async function OverviewPage() {
           </div>
           <Link
             href="/accounts"
-            className={buttonVariants({ variant: "outline", size: "sm" })}
+            className={buttonVariants({
+              variant: "outline",
+              size: "sm",
+              className: "bg-muted/50 hover:bg-muted",
+            })}
           >
+            <Users aria-hidden="true" />
             Manage accounts
           </Link>
         </CardHeader>
@@ -206,8 +213,13 @@ export default async function OverviewPage() {
           </div>
           <Link
             href="/calendar"
-            className={buttonVariants({ variant: "outline", size: "sm" })}
+            className={buttonVariants({
+              variant: "outline",
+              size: "sm",
+              className: "bg-muted/50 hover:bg-muted",
+            })}
           >
+            <CalendarDays aria-hidden="true" />
             View calendar
           </Link>
         </CardHeader>
