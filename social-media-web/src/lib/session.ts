@@ -1,7 +1,10 @@
+import { cache } from "react";
+
 import { headers } from "next/headers";
 import { unstable_rethrow } from "next/navigation";
 
 import { auth, ADMIN_ROLE, type AppUser } from "@/lib/auth";
+import { ensureDatabaseConnection } from "@/lib/db";
 
 export type AdminSession = NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>;
 
@@ -45,28 +48,29 @@ function logSessionLookupFailure(error: unknown): void {
 // (FAILED_TO_GET_SESSION); the underlying database error is only logged, never
 // attached as a cause, so transient connection failures cannot be recognized
 // from the thrown error alone. Live diagnosis against the production database
-// confirmed the failure mode: serverless instances on Vercel lose their pooled
-// TCP sockets while frozen (Supabase/intermediaries close idle connections),
-// and the next lookup fails with a connection-level error (ECONNRESET) before
-// the pool establishes a replacement.
+// confirmed the failure mode: serverless instances on Vercel freeze between
+// requests, providers close the instance's idle TCP connections while it is
+// frozen, and the pool then hands out those dead clients one query at a time -
+// so a lookup can fail on several consecutive dead clients before reaching a
+// healthy connection, which a single blind retry cannot recover from.
 //
-// Retry the lookup exactly once after a short delay. The second attempt
-// re-runs the entire verification against the database - nothing is cached or
-// assumed from the first attempt - so a retry can never fabricate a session.
-// A persistent outage fails the retry too and still surfaces as
-// `SessionUnavailableError`.
-const SESSION_RETRY_DELAY_MS = 400;
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+// Recovery is therefore deterministic, not a blind retry: verify (and drain
+// dead clients from) the pool with `ensureDatabaseConnection`, then re-run the
+// lookup exactly once. The second attempt re-runs the entire verification
+// against the database - nothing is cached or assumed from the first attempt -
+// so it can never fabricate a session. A persistent outage fails the retry too
+// and still surfaces as `SessionUnavailableError`.
 
 async function lookupSession(): Promise<AdminSession | null> {
   const result = await auth.api.getSession({ headers: await headers() });
   return result ?? null;
 }
 
-export async function getSession(): Promise<AdminSession | null> {
+// `cache` deduplicates the lookup within a single render: the dashboard layout
+// and the page (for example requireAdmin() on /admin) each call getSession(),
+// and without dedupe every page render performs two or more full session
+// lookups - each one another chance to hit a stale connection.
+export const getSession = cache(async (): Promise<AdminSession | null> => {
   try {
     return await lookupSession();
   } catch (error) {
@@ -75,7 +79,9 @@ export async function getSession(): Promise<AdminSession | null> {
     // framework; during `next build` they are how a route is marked dynamic.
     unstable_rethrow(error);
     logSessionLookupFailure(error);
-    await delay(SESSION_RETRY_DELAY_MS);
+    if (!(await ensureDatabaseConnection())) {
+      throw new SessionUnavailableError();
+    }
     try {
       return await lookupSession();
     } catch (retryError) {
@@ -84,7 +90,7 @@ export async function getSession(): Promise<AdminSession | null> {
       throw new SessionUnavailableError();
     }
   }
-}
+});
 
 export class UnauthorizedError extends Error {
   constructor() {

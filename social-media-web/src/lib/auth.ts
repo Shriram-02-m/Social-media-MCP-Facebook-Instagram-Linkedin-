@@ -37,10 +37,46 @@ const BANNED_USER_MESSAGE =
 // The single Super Admin signature used to detect an existing admin row.
 export const ADMIN_ROLE = "admin";
 
+// Better Auth wraps every failed database operation in an opaque APIError and
+// only passes the real database error to its internal logger. Capture it so
+// production logs identify the actual connectivity failure (ECONNRESET, "too
+// many clients", ...) instead of the generic "Failed to get session". Values
+// are redacted: a database error message can carry bound parameters such as
+// the session token, so URLs are stripped and the text truncated.
+function redactDatabaseError(text: string): string {
+  return text
+    .replace(/postgres(?:ql)?:\/\/[^\s"'<>]+/gi, "[database URL redacted]")
+    .slice(0, 300);
+}
+
+const authLogger = {
+  log: (level: "debug" | "info" | "warn" | "error", message: string, ...args: unknown[]) => {
+    if (level === "error") {
+      const cause = [message, ...args].find((a): a is Error => a instanceof Error);
+      if (cause) {
+        console.error(
+          JSON.stringify({
+            event: "better_auth_internal_error",
+            name: cause.name,
+            code: (cause as NodeJS.ErrnoException).code ?? undefined,
+            message: redactDatabaseError(cause.message),
+          }),
+        );
+        return;
+      }
+    }
+    // Preserve Better Auth's default output (its default level is "warn", so
+    // only warn/error reach this hook) for every other event.
+    const write = level === "error" ? console.error : console.warn;
+    write(`[Better Auth]: ${message}`, ...args.filter((a) => typeof a === "string"));
+  },
+};
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: "pg", schema }),
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL,
+  logger: authLogger,
   trustedOrigins: [...new Set(trustedOrigins)],
   emailAndPassword: {
     enabled: true,
