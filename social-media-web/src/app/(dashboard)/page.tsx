@@ -12,6 +12,7 @@ import { PostStatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { PlatformChip } from "@/components/platform-chip";
+import { PlatformLogo } from "@/components/platform-logo";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -168,26 +169,31 @@ export default async function OverviewPage() {
               description="Connect Facebook, Instagram, or LinkedIn from the Accounts page to start publishing."
             />
           ) : (
-            <ul className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-x-6 sm:gap-y-2">
+            <ul className="flex flex-col">
               {connected.map((platform) => {
                 const token = tokenByPlatform.get(platform);
                 return (
                   <li
                     key={platform}
-                    className="flex min-w-0 items-center gap-2.5"
+                    className="flex min-w-0 items-center gap-3 border-b pb-3 last:border-b-0 last:pb-0"
                   >
-                    <PlatformChip platform={platform} size="md" />
-                    <span className="min-w-0 flex-col">
-                      <span className="block truncate text-sm font-medium">
-                        {token?.accountName ?? PLATFORM_LABEL(platform)}
+                    <PlatformLogo platform={platform} />
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span className="text-sm font-medium">
+                        {PLATFORM_LABEL(platform)}
                       </span>
-                      <span
-                        className={`text-xs ${
-                          token?.expired
-                            ? "text-amber-700 dark:text-amber-400"
-                            : "text-muted-foreground"
-                        }`}
-                      >
+                      {token?.accountName ? (
+                        <span className="truncate text-sm text-muted-foreground">
+                          {token.accountName}
+                        </span>
+                      ) : null}
+                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span
+                          aria-hidden="true"
+                          className={`size-1.5 rounded-full ${
+                            token?.expired ? "bg-amber-500" : "bg-emerald-500"
+                          }`}
+                        />
                         {token?.expired ? "Expired — reconnect" : "Connected"}
                       </span>
                     </span>
