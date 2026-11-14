@@ -41,17 +41,48 @@ function logSessionLookupFailure(error: unknown): void {
   console.error(JSON.stringify({ event: "session_lookup_failed", ...details }));
 }
 
+// Better Auth wraps every failed session lookup in an opaque `APIError`
+// (FAILED_TO_GET_SESSION); the underlying database error is only logged, never
+// attached as a cause, so transient connection failures cannot be recognized
+// from the thrown error alone. Live diagnosis against the production database
+// confirmed the failure mode: serverless instances on Vercel lose their pooled
+// TCP sockets while frozen (Supabase/intermediaries close idle connections),
+// and the next lookup fails with a connection-level error (ECONNRESET) before
+// the pool establishes a replacement.
+//
+// Retry the lookup exactly once after a short delay. The second attempt
+// re-runs the entire verification against the database - nothing is cached or
+// assumed from the first attempt - so a retry can never fabricate a session.
+// A persistent outage fails the retry too and still surfaces as
+// `SessionUnavailableError`.
+const SESSION_RETRY_DELAY_MS = 400;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function lookupSession(): Promise<AdminSession | null> {
+  const result = await auth.api.getSession({ headers: await headers() });
+  return result ?? null;
+}
+
 export async function getSession(): Promise<AdminSession | null> {
   try {
-    const result = await auth.api.getSession({ headers: await headers() });
-    return result ?? null;
+    return await lookupSession();
   } catch (error) {
     // Never intercept Next.js control-flow errors (dynamic-usage from
     // `headers()`, redirect/notFound, prerender bailouts). They must reach the
     // framework; during `next build` they are how a route is marked dynamic.
     unstable_rethrow(error);
     logSessionLookupFailure(error);
-    throw new SessionUnavailableError();
+    await delay(SESSION_RETRY_DELAY_MS);
+    try {
+      return await lookupSession();
+    } catch (retryError) {
+      unstable_rethrow(retryError);
+      logSessionLookupFailure(retryError);
+      throw new SessionUnavailableError();
+    }
   }
 }
 

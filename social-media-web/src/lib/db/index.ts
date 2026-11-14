@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import { Pool, type PoolConfig } from "pg";
 
 import { config } from "@/lib/backend";
 
@@ -11,8 +11,31 @@ function connectionString(): string {
   return (process.env.DATABASE_URL?.trim() || config.databaseUrl || "").trim();
 }
 
+// `pg` enables TLS only when the connection string itself carries an `sslmode`
+// parameter; without one it connects in cleartext. Supabase does not currently
+// reject unencrypted sessions, so a DATABASE_URL without `?sslmode=require`
+// silently degrades to plaintext. Enforce encryption for Supabase hosts unless
+// the URL explicitly configures TLS itself. `rejectUnauthorized: false` matches
+// `sslmode=require` semantics (encryption required, no CA verification) so no
+// CA bundle has to be shipped with the deployment.
+function sslOverride(connectionUrl: string): PoolConfig["ssl"] {
+  let parsed: URL;
+  try {
+    parsed = new URL(connectionUrl);
+  } catch {
+    return undefined;
+  }
+  if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") return undefined;
+  if (parsed.searchParams.has("sslmode")) return undefined;
+  if (!/\.supabase\.(co|com)$/.test(parsed.hostname)) return undefined;
+  return { rejectUnauthorized: false };
+}
+
+const connectionUrl = connectionString();
+
 const pool = globalForDb.scheduledMediaDbPool ?? new Pool({
-  connectionString: connectionString(),
+  connectionString: connectionUrl,
+  ssl: sslOverride(connectionUrl),
   max: 5,
   connectionTimeoutMillis: 10000,
   idleTimeoutMillis: 30000,

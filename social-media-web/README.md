@@ -28,6 +28,13 @@ auth variables, the OAuth/worker modules read `DATABASE_URL`,
 and the public `META_APP_ID` / `INSTAGRAM_APP_ID` / `LINKEDIN_CLIENT_ID` values from
 the Vercel environment.
 
+On Vercel, set `DATABASE_URL` to the Supabase **pooler** URL (transaction mode,
+port 6543, with `?sslmode=require`); see `.env.example`. Serverless isolates
+opening direct connections (`db.<ref>.supabase.co:5432`) can exhaust the
+database's connection cap and intermittently break session verification with the
+"Can't verify your session" screen. Keep the direct URL only for long-running
+workers such as the Render backend.
+
 `APP_CREDENTIAL_ENCRYPTION_KEY` is also required on Vercel: `POST /api/credentials`
 encrypts each signed-in user's Developer App secret before it is stored. Use the
 same 64-character hex value as the Render worker, generate it with
