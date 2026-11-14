@@ -154,11 +154,7 @@ export default async function OverviewPage() {
           </div>
           <Link
             href="/accounts"
-            className={buttonVariants({
-              variant: "outline",
-              size: "sm",
-              className: "bg-muted/50 hover:bg-muted",
-            })}
+            className={buttonVariants({ size: "sm" })}
           >
             <Users aria-hidden="true" />
             Manage accounts
@@ -213,11 +209,7 @@ export default async function OverviewPage() {
           </div>
           <Link
             href="/calendar"
-            className={buttonVariants({
-              variant: "outline",
-              size: "sm",
-              className: "bg-muted/50 hover:bg-muted",
-            })}
+            className={buttonVariants({ size: "sm" })}
           >
             <CalendarDays aria-hidden="true" />
             View calendar
