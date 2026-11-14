@@ -37,6 +37,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   accountConnectionState,
+  connectionAction,
   type AccountConnectionState,
 } from "@/lib/account-connection-state";
 
@@ -57,6 +58,7 @@ interface PlatformStatus {
   grantedPermissions?: string[];
   warning?: string;
   connectedAt?: string | null;
+  previouslyConnected?: boolean;
 }
 
 interface CredentialStatus {
@@ -720,6 +722,11 @@ export function AccountsPanel() {
           const isSaving = busyHere && busy.action === "save";
           const isConnecting = busyHere && busy.action === "connect";
           const accountName = connection.accountName?.trim();
+          // "Reconnect" is right whenever an OAuth consent completed before
+          // (live connection or a stored token record); everyone else,
+          // including users who only saved developer credentials, sees
+          // "Connect".
+          const action = connectionAction(state, connection.previouslyConnected);
 
           return (
             <Card
@@ -952,7 +959,7 @@ export function AccountsPanel() {
                         <LoaderCircle className="animate-spin" />
                         Waiting for sign-in...
                       </>
-                    ) : state === "connected" ? (
+                    ) : action === "reconnect" ? (
                       <>
                         <RefreshCw />
                         Reconnect

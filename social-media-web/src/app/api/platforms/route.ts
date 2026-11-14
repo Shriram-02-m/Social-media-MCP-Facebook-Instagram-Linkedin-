@@ -54,6 +54,11 @@ export async function GET() {
         tokenExpired:
           typeof status.tokenExpired === "boolean" ? status.tokenExpired : meta.expired,
         connectedAt: meta.connectedAt,
+        // A token record is written only after a completed OAuth consent and
+        // is never deleted, so its existence proves a previous connection even
+        // when the token is expired or revoked. Saved developer credentials
+        // live in a separate table and must never be treated as history.
+        previouslyConnected: true,
       };
     });
 

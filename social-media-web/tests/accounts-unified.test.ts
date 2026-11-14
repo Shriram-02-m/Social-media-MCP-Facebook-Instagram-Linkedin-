@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { accountConnectionState } from "@/lib/account-connection-state";
+import { accountConnectionState, connectionAction } from "@/lib/account-connection-state";
 
 const readFile = (relative: string) => readFileSync(relative, "utf8");
 
@@ -29,6 +29,33 @@ describe("accountConnectionState", () => {
     expect(accountConnectionState({ connected: true, tokenExpired: true })).toBe(
       "expired",
     );
+  });
+});
+
+describe("connectionAction (Connect vs Reconnect)", () => {
+  it("shows Connect for users who never completed an OAuth consent", () => {
+    expect(connectionAction("disconnected")).toBe("connect");
+    expect(connectionAction("disconnected", false)).toBe("connect");
+  });
+
+  it("shows Connect when only developer app credentials are saved", () => {
+    // Saved credentials must not imply a previous social account connection;
+    // the panel passes the API's token-record flag, not credential state.
+    expect(connectionAction("disconnected", false)).toBe("connect");
+  });
+
+  it("shows Reconnect when a previous connection exists but is no longer active", () => {
+    expect(connectionAction("expired", true)).toBe("reconnect");
+    expect(connectionAction("disconnected", true)).toBe("reconnect");
+  });
+
+  it("shows Reconnect for a currently connected platform as its management action", () => {
+    expect(connectionAction("connected")).toBe("reconnect");
+    expect(connectionAction("connected", true)).toBe("reconnect");
+  });
+
+  it("defaults to Connect when the API response carries no history flag", () => {
+    expect(connectionAction("disconnected", undefined)).toBe("connect");
   });
 });
 
@@ -132,6 +159,24 @@ describe("credential storage and isolation", () => {
     expect(appCredentials).not.toMatch(
       /DELETE FROM public\.oauth_tokens|saveTokens\(/,
     );
+  });
+});
+
+describe("connection history detection", () => {
+  it("derives the Connect/Reconnect flag from stored token records only", () => {
+    // The platforms route merges per-user token metadata, which exists only
+    // after a completed OAuth consent; saved developer credentials are a
+    // separate table and must never produce the history flag.
+    expect(platformsRoute).toMatch(/loadTokenMetadata\(session\.user\.id\)/);
+    expect(platformsRoute).toMatch(/previouslyConnected: true/);
+    expect(platformsRoute).not.toMatch(/appCredentialStatuses|loadAppCredentials/);
+  });
+
+  it("labels the card action via the shared truth table", () => {
+    expect(panel).toMatch(
+      /connectionAction\(state, connection\.previouslyConnected\)/,
+    );
+    expect(panel).toMatch(/action === "reconnect" \?/);
   });
 });
 
