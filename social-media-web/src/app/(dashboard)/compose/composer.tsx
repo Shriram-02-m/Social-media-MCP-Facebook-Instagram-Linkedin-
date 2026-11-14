@@ -6,6 +6,7 @@ import { ImagePlus, LoaderCircle, Send, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { PlatformChip } from "@/components/platform-chip";
+import { PlatformLogo } from "@/components/platform-logo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -222,21 +224,30 @@ export function Composer() {
             <div
               role="group"
               aria-labelledby="platforms-label"
-              className="flex flex-wrap gap-2"
+              className="flex flex-col gap-2"
             >
               {PLATFORMS.map((platform) => {
                 const active = platforms.includes(platform.id);
                 return (
-                  <Button
+                  <label
                     key={platform.id}
-                    type="button"
-                    variant={active ? "default" : "outline"}
-                    size="sm"
-                    aria-pressed={active}
-                    onClick={() => togglePlatform(platform.id)}
+                    className={cn(
+                      "flex cursor-pointer select-none items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors hover:bg-muted/50 focus-within:ring-[3px] focus-within:ring-ring/50 focus-within:outline-none",
+                      active ? "border-primary bg-primary/5" : "border-input",
+                    )}
                   >
-                    {platform.label}
-                  </Button>
+                    <Checkbox
+                      checked={active}
+                      onCheckedChange={() => togglePlatform(platform.id)}
+                    />
+                    <PlatformLogo
+                      platform={platform.id}
+                      className="size-7 rounded-md"
+                    />
+                    <span className="text-sm font-medium">
+                      {platform.label}
+                    </span>
+                  </label>
                 );
               })}
             </div>
