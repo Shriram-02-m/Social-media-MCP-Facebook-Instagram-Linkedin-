@@ -95,20 +95,6 @@ export default async function OverviewPage() {
         }
       />
 
-      {failed.length > 0 ? (
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
-          <strong className="font-semibold">
-            {failed.length} post{failed.length === 1 ? "" : "s"} failed to
-            publish.
-          </strong>
-          <Link
-            href="/history"
-            className="font-medium underline underline-offset-2 hover:underline"
-          >
-            Review failures
-          </Link>
-        </p>
-      ) : null}
       {expired.length > 0 ? (
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
           <strong className="font-semibold">
