@@ -6,10 +6,10 @@ export default function QueuePage() {
     <>
       <PageHeader
         title="Queue"
-        description="Scheduled posts waiting to publish, in publishing order."
+        description="Scheduled and held posts waiting to publish, in publishing order."
       />
       <PostsList
-        statuses={["scheduled", "publishing"]}
+        statuses={["scheduled", "publishing", "held"]}
         showWorkerButton
         variant="queue"
         emptyTitle="Nothing in the queue"

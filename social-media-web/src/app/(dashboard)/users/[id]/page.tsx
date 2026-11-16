@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 import { PostStatusBadge, SocialStatusBadge } from "@/components/admin/status-badge";
+import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -560,15 +561,11 @@ export default async function UserDetailPage(props: PageProps<"/users/[id]">) {
         </CardHeader>
         <CardContent className="p-0">
           {posts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
-              <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                <CalendarClock className="size-5" aria-hidden="true" />
-              </span>
-              <p className="text-sm font-medium">No scheduled posts</p>
-              <p className="max-w-sm text-sm text-muted-foreground">
-                This user has no scheduled, published, or failed posts yet.
-              </p>
-            </div>
+            <EmptyState
+              icon={CalendarClock}
+              title="No scheduled posts"
+              description="This user has no scheduled, published, or failed posts yet."
+            />
           ) : (
             <Table className="min-w-[960px] table-fixed">
               <colgroup>

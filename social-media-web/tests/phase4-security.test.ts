@@ -489,6 +489,13 @@ describe("settings and recovery UI", () => {
     expect(login).toMatch(/autoComplete="current-password"/);
   });
 
+  it("keeps the password reset page reachable without a session", () => {
+    // The login page intentionally omits the link, but the documented
+    // self-service route must not be swallowed by the auth redirect.
+    const proxy = readFile("src/proxy.ts");
+    expect(proxy).toMatch(/"\/forgot-password"/);
+  });
+
   it("requests and consumes recovery OTPs without revealing account existence", () => {
     expect(forgot).toMatch(/requestPasswordReset/);
     expect(forgot).toMatch(/resetPassword/);

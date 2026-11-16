@@ -1,15 +1,10 @@
 import Link from "next/link";
 import { UsersRound } from "lucide-react";
 
+import { StatCard } from "@/components/admin/stat-card";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { requireAdminPage } from "@/lib/admin-page";
 import { getAdminUserStats, type AdminUserStats } from "@/lib/admin-overview";
 
@@ -58,43 +53,6 @@ const STATS: {
   },
 ];
 
-function StatCard({
-  stat,
-  value,
-}: {
-  stat: (typeof STATS)[number];
-  value: number;
-}) {
-  // Pending approvals are the one thing an administrator must act on, so the
-  // card is highlighted while work is waiting.
-  const attention = stat.attention && value > 0 ? stat.attention : undefined;
-
-  return (
-    <Link
-      href={stat.href}
-      className="group block rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-    >
-      <Card
-        className={`h-full transition-colors group-hover:bg-muted/50 ${attention ?? ""}`}
-      >
-        <CardHeader>
-          <CardDescription className="flex items-center gap-2">
-            <span
-              className={`size-2 rounded-full ${stat.indicator}`}
-              aria-hidden="true"
-            />
-            {stat.label}
-          </CardDescription>
-          <CardTitle className="text-3xl tabular-nums">{value}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-muted-foreground">{stat.description}</p>
-        </CardContent>
-      </Card>
-    </Link>
-  );
-}
-
 export default async function AdminOverviewPage() {
   await requireAdminPage();
   const stats = await getAdminUserStats();
@@ -122,8 +80,13 @@ export default async function AdminOverviewPage() {
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {STATS.map((stat) => (
-          <StatCard key={stat.key} stat={stat} value={stats[stat.key]} />
+        {STATS.map(({ key, attention, ...stat }) => (
+          <StatCard
+            key={key}
+            {...stat}
+            value={stats[key]}
+            attention={attention && stats[key] > 0 ? attention : undefined}
+          />
         ))}
       </div>
 

@@ -8,6 +8,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -67,17 +68,11 @@ export default async function AdminSettingsPage() {
   const profile = await getAdminProfile(session.user.id);
 
   return (
-    <div className="flex flex-col gap-8">
-      <header className="flex flex-col gap-1.5">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Administration settings
-        </h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          Update your profile, secure your account, and review how this console
-          protects publishing. Changes to individual user accounts are made from
-          the Users pages.
-        </p>
-      </header>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Administration settings"
+        description="Update your profile, secure your account, and review how this console protects publishing. Changes to individual user accounts are made from the Users pages."
+      />
 
       {/* Editable settings get the strongest visual priority. */}
       <SettingsClient profile={profile} />

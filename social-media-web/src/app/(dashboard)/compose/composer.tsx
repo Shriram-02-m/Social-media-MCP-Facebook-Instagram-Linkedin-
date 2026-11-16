@@ -22,7 +22,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "cn";
 
-const PLATFORMS = [  { id: "facebook", label: "Facebook" },
+const PLATFORMS = [
+  { id: "facebook", label: "Facebook" },
   { id: "instagram", label: "Instagram" },
   { id: "linkedin", label: "LinkedIn" },
 ] as const;
@@ -85,6 +86,9 @@ export function Composer() {
   const [files, setFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
+  // Stable lower bound for the schedule picker. Reading the clock during
+  // render would be impure; the server re-validates the chosen time anyway.
+  const [minSchedule] = useState(() => localDateTimeDefault(1));
 
   const previews = useMemo(
     () =>
@@ -123,7 +127,15 @@ export function Composer() {
           : isCarousel && (!platforms.includes("instagram") || platforms.length > 1)
             ? "Carousels can only be published to Instagram."
             : null;
-  const scheduleError = !publishNow && !scheduledAt ? "Choose a schedule time." : null;
+  const scheduleError = publishNow
+    ? null
+    : !scheduledAt
+      ? "Choose a schedule time."
+      : Number.isNaN(new Date(scheduledAt).getTime())
+        ? "Choose a valid date and time."
+        : scheduledAt < minSchedule
+          ? "Choose a time in the future."
+          : null;
 
   const issues: string[] = [];
   if (platformError) issues.push(platformError);
@@ -429,7 +441,7 @@ export function Composer() {
                 id="scheduledAt"
                 type="datetime-local"
                 value={scheduledAt}
-                min={localDateTimeDefault(1)}
+                min={minSchedule}
                 aria-invalid={scheduleError !== null}
                 onChange={(event) => setScheduledAt(event.target.value)}
               />
@@ -488,42 +500,46 @@ export function Composer() {
             PLATFORMS.filter((platform) => platforms.includes(platform.id)).map(
               (platform) => (
                 <div key={platform.id} className="rounded-lg border p-3">
-                <div className="mb-2 flex items-center gap-2">
-                  <PlatformChip platform={platform.id} />
-                  <span className="text-sm font-medium">{platform.label}</span>
-                  <Badge variant="outline" className="ml-auto text-[10px]">
-                    {publishNow ? "Publishing now" : `Scheduled ${formatCountdown(scheduledAt)}`}
-                  </Badge>
-                </div>
-                {previews.length > 0 ? (
-                  <div className="mb-2 flex gap-2 overflow-x-auto">
-                    {previews.slice(0, isCarousel ? 10 : 1).map((item, index) => (
-                      <div
-                        key={index}
-                        className="h-20 w-20 shrink-0 overflow-hidden rounded-md border"
-                      >
-                        {item.kind === "image" && item.url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={item.url}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <video
-                            src={item.url}
-                            className="h-full w-full object-cover"
-                            muted
-                            playsInline
-                          />
-                        )}
-                      </div>
-                    ))}
+                  <div className="mb-2 flex items-center gap-2">
+                    <PlatformChip platform={platform.id} />
+                    <span className="text-sm font-medium">{platform.label}</span>
+                    <Badge variant="outline" className="ml-auto text-[10px]">
+                      {publishNow
+                        ? "Publishing now"
+                        : `Scheduled ${formatCountdown(scheduledAt)}`}
+                    </Badge>
                   </div>
-                ) : null}
-                <p className="whitespace-pre-wrap break-words text-sm">
-                  {text.trim() || "No text yet."}
-                </p>
+                  {previews.length > 0 ? (
+                    <div className="mb-2 flex gap-2 overflow-x-auto">
+                      {previews
+                        .slice(0, isCarousel ? 10 : 1)
+                        .map((item, index) => (
+                          <div
+                            key={index}
+                            className="h-20 w-20 shrink-0 overflow-hidden rounded-md border"
+                          >
+                            {item.kind === "image" && item.url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={item.url}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <video
+                                src={item.url}
+                                className="h-full w-full object-cover"
+                                muted
+                                playsInline
+                              />
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                  ) : null}
+                  <p className="whitespace-pre-wrap break-words text-sm">
+                    {text.trim() || "No text yet."}
+                  </p>
                 </div>
               ),
             )

@@ -254,9 +254,12 @@ function statusBadgeClass(state: AccountConnectionState): string {
 }
 
 function cardRingClass(state: AccountConnectionState): string {
-  return state === "connected"
-    ? "ring-2 ring-emerald-500/80"
-    : "ring-2 ring-destructive/70";
+  // Only a live connection earns a coloured outline. Expired tokens get an
+  // amber warning, while never-connected / disconnected cards stay neutral so
+  // the page does not read as a wall of errors.
+  if (state === "connected") return "ring-2 ring-emerald-500/80";
+  if (state === "expired") return "ring-2 ring-amber-500/70";
+  return "ring-1 ring-foreground/10";
 }
 
 export function AccountsPanel() {

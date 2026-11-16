@@ -1,7 +1,14 @@
 import { getSessionCookie } from "better-auth/cookies";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PREFIXES = ["/login", "/signup", "/pending", "/api/auth", "/api/health"];
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/signup",
+  "/pending",
+  "/forgot-password",
+  "/api/auth",
+  "/api/health",
+];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PREFIXES.some(

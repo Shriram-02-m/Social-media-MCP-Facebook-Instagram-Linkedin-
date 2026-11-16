@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { UserSearch } from "lucide-react";
 
 import { AdminPagination } from "@/components/admin/admin-pagination";
 import { SocialStatusBadge, UserStatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/empty-state";
-import { UserSearch } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -286,13 +287,10 @@ export default async function AdminSocialAccountsPage({
 
   return (
     <>
-      <div>
-        <h1 className="text-2xl font-semibold">Social accounts</h1>
-        <p className="text-sm text-muted-foreground">
-          Monitor every connected social account across the platform. Only
-          non-secret metadata is shown; access tokens are never exposed.
-        </p>
-      </div>
+      <PageHeader
+        title="Social accounts"
+        description="Monitor every connected social account across the platform. Only non-secret metadata is shown; access tokens are never exposed."
+      />
 
       <Card>
         <CardHeader>

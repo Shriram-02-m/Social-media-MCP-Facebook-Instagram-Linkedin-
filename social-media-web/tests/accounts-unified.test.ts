@@ -88,7 +88,7 @@ describe("unified Accounts page", () => {
   it("drives the card border from the connection state, never from saved credentials", () => {
     expect(panel).toMatch(/cardRingClass\(state\)/);
     expect(panel).toContain("ring-emerald-500/80");
-    expect(panel).toContain("ring-destructive/70");
+    expect(panel).toContain("ring-amber-500/70");
     expect(panel).toContain("bg-emerald-600 text-white");
   });
 

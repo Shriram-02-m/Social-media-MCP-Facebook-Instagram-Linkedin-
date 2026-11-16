@@ -1,5 +1,4 @@
-import Link from "next/link";
-
+import { StatCard } from "@/components/admin/stat-card";
 import { PageHeader } from "@/components/page-header";
 import {
   Card,
@@ -68,30 +67,15 @@ export default async function UsersPage(props: PageProps<"/users">) {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {SUMMARY.map(({ key, label, description, href, indicator }) => (
-          <Link
-            key={key}
-            href={href}
-            className="group block rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            <Card className="h-full transition-colors group-hover:bg-muted/50">
-              <CardHeader>
-                <CardDescription className="flex items-center gap-2">
-                  <span
-                    className={`size-2 rounded-full ${indicator}`}
-                    aria-hidden="true"
-                  />
-                  {label}
-                </CardDescription>
-                <CardTitle className="text-2xl tabular-nums">
-                  {counts[key]}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground">{description}</p>
-              </CardContent>
-            </Card>
-          </Link>
+        {SUMMARY.map((stat) => (
+          <StatCard
+            key={stat.key}
+            label={stat.label}
+            description={stat.description}
+            href={stat.href}
+            indicator={stat.indicator}
+            value={counts[stat.key]}
+          />
         ))}
       </div>
 

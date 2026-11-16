@@ -102,7 +102,13 @@ function canRetry(post: ScheduledPostSummary): boolean {
 }
 
 function canReschedule(post: ScheduledPostSummary): boolean {
-  return post.status === "scheduled";
+  // Held posts can be rescheduled to a future time (which also returns them to
+  // `scheduled`), matching the backend scheduler rules.
+  return post.status === "scheduled" || post.status === "held";
+}
+
+function canCancel(post: ScheduledPostSummary): boolean {
+  return post.status === "scheduled" || post.status === "held";
 }
 
 export function PostsList({
@@ -124,6 +130,7 @@ export function PostsList({
 }) {
   const EmptyIcon = variant === "history" ? History : ListChecks;
   const [posts, setPosts] = useState<ScheduledPostSummary[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rescheduling, setRescheduling] = useState<ScheduledPostSummary | null>(null);
   const [cancelling, setCancelling] = useState<ScheduledPostSummary | null>(null);
@@ -138,13 +145,16 @@ export function PostsList({
           error?: string;
         };
         if (!response.ok) {
-          toast.error(body.error ?? "Could not load posts.");
+          setLoadError(body.error ?? "Could not load posts. Try again.");
           return;
         }
+        setLoadError(null);
         setPosts(body.posts ?? []);
       })
       .catch((error: unknown) => {
-        toast.error(error instanceof Error ? error.message : "Could not load posts.");
+        setLoadError(
+          error instanceof Error ? error.message : "Could not load posts. Try again.",
+        );
       });
   }, []);
 
@@ -325,7 +335,18 @@ export function PostsList({
             </div>
           </div>
         ) : null}
-        {posts === null ? (
+        {loadError !== null ? (
+          <EmptyState
+            icon={CircleAlert}
+            title="Could not load posts"
+            description={loadError}
+            action={
+              <Button size="sm" variant="outline" onClick={load}>
+                Try again
+              </Button>
+            }
+          />
+        ) : posts === null ? (
           <div className="flex flex-col gap-3">
             <Skeleton className="h-8 w-full" />
             <Skeleton className="h-8 w-full" />
@@ -417,7 +438,7 @@ export function PostsList({
                           Reschedule
                         </Button>
                       ) : null}
-                      {post.status === "scheduled" ? (
+                      {canCancel(post) ? (
                         <Button
                           size="sm"
                           variant="outline"
