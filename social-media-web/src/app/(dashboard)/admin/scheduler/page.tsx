@@ -31,7 +31,10 @@ import {
 import { requireAdminPage } from "@/lib/admin-page";
 import { parsePostFilters } from "@/lib/admin-policy";
 import { PLATFORM_META } from "@/lib/platform-meta";
-import { listScheduledPosts } from "@/lib/admin-scheduler";
+import {
+  listScheduledPosts,
+  type AdminScheduledPost,
+} from "@/lib/admin-scheduler";
 
 import { ErrorCell } from "./error-cell";
 import { PostActions } from "./post-actions";
@@ -85,6 +88,89 @@ function StatCard({
         </span>
       </CardContent>
     </Card>
+  );
+}
+
+function SchedulerPostCard({ post }: { post: AdminScheduledPost }) {
+  const platform = PLATFORM_META[post.platform];
+
+  return (
+    <article className="rounded-xl border bg-card p-4 shadow-card">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <Link
+            href={`/users/${post.ownerId}`}
+            className="truncate text-sm font-semibold hover:underline"
+            title={post.ownerName}
+          >
+            {post.ownerName}
+          </Link>
+          <span className="truncate text-xs text-muted-foreground" title={post.ownerEmail}>
+            {post.ownerEmail}
+          </span>
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full border bg-muted/40 px-2 py-1 text-xs">
+          <span
+            aria-hidden="true"
+            className={`flex size-[18px] shrink-0 items-center justify-center rounded-full text-[8px] font-semibold ring-1 ${platform.className}`}
+          >
+            {platform.short}
+          </span>
+          {platform.label}
+        </span>
+      </header>
+
+      <div className="mt-3">
+        <PostContentCell
+          text={post.text}
+          textPreview={post.textPreview}
+          mediaType={post.mediaType}
+        />
+      </div>
+
+      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t pt-3 text-xs">
+        <div>
+          <dt className="text-muted-foreground">Scheduled</dt>
+          <dd className="mt-0.5 font-medium tabular-nums">
+            {formatDate(post.scheduledAt)} · {formatTime(post.scheduledAt)} UTC
+            {post.publishedAt ? (
+              <span className="mt-1 block text-muted-foreground">
+                Published {formatDate(post.publishedAt)}
+              </span>
+            ) : null}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Status</dt>
+          <dd className="mt-1">
+            <PostStatusBadge status={post.status} />
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Retries</dt>
+          <dd className="mt-0.5 font-medium tabular-nums">
+            {post.retryCount}
+            {post.failureStage ? (
+              <span className="ml-1 text-muted-foreground">· {post.failureStage}</span>
+            ) : null}
+          </dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-muted-foreground">Error</dt>
+          <dd className="mt-0.5">
+            <ErrorCell error={post.error} failureStage={post.failureStage} />
+          </dd>
+        </div>
+      </dl>
+
+      <footer className="mt-3 flex justify-end border-t pt-3">
+        <PostActions
+          id={post.id}
+          status={post.status}
+          publishedUrl={post.publishedUrl}
+        />
+      </footer>
+    </article>
   );
 }
 
@@ -171,145 +257,116 @@ export default async function AdminSchedulerPage({
               description="No posts match the current filters in this date range. Try adjusting the search, status, platform, or date range."
             />
           ) : (
-            <Table className="min-w-[1024px] table-fixed">
-              <colgroup>
-                <col className="w-[12%]" />
-                <col className="w-[10%]" />
-                <col className="w-[29%]" />
-                <col className="w-[11%]" />
-                <col className="w-[11%]" />
-                <col className="w-[6%]" />
-                <col className="w-[10%]" />
-                <col className="w-[11%]" />
-              </colgroup>
-              <TableHeader className="bg-muted/40">
-                <TableRow>
-                  <TableHead className="h-11 px-3 text-xs font-medium text-muted-foreground">
-                    Owner
-                  </TableHead>
-                  <TableHead className="h-11 px-3 text-xs font-medium text-muted-foreground">
-                    Platform
-                  </TableHead>
-                  <TableHead className="h-11 px-3 text-xs font-medium text-muted-foreground">
-                    Post content
-                  </TableHead>
-                  <TableHead className="h-11 px-3 text-xs font-medium text-muted-foreground">
-                    Scheduled
-                  </TableHead>
-                  <TableHead className="h-11 px-3 text-xs font-medium text-muted-foreground">
-                    Status
-                  </TableHead>
-                  <TableHead className="h-11 px-3 text-center text-xs font-medium text-muted-foreground">
-                    Retries
-                  </TableHead>
-                  <TableHead className="h-11 px-3 text-xs font-medium text-muted-foreground">
-                    Error
-                  </TableHead>
-                  <TableHead className="h-11 px-3 text-right text-xs font-medium text-muted-foreground">
-                    Actions
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {result.posts.map((post) => {
-                  const platform = PLATFORM_META[post.platform];
-                  return (
-                    <TableRow key={post.id} className="h-[84px]">
-                      <TableCell className="whitespace-normal px-3 py-3 align-top">
-                        <div className="flex min-w-0 flex-col gap-0.5">
-                          <Link
-                            href={`/users/${post.ownerId}`}
-                            className="truncate font-medium hover:underline"
-                            title={post.ownerName}
-                          >
-                            {post.ownerName}
-                          </Link>
-                          <span
-                            className="truncate text-xs text-muted-foreground"
-                            title={post.ownerEmail}
-                          >
-                            {post.ownerEmail}
-                          </span>
-                        </div>
-                      </TableCell>
-
-                      <TableCell className="whitespace-normal px-3 py-3 align-top">
-                        <span className="inline-flex min-w-0 items-center gap-1">
-                          <span
-                            aria-hidden="true"
-                            className={`flex size-[18px] shrink-0 items-center justify-center rounded-full text-[8px] font-semibold ring-1 ${platform.className}`}
-                          >
-                            {platform.short}
-                          </span>
-                          <span className="truncate text-xs">
-                            {platform.label}
-                          </span>
-                        </span>
-                      </TableCell>
-
-                      <TableCell className="whitespace-normal px-3 py-3 align-top">
-                        <PostContentCell
-                          text={post.text}
-                          textPreview={post.textPreview}
-                          mediaType={post.mediaType}
-                        />
-                      </TableCell>
-
-                      <TableCell className="whitespace-normal px-3 py-3 align-top">
-                        <div className="flex flex-col gap-0.5 text-sm">
-                          <span className="font-medium tabular-nums">
-                            {formatDate(post.scheduledAt)}
-                          </span>
-                          <span className="text-xs tabular-nums text-muted-foreground">
-                            {formatTime(post.scheduledAt)} UTC
-                          </span>
-                          {post.publishedAt ? (
-                            <span className="mt-1 text-[11px] text-muted-foreground">
-                              Published {formatDate(post.publishedAt)}
-                            </span>
-                          ) : null}
-                        </div>
-                      </TableCell>
-
-                      <TableCell className="whitespace-normal px-3 py-3 align-top">
-                        <PostStatusBadge status={post.status} />
-                      </TableCell>
-
-                      <TableCell className="whitespace-normal px-3 py-3 text-center align-top">
-                        <div className="flex flex-col items-center gap-0.5">
-                          <span className="text-sm font-medium tabular-nums">
-                            {post.retryCount}
-                          </span>
-                          {post.failureStage ? (
-                            <span
-                              className="w-full truncate text-[10px] text-muted-foreground"
-                              title={post.failureStage}
-                            >
-                              {post.failureStage}
-                            </span>
-                          ) : null}
-                        </div>
-                      </TableCell>
-
-                      <TableCell className="whitespace-normal px-3 py-3 align-top">
-                        <ErrorCell
-                          error={post.error}
-                          failureStage={post.failureStage}
-                        />
-                      </TableCell>
-
-                      <TableCell className="whitespace-normal px-3 py-3 text-right align-top">
-                        <PostActions
-                          id={post.id}
-                          status={post.status}
-                          publishedUrl={post.publishedUrl}
-                        />
-                      </TableCell>
+            <>
+              <div className="hidden 2xl:block">
+                <Table className="min-w-[1024px] table-fixed">
+                  <colgroup>
+                    <col className="w-[12%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[29%]" />
+                    <col className="w-[11%]" />
+                    <col className="w-[11%]" />
+                    <col className="w-[6%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[11%]" />
+                  </colgroup>
+                  <TableHeader className="bg-muted/40">
+                    <TableRow>
+                      <TableHead className="h-11 px-3 text-xs font-medium text-muted-foreground">Owner</TableHead>
+                      <TableHead className="h-11 px-3 text-xs font-medium text-muted-foreground">Platform</TableHead>
+                      <TableHead className="h-11 px-3 text-xs font-medium text-muted-foreground">Post content</TableHead>
+                      <TableHead className="h-11 px-3 text-xs font-medium text-muted-foreground">Scheduled</TableHead>
+                      <TableHead className="h-11 px-3 text-xs font-medium text-muted-foreground">Status</TableHead>
+                      <TableHead className="h-11 px-3 text-center text-xs font-medium text-muted-foreground">Retries</TableHead>
+                      <TableHead className="h-11 px-3 text-xs font-medium text-muted-foreground">Error</TableHead>
+                      <TableHead className="h-11 px-3 text-right text-xs font-medium text-muted-foreground">Actions</TableHead>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {result.posts.map((post) => {
+                      const platform = PLATFORM_META[post.platform];
+                      return (
+                        <TableRow key={post.id} className="h-[84px]">
+                          <TableCell className="whitespace-normal px-3 py-3 align-top">
+                            <div className="flex min-w-0 flex-col gap-0.5">
+                              <Link
+                                href={`/users/${post.ownerId}`}
+                                className="truncate font-medium hover:underline"
+                                title={post.ownerName}
+                              >
+                                {post.ownerName}
+                              </Link>
+                              <span className="truncate text-xs text-muted-foreground" title={post.ownerEmail}>
+                                {post.ownerEmail}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="whitespace-normal px-3 py-3 align-top">
+                            <span className="inline-flex min-w-0 items-center gap-1">
+                              <span
+                                aria-hidden="true"
+                                className={`flex size-[18px] shrink-0 items-center justify-center rounded-full text-[8px] font-semibold ring-1 ${platform.className}`}
+                              >
+                                {platform.short}
+                              </span>
+                              <span className="truncate text-xs">{platform.label}</span>
+                            </span>
+                          </TableCell>
+                          <TableCell className="whitespace-normal px-3 py-3 align-top">
+                            <PostContentCell
+                              text={post.text}
+                              textPreview={post.textPreview}
+                              mediaType={post.mediaType}
+                            />
+                          </TableCell>
+                          <TableCell className="whitespace-normal px-3 py-3 align-top">
+                            <div className="flex flex-col gap-0.5 text-sm">
+                              <span className="font-medium tabular-nums">{formatDate(post.scheduledAt)}</span>
+                              <span className="text-xs tabular-nums text-muted-foreground">
+                                {formatTime(post.scheduledAt)} UTC
+                              </span>
+                              {post.publishedAt ? (
+                                <span className="mt-1 text-[11px] text-muted-foreground">
+                                  Published {formatDate(post.publishedAt)}
+                                </span>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableCell className="whitespace-normal px-3 py-3 align-top">
+                            <PostStatusBadge status={post.status} />
+                          </TableCell>
+                          <TableCell className="whitespace-normal px-3 py-3 text-center align-top">
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="text-sm font-medium tabular-nums">{post.retryCount}</span>
+                              {post.failureStage ? (
+                                <span className="w-full truncate text-[10px] text-muted-foreground" title={post.failureStage}>
+                                  {post.failureStage}
+                                </span>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableCell className="whitespace-normal px-3 py-3 align-top">
+                            <ErrorCell error={post.error} failureStage={post.failureStage} />
+                          </TableCell>
+                          <TableCell className="whitespace-normal px-3 py-3 text-right align-top">
+                            <PostActions
+                              id={post.id}
+                              status={post.status}
+                              publishedUrl={post.publishedUrl}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="grid gap-3 p-3 2xl:hidden sm:p-4">
+                {result.posts.map((post) => (
+                  <SchedulerPostCard key={post.id} post={post} />
+                ))}
+              </div>
+            </>
           )}
         </CardContent>
 

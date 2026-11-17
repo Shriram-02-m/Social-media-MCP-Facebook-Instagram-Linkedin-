@@ -92,71 +92,104 @@ export function UsersTable({
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="text-xs font-medium text-muted-foreground">
-            Name
-          </TableHead>
-          <TableHead className="text-xs font-medium text-muted-foreground">
-            Role
-          </TableHead>
-          <TableHead className="text-xs font-medium text-muted-foreground">
-            Status
-          </TableHead>
-          <TableHead className="text-xs font-medium text-muted-foreground">
-            Created
-          </TableHead>
-          <TableHead className="text-right text-xs font-medium text-muted-foreground">
-            Actions
-          </TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
+    <>
+      <div className="hidden lg:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs font-medium text-muted-foreground">Name</TableHead>
+              <TableHead className="text-xs font-medium text-muted-foreground">Role</TableHead>
+              <TableHead className="text-xs font-medium text-muted-foreground">Status</TableHead>
+              <TableHead className="text-xs font-medium text-muted-foreground">Created</TableHead>
+              <TableHead className="text-right text-xs font-medium text-muted-foreground">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {users.map((user) => (
+              <TableRow key={user.id}>
+                <TableCell className="whitespace-normal">
+                  <div className="flex items-center gap-2.5">
+                    <span
+                      aria-hidden="true"
+                      className="flex size-8 shrink-0 items-center justify-center rounded-full border bg-muted text-xs font-semibold text-muted-foreground"
+                    >
+                      {initials(user.name)}
+                    </span>
+                    <div className="flex min-w-0 flex-col">
+                      <span className="truncate font-medium">
+                        {user.name}
+                        {user.id === currentUserId ? (
+                          <span className="ml-2 text-xs font-normal text-muted-foreground">(you)</span>
+                        ) : null}
+                      </span>
+                      <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell><RoleBadge role={user.role} /></TableCell>
+                <TableCell><StatusBadge user={user} /></TableCell>
+                <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                  {dateFormatter.format(new Date(user.createdAt))}
+                </TableCell>
+                <TableCell className="text-right">
+                  <UserRowActions
+                    id={user.id}
+                    approvalStatus={user.approvalStatus}
+                    isSelf={user.id === currentUserId}
+                  />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="grid gap-3 lg:hidden">
         {users.map((user) => (
-          <TableRow key={user.id}>
-            <TableCell className="whitespace-normal">
-              <div className="flex items-center gap-2.5">
+          <article key={user.id} className="rounded-xl border bg-card p-4 shadow-card">
+            <header className="flex min-w-0 items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2.5">
                 <span
                   aria-hidden="true"
-                  className="flex size-8 shrink-0 items-center justify-center rounded-full border bg-muted text-xs font-semibold text-muted-foreground"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full border bg-muted text-xs font-semibold text-muted-foreground"
                 >
                   {initials(user.name)}
                 </span>
                 <div className="flex min-w-0 flex-col">
-                  <span className="truncate font-medium">
+                  <span className="truncate text-sm font-medium">
                     {user.name}
                     {user.id === currentUserId ? (
-                      <span className="ml-2 text-xs font-normal text-muted-foreground">
-                        (you)
-                      </span>
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">(you)</span>
                     ) : null}
                   </span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {user.email}
-                  </span>
+                  <span className="truncate text-xs text-muted-foreground">{user.email}</span>
                 </div>
               </div>
-            </TableCell>
-            <TableCell>
-              <RoleBadge role={user.role} />
-            </TableCell>
-            <TableCell>
-              <StatusBadge user={user} />
-            </TableCell>
-            <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-              {dateFormatter.format(new Date(user.createdAt))}
-            </TableCell>
-            <TableCell className="text-right">
               <UserRowActions
                 id={user.id}
                 approvalStatus={user.approvalStatus}
                 isSelf={user.id === currentUserId}
               />
-            </TableCell>
-          </TableRow>
+            </header>
+            <dl className="mt-4 grid grid-cols-2 gap-3 border-t pt-3 text-xs">
+              <div>
+                <dt className="mb-1 text-muted-foreground">Role</dt>
+                <dd><RoleBadge role={user.role} /></dd>
+              </div>
+              <div>
+                <dt className="mb-1 text-muted-foreground">Status</dt>
+                <dd><StatusBadge user={user} /></dd>
+              </div>
+              <div className="col-span-2">
+                <dt className="text-muted-foreground">Created</dt>
+                <dd className="mt-0.5 font-medium tabular-nums">
+                  {dateFormatter.format(new Date(user.createdAt))}
+                </dd>
+              </div>
+            </dl>
+          </article>
         ))}
-      </TableBody>
-    </Table>
+      </div>
+    </>
   );
 }

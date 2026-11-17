@@ -52,7 +52,7 @@ export function LoginForm({ next }: { next: string }) {
     <Card className="w-full max-w-sm shadow-pop [--card-spacing:--spacing(6)]">
       <CardHeader>
         <CardTitle className="text-lg font-semibold">Sign in</CardTitle>
-        <CardDescription>Administrator access to the social media console.</CardDescription>
+        <CardDescription>Sign in to your social media console.</CardDescription>
       </CardHeader>
       <CardContent>
         <form aria-busy={pending} className="flex flex-col gap-4" onSubmit={onSubmit}>
@@ -69,7 +69,15 @@ export function LoginForm({ next }: { next: string }) {
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="password">Password</Label>
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="password">Password</Label>
+              <Link
+                className="text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                href="/forgot-password"
+              >
+                Forgot password?
+              </Link>
+            </div>
             <div className="relative">
               <Input
                 id="password"

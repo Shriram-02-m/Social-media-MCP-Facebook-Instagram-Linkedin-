@@ -258,6 +258,91 @@ function OwnerRow({ row }: { row: AdminSocialOwnerRow }) {
   );
 }
 
+function OwnerCard({ row }: { row: AdminSocialOwnerRow }) {
+  const connectionByPlatform = new Map(
+    row.connections.map((connection) => [connection.platform, connection] as const),
+  );
+
+  return (
+    <article className="rounded-xl border bg-card p-4 shadow-card">
+      <header className="flex min-w-0 flex-wrap items-start justify-between gap-2 border-b pb-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <Link
+            href={`/users/${row.userId}`}
+            className="truncate text-sm font-semibold hover:underline"
+            title={row.userName}
+          >
+            {row.userName}
+          </Link>
+          <span className="truncate text-xs text-muted-foreground" title={row.userEmail}>
+            {row.userEmail}
+          </span>
+        </div>
+        <UserStatusBadge status={row.userStatus} />
+      </header>
+
+      <div className="divide-y">
+        {PLATFORMS.map((platform) => {
+          const connection = connectionByPlatform.get(platform);
+          return (
+            <section key={platform} className="flex flex-col gap-3 py-3 last:pb-0">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <PlatformChip platform={platform} showLabel />
+                {connection ? (
+                  <SocialStatusBadge status={connection.status} />
+                ) : (
+                  <Badge variant="secondary">Not connected</Badge>
+                )}
+              </div>
+              <dl className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                <div className="min-w-0">
+                  <dt className="text-muted-foreground">Connected account</dt>
+                  <dd className="truncate font-medium" title={connection ? accountLabel(connection) : undefined}>
+                    {connection ? accountLabel(connection) : "—"}
+                    {connection && connection.pageCount > 0
+                      ? ` · ${connection.pageCount} page${connection.pageCount === 1 ? "" : "s"}`
+                      : ""}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Last sync</dt>
+                  <dd className="font-medium tabular-nums">
+                    {connection ? dateTime(connection.lastSyncAt) : "—"}
+                    {connection?.lastSyncAt ? " UTC" : ""}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Token expiry</dt>
+                  <dd
+                    className={`font-medium tabular-nums ${
+                      connection?.expired ? "text-destructive" : ""
+                    }`}
+                  >
+                    {connection
+                      ? connection.expiresAt
+                        ? `${dateTime(connection.expiresAt)}${connection.expired ? " (expired)" : ""}`
+                        : "No expiry"
+                      : "—"}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-muted-foreground">Last error</dt>
+                  <dd
+                    className="line-clamp-2 break-words font-medium text-destructive"
+                    title={connection?.lastError ?? undefined}
+                  >
+                    {connection?.lastError ?? "—"}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+          );
+        })}
+      </div>
+    </article>
+  );
+}
+
 export default async function AdminSocialAccountsPage({
   searchParams,
 }: {
@@ -304,33 +389,42 @@ export default async function AdminSocialAccountsPage({
               description="Try a different search term, platform, or status filter."
             />
           ) : (
-            <Table className="min-w-[960px] table-fixed">
-              <colgroup>
-                <col className="w-[17%]" />
-                <col className="w-[11%]" />
-                <col className="w-[20%]" />
-                <col className="w-[14%]" />
-                <col className="w-[12%]" />
-                <col className="w-[12%]" />
-                <col className="w-[14%]" />
-              </colgroup>
-              <TableHeader className="bg-muted/40">
-                <TableRow>
-                  <TableHead className="px-3 text-xs font-medium text-muted-foreground">Owner</TableHead>
-                  <TableHead className="px-3 text-xs font-medium text-muted-foreground">Platform</TableHead>
-                  <TableHead className="px-3 text-xs font-medium text-muted-foreground">Connected account</TableHead>
-                  <TableHead className="px-3 text-xs font-medium text-muted-foreground">Status</TableHead>
-                  <TableHead className="px-3 text-xs font-medium text-muted-foreground">Last sync</TableHead>
-                  <TableHead className="px-3 text-xs font-medium text-muted-foreground">Token expiry</TableHead>
-                  <TableHead className="px-3 text-xs font-medium text-muted-foreground">Last error</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              <div className="hidden xl:block">
+                <Table className="min-w-[960px] table-fixed">
+                  <colgroup>
+                    <col className="w-[17%]" />
+                    <col className="w-[11%]" />
+                    <col className="w-[20%]" />
+                    <col className="w-[14%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[14%]" />
+                  </colgroup>
+                  <TableHeader className="bg-muted/40">
+                    <TableRow>
+                      <TableHead className="px-3 text-xs font-medium text-muted-foreground">Owner</TableHead>
+                      <TableHead className="px-3 text-xs font-medium text-muted-foreground">Platform</TableHead>
+                      <TableHead className="px-3 text-xs font-medium text-muted-foreground">Connected account</TableHead>
+                      <TableHead className="px-3 text-xs font-medium text-muted-foreground">Status</TableHead>
+                      <TableHead className="px-3 text-xs font-medium text-muted-foreground">Last sync</TableHead>
+                      <TableHead className="px-3 text-xs font-medium text-muted-foreground">Token expiry</TableHead>
+                      <TableHead className="px-3 text-xs font-medium text-muted-foreground">Last error</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {result.rows.map((row) => (
+                      <OwnerRow key={row.userId} row={row} />
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="grid gap-3 p-3 xl:hidden sm:p-4">
                 {result.rows.map((row) => (
-                  <OwnerRow key={row.userId} row={row} />
+                  <OwnerCard key={row.userId} row={row} />
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+            </>
           )}
 
           <AdminPagination

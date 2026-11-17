@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { CircleCheck, Loader2 } from "lucide-react";
+import { CircleCheck, Eye, EyeOff, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -66,6 +66,8 @@ export function ForgotPasswordForm() {
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [resendAt, setResendAt] = useState(0);
@@ -221,25 +223,57 @@ export function ForgotPasswordForm() {
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="reset-password">New password</Label>
-              <Input
-                id="reset-password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-              />
+              <div className="relative">
+                <Input
+                  id="reset-password"
+                  type={showNewPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  required
+                  className="pr-10"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword((visible) => !visible)}
+                  aria-label={showNewPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showNewPassword}
+                  className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {showNewPassword ? (
+                    <EyeOff className="size-4" aria-hidden="true" />
+                  ) : (
+                    <Eye className="size-4" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="reset-confirm">Confirm new password</Label>
-              <Input
-                id="reset-confirm"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-              />
+              <div className="relative">
+                <Input
+                  id="reset-confirm"
+                  type={showConfirmPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  required
+                  className="pr-10"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((visible) => !visible)}
+                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showConfirmPassword}
+                  className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="size-4" aria-hidden="true" />
+                  ) : (
+                    <Eye className="size-4" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
             </div>
             <ul className="grid gap-1" aria-label="Password requirements">
               <Requirement met={requirements.length}>

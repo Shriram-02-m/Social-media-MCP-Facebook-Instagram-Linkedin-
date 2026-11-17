@@ -11,6 +11,7 @@ export default function QueuePage() {
       <PostsList
         statuses={["scheduled", "publishing", "held"]}
         showWorkerButton
+        showFilters
         variant="queue"
         emptyTitle="Nothing in the queue"
         emptyDescription="Create a post in the Composer and choose Schedule to add it here."

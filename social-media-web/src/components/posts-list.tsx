@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   CalendarClock,
+  ChevronLeft,
+  ChevronRight,
   CircleAlert,
   History,
   LoaderCircle,
@@ -24,6 +26,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -50,6 +53,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  filterAndSortPosts,
+  paginatePosts,
+  type PostListSort,
+} from "@/lib/post-list-view";
 
 export interface ScheduledPostSummary {
   id: string;
@@ -95,6 +103,9 @@ const PLATFORM_ORDER: ScheduledPostSummary["platform"][] = [
 
 type StatusFilter = "all" | ScheduledPostSummary["status"];
 type PlatformFilter = "all" | ScheduledPostSummary["platform"];
+type SortOption = PostListSort;
+
+const PAGE_SIZE = 10;
 
 function canRetry(post: ScheduledPostSummary): boolean {
   return (
@@ -139,6 +150,11 @@ export function PostsList({
   const [cancelling, setCancelling] = useState<ScheduledPostSummary | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("all");
+  const [query, setQuery] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>(
+    variant === "queue" ? "date-oldest" : "date-newest",
+  );
+  const [page, setPage] = useState(1);
 
   const load = useCallback(() => {
     return fetch("/api/posts", { cache: "no-store" })
@@ -166,16 +182,23 @@ export function PostsList({
   }, [load]);
 
   const visible = (posts ?? []).filter((post) => statuses.includes(post.status));
-  const filtered = visible.filter(
-    (post) =>
-      (statusFilter === "all" || post.status === statusFilter) &&
-      (platformFilter === "all" || post.platform === platformFilter),
-  );
-  const filtersActive = statusFilter !== "all" || platformFilter !== "all";
+  const filtered = filterAndSortPosts(visible, {
+    statuses,
+    query,
+    status: statusFilter,
+    platform: platformFilter,
+    sort: sortBy,
+  });
+  const pagination = paginatePosts(filtered, page, PAGE_SIZE);
+  const currentPage = pagination.page;
+  const filtersActive =
+    query.trim().length > 0 || statusFilter !== "all" || platformFilter !== "all";
 
   function resetFilters() {
+    setQuery("");
     setStatusFilter("all");
     setPlatformFilter("all");
+    setPage(1);
   }
 
   async function runAction(
@@ -267,17 +290,29 @@ export function PostsList({
       </CardHeader>
       <CardContent>
         {showFilters && posts !== null ? (
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="mb-5 flex flex-col gap-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(14rem,1fr)_12rem_12rem_12rem]">
+              <Input
+                type="search"
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search post text or errors"
+                aria-label="Search posts by text, status, platform, media, or error"
+                maxLength={200}
+                className="sm:col-span-2 lg:col-span-1"
+              />
               <Select
                 value={statusFilter}
-                onValueChange={(value) =>
-                  setStatusFilter((value ?? "all") as StatusFilter)
-                }
+                onValueChange={(value) => {
+                  setStatusFilter((value ?? "all") as StatusFilter);
+                  setPage(1);
+                }}
               >
                 <SelectTrigger
-                  size="sm"
-                  className="w-full sm:w-44"
+                  className="w-full"
                   aria-label="Filter by status"
                 >
                   <SelectValue>
@@ -300,11 +335,13 @@ export function PostsList({
 
               <Select
                 value={platformFilter}
-                onValueChange={(value) => setPlatformFilter((value ?? "all") as PlatformFilter)}
+                onValueChange={(value) => {
+                  setPlatformFilter((value ?? "all") as PlatformFilter);
+                  setPage(1);
+                }}
               >
                 <SelectTrigger
-                  size="sm"
-                  className="w-full sm:w-40"
+                  className="w-full"
                   aria-label="Filter by platform"
                 >
                   <SelectValue>
@@ -324,15 +361,44 @@ export function PostsList({
                   ))}
                 </SelectContent>
               </Select>
+              <Select
+                value={sortBy}
+                onValueChange={(value) => {
+                  setSortBy((value ?? "date-newest") as SortOption);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="w-full" aria-label="Sort posts">
+                  <SelectValue>
+                    {(value) =>
+                      ({
+                        "date-newest": "Newest first",
+                        "date-oldest": "Oldest first",
+                        platform: "Platform A–Z",
+                        status: "Status A–Z",
+                        text: "Post text A–Z",
+                      })[value as SortOption] ?? "Sort posts"
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date-newest">Newest first</SelectItem>
+                  <SelectItem value="date-oldest">Oldest first</SelectItem>
+                  <SelectItem value="platform">Platform A–Z</SelectItem>
+                  <SelectItem value="status">Status A–Z</SelectItem>
+                  <SelectItem value="text">Post text A–Z</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">
-                Showing {filtered.length} of {visible.length}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground" aria-live="polite">
+                {filtered.length === 0
+                  ? `No posts${filtersActive ? " match these filters" : ""}`
+                  : `Showing ${pagination.start}–${pagination.end} of ${filtered.length}`}
               </span>
               {filtersActive ? (
                 <Button size="sm" variant="ghost" onClick={resetFilters}>
-                  Reset
+                  Clear filters
                 </Button>
               ) : null}
             </div>
@@ -389,7 +455,7 @@ export function PostsList({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((post) => (
+              {pagination.items.map((post) => (
                 <TableRow key={post.id} className="border-border/60 hover:bg-muted/40">
                   <TableCell className="whitespace-nowrap">
                     <PlatformChip platform={post.platform} showLabel />
@@ -466,6 +532,38 @@ export function PostsList({
             </TableBody>
           </Table>
         )}
+        {posts !== null && !loadError && pagination.totalPages > 1 ? (
+          <nav
+            aria-label="Posts pagination"
+            className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4"
+          >
+            <span className="text-xs text-muted-foreground">
+              Page {currentPage} of {pagination.totalPages}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={currentPage <= 1}
+                onClick={() => setPage(currentPage - 1)}
+              >
+                <ChevronLeft aria-hidden="true" />
+                Previous
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={currentPage >= pagination.totalPages}
+                onClick={() => setPage(currentPage + 1)}
+              >
+                Next
+                <ChevronRight aria-hidden="true" />
+              </Button>
+            </div>
+          </nav>
+        ) : null}
       </CardContent>
 
       {/* Cancel is destructive: it stops a scheduled post from ever publishing. */}

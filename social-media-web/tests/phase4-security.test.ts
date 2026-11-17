@@ -432,6 +432,7 @@ describe("settings and recovery UI", () => {
   const page = readFile("src/app/(dashboard)/admin/settings/page.tsx");
   const client = readFile("src/app/(dashboard)/admin/settings/settings-client.tsx");
   const login = readFile("src/app/(auth)/login/login-form.tsx");
+  const signup = readFile("src/app/(auth)/signup/signup-form.tsx");
   const forgot = readFile("src/app/(auth)/forgot-password/forgot-password-form.tsx");
 
   it("loads profile data behind the admin page guard", () => {
@@ -474,12 +475,9 @@ describe("settings and recovery UI", () => {
     expect(client).toMatch(/readOnly/);
   });
 
-  it("keeps login free of forgot-password links and adds a password visibility toggle", () => {
-    // The forgot-password route itself remains available (self-service reset
-    // and the email-OTP endpoint stay wired), but the login page must not
-    // surface the link.
-    expect(login).not.toMatch(/href="\/forgot-password"/);
-    expect(login).not.toMatch(/Forgot password/);
+  it("links to password recovery and provides password visibility controls", () => {
+    expect(login).toMatch(/href="\/forgot-password"/);
+    expect(login).toMatch(/Forgot password/);
     // The password field starts hidden and toggles through an accessible,
     // keyboard-operable button without losing the entered value.
     expect(login).toMatch(/type=\{showPassword \? "text" : "password"\}/);
@@ -487,11 +485,14 @@ describe("settings and recovery UI", () => {
     expect(login).toMatch(/EyeOff/);
     expect(login).toMatch(/Eye/);
     expect(login).toMatch(/autoComplete="current-password"/);
+    expect(signup).toMatch(/type=\{showPassword \? "text" : "password"\}/);
+    expect(signup).toMatch(/aria-label=\{showPassword \? "Hide password" : "Show password"\}/);
+    expect(forgot).toMatch(/type=\{showNewPassword \? "text" : "password"\}/);
+    expect(forgot).toMatch(/type=\{showConfirmPassword \? "text" : "password"\}/);
   });
 
   it("keeps the password reset page reachable without a session", () => {
-    // The login page intentionally omits the link, but the documented
-    // self-service route must not be swallowed by the auth redirect.
+    // The public self-service route must not be swallowed by the auth redirect.
     const proxy = readFile("src/proxy.ts");
     expect(proxy).toMatch(/"\/forgot-password"/);
   });
