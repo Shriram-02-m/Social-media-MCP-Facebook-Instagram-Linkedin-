@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Clock, ShieldX } from "lucide-react";
 
 import { SignOutButton } from "@/components/sign-out-button";
 import { buttonVariants } from "@/components/ui/button";
@@ -27,33 +28,53 @@ export default async function PendingApprovalPage() {
   // created session was discarded - the generic pending message is shown and
   // reveals nothing about any particular account.
   const rejected = state?.approvalStatus === "rejected";
+  const StatusIcon = rejected ? ShieldX : Clock;
   const heading = rejected ? "Registration not approved" : "Awaiting administrator approval";
   const description = rejected
     ? "This account was not approved. Contact the administrator if you believe this is a mistake."
     : "Your registration was received and is waiting for an administrator to approve it. You will be able to sign in once the account is approved.";
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader>
-        <CardTitle>{heading}</CardTitle>
-        <CardDescription>
-          {description}
-          {rejected || state?.deleted ? null : (
-            <span className="mt-2 block text-xs text-muted-foreground">
-              This page appears until approval. All console features stay locked meanwhile.
-            </span>
-          )}
-        </CardDescription>
-      </CardHeader>
-      <CardFooter className="flex flex-col gap-2">
-        <Link
-          href="/login"
-          className={buttonVariants({ variant: "outline", className: "w-full" })}
+    <main className="flex min-h-svh flex-1 flex-col items-center justify-center gap-6 bg-background px-4 py-10 [background-image:radial-gradient(60rem_40rem_at_50%_-10%,color-mix(in_oklch,var(--brand)_6%,transparent),transparent)]">
+      <div className="flex items-center gap-3">
+        <span
+          aria-hidden="true"
+          className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-b from-brand to-brand/85 text-brand-foreground shadow-card ring-1 ring-foreground/10"
         >
-          Return to sign in
-        </Link>
-        {session ? <SignOutButton /> : null}
-      </CardFooter>
-    </Card>
+          <Clock className="size-5" />
+        </span>
+        <span className="text-sm font-semibold">Social Console</span>
+      </div>
+      <Card className="w-full max-w-sm shadow-pop [--card-spacing:--spacing(6)]">
+        <CardHeader className="gap-3">
+          <span
+            aria-hidden="true"
+            className="flex size-11 items-center justify-center rounded-xl border bg-muted/60 text-muted-foreground shadow-card"
+          >
+            <StatusIcon className="size-5" />
+          </span>
+          <div className="flex flex-col gap-1.5">
+            <CardTitle className="text-lg font-semibold">{heading}</CardTitle>
+            <CardDescription>
+              {description}
+              {rejected || state?.deleted ? null : (
+                <span className="mt-2 block text-xs text-muted-foreground">
+                  This page appears until approval. All console features stay locked meanwhile.
+                </span>
+              )}
+            </CardDescription>
+          </div>
+        </CardHeader>
+        <CardFooter className="flex flex-col gap-2">
+          <Link
+            href="/login"
+            className={buttonVariants({ variant: "outline", className: "w-full" })}
+          >
+            Return to sign in
+          </Link>
+          {session ? <SignOutButton /> : null}
+        </CardFooter>
+      </Card>
+    </main>
   );
 }

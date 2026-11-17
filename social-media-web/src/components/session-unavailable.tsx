@@ -24,7 +24,7 @@ export function SessionUnavailable() {
     <div className="flex flex-1 items-center justify-center p-6">
       {/* w-full keeps the card a consistent, comfortable width: as a flex
           item it would otherwise shrink-wrap to its (narrow) content. */}
-      <Card className="w-full max-w-xl">
+      <Card className="w-full max-w-xl shadow-overlay">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <CircleAlert className="text-destructive size-5" aria-hidden />

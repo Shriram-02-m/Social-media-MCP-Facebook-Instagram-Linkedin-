@@ -3,7 +3,9 @@
 import { useRef, useState } from "react";
 import { Check, Copy, FileUp, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "cn";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,7 +15,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 // Browser fallback for remote MCP clients that cannot transfer attachment
 // bytes. The published MCP spec has no client-to-server file-upload primitive,
@@ -91,7 +92,7 @@ export function MediaUploader() {
   }
 
   return (
-    <Card>
+    <Card className="shadow-card">
       <CardHeader>
         <CardTitle>Upload media</CardTitle>
         <CardDescription>
@@ -100,17 +101,33 @@ export function MediaUploader() {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="media-file">File</Label>
+          <label
+            htmlFor="media-file"
+            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-muted/40 px-6 py-8 text-center transition-colors hover:border-brand/50 hover:bg-muted/60 focus-within:ring-[3px] focus-within:ring-ring/50 focus-within:outline-none"
+          >
+            <FileUp
+              className={cn(
+                "size-5 text-muted-foreground",
+                pending && "animate-pulse",
+              )}
+              aria-hidden="true"
+            />
+            <span className="text-sm font-medium">
+              {pending ? "Uploading…" : "Choose a file to upload"}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {fileLabel || "JPEG, PNG, or GIF images, MP4 or MOV video, or a PDF document"}
+            </span>
             <Input
               id="media-file"
               ref={inputRef}
               type="file"
               accept={ACCEPT}
+              className="sr-only"
               onChange={onFileChange}
               disabled={pending}
             />
-          </div>
+          </label>
           <Button type="submit" disabled={pending || !fileLabel} className="w-fit">
             {pending ? (
               <>
@@ -126,12 +143,15 @@ export function MediaUploader() {
           </Button>
         </form>
         {result && (
-          <div className="flex flex-col gap-3 rounded-md border bg-muted/40 p-3">
+          <div className="flex flex-col gap-3 rounded-xl border bg-muted/40 p-4 shadow-card">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+              <Badge variant="outline" className="text-[11px]">
+                {KIND_LABELS[result.kind] ?? result.kind}
+              </Badge>
               <span className="font-medium">
                 {KIND_LABELS[result.kind] ?? result.kind} uploaded
               </span>
-              <span className="text-xs text-muted-foreground">
+              <span className="ml-auto text-xs tabular-nums text-muted-foreground">
                 {(result.bytes / 1024 / 1024).toFixed(2)} MB
               </span>
             </div>

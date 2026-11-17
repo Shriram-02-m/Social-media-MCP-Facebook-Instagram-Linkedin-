@@ -123,9 +123,9 @@ function AccountStatusBadge({ status }: { status: UserStatus }) {
 
 function RoleBadge({ role }: { role: string }) {
   return role === "admin" ? (
-    <Badge>Super Admin</Badge>
+    <Badge variant="secondary">Super Admin</Badge>
   ) : (
-    <Badge variant="secondary">User</Badge>
+    <Badge variant="outline">User</Badge>
   );
 }
 
@@ -140,9 +140,7 @@ function InfoItem({
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </dt>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="min-w-0 text-sm font-medium break-words">{children}</dd>
     </div>
   );
@@ -427,8 +425,8 @@ export default async function UserDetailPage(props: PageProps<"/users/[id]">) {
         </div>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
-        <Card>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Account information</CardTitle>
             <CardDescription>

@@ -89,7 +89,11 @@ describe("unified Accounts page", () => {
     expect(panel).toMatch(/cardRingClass\(state\)/);
     expect(panel).toContain("ring-emerald-500/80");
     expect(panel).toContain("ring-amber-500/70");
-    expect(panel).toContain("bg-emerald-600 text-white");
+    // Premium redesign: the connect action is the card's primary (design-token)
+    // button when the platform is not connected, and outline when it is.
+    expect(
+      panel,
+    ).toContain(`variant={state === "connected" ? "outline" : "default"}`);
   });
 
   it("never stores credentials in browser storage", () => {

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Blocks, ShieldX } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -34,21 +35,52 @@ function single(value: string | string[] | undefined): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+// Shared premium auth shell: centered column with the brand mark above the
+// card and a single subtle brand-tinted radial accent on the canvas.
+function AuthMain({ children }: { children: React.ReactNode }) {
+  return (
+    <main className="flex min-h-svh flex-1 flex-col items-center justify-center gap-6 bg-background px-4 py-10 [background-image:radial-gradient(60rem_40rem_at_50%_-10%,color-mix(in_oklch,var(--brand)_6%,transparent),transparent)]">
+      <div className="flex items-center gap-3">
+        <span
+          aria-hidden="true"
+          className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-b from-brand to-brand/85 text-brand-foreground shadow-card ring-1 ring-foreground/10"
+        >
+          <Blocks className="size-5" />
+        </span>
+        <span className="text-sm font-semibold">Social Console</span>
+      </div>
+      {children}
+    </main>
+  );
+}
+
 function ErrorCard({ message }: { message: string }) {
   return (
-    <main className="flex min-h-svh flex-1 items-center justify-center bg-muted/40 p-6">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Authorization request rejected</CardTitle>
-          <CardDescription>
-            This request could not be verified, so no access was granted.
-          </CardDescription>
+    <AuthMain>
+      <Card className="w-full max-w-md shadow-pop [--card-spacing:--spacing(6)]">
+        <CardHeader className="gap-3">
+          <span
+            aria-hidden="true"
+            className="flex size-11 items-center justify-center rounded-xl border bg-muted/60 text-muted-foreground shadow-card"
+          >
+            <ShieldX className="size-5" />
+          </span>
+          <div className="flex flex-col gap-1.5">
+            <CardTitle className="text-lg font-semibold">
+              Authorization request rejected
+            </CardTitle>
+            <CardDescription>
+              This request could not be verified, so no access was granted.
+            </CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-destructive">{message}</p>
+          <p className="text-xs text-destructive" role="alert">
+            {message}
+          </p>
         </CardContent>
       </Card>
-    </main>
+    </AuthMain>
   );
 }
 
@@ -123,41 +155,47 @@ export default async function McpAuthorizePage({
   }
 
   return (
-    <main className="flex min-h-svh flex-1 items-center justify-center bg-muted/40 p-6">
-      <Card className="w-full max-w-md">
+    <AuthMain>
+      <Card className="w-full max-w-md shadow-pop [--card-spacing:--spacing(6)]">
         <CardHeader>
-          <CardTitle>Connect {clientName} to Social Media</CardTitle>
+          <CardTitle className="text-lg font-semibold">
+            Connect {clientName} to Social Media
+          </CardTitle>
           <CardDescription>
             Signed in as {session.user.email}. {clientName} is requesting access to
             your social media console.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 text-sm">
-          <div className="flex flex-col gap-1">
-            <span className="font-medium">Requested access</span>
-            <span className="text-muted-foreground">
-              Create, schedule, publish, reschedule, retry, and cancel posts, and
-              read connection status for the Instagram, Facebook Page, and LinkedIn
-              accounts you have connected in this console.
-            </span>
+          <div className="flex flex-col gap-3 rounded-xl border bg-muted/30 p-4">
+            <div className="flex flex-col gap-1">
+              <span className="font-medium">Requested access</span>
+              <span className="text-muted-foreground">
+                Create, schedule, publish, reschedule, retry, and cancel posts, and
+                read connection status for the Instagram, Facebook Page, and LinkedIn
+                accounts you have connected in this console.
+              </span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="font-medium">Scope</span>
+              <code className="w-fit rounded-md bg-muted px-2 py-1 font-mono text-xs">
+                {scope}
+              </code>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="font-medium">Callback host</span>
+              <code className="break-all rounded-md bg-muted px-2 py-1 font-mono text-xs">
+                {redirectHost}
+              </code>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="font-medium">MCP resource</span>
+              <code className="break-all rounded-md bg-muted px-2 py-1 font-mono text-xs">
+                {resource}
+              </code>
+            </div>
           </div>
-          <div className="flex flex-col gap-1">
-            <span className="font-medium">Scope</span>
-            <code className="rounded bg-muted px-2 py-1 text-xs">{scope}</code>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="font-medium">Callback host</span>
-            <code className="break-all rounded bg-muted px-2 py-1 text-xs">
-              {redirectHost}
-            </code>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="font-medium">MCP resource</span>
-            <code className="break-all rounded bg-muted px-2 py-1 text-xs">
-              {resource}
-            </code>
-          </div>
-          <p className="text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Only approve if you started this connection from {clientName}. This
             grants access to your account only; it does not share your password,
             provider tokens, or other users&apos; accounts.
@@ -175,11 +213,12 @@ export default async function McpAuthorizePage({
                 <input key={field} type="hidden" name={field} value={value} />
               ) : null;
             })}
-            <Button className="flex-1" type="submit" name="action" value="approve">
+            <Button className="flex-1" size="lg" type="submit" name="action" value="approve">
               Approve
             </Button>
             <Button
               className="flex-1"
+              size="lg"
               type="submit"
               name="action"
               value="deny"
@@ -190,6 +229,6 @@ export default async function McpAuthorizePage({
           </form>
         </CardFooter>
       </Card>
-    </main>
+    </AuthMain>
   );
 }

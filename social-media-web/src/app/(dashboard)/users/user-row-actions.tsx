@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { CheckIcon, MoreHorizontal, XIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -15,7 +16,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { AdminUserSummary } from "@/lib/admin-users";
 
 export function UserRowActions({
@@ -62,56 +70,71 @@ export function UserRowActions({
     }
   }
 
+  const canApprove = !isSelf && approvalStatus !== "approved";
+  const canReject = !isSelf && approvalStatus !== "rejected";
+
   return (
-    <div className="flex justify-end gap-2">
-      {!isSelf && approvalStatus !== "approved" ? (
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={busy}
-          onClick={() => void setApproval("approved")}
+    <div className="flex justify-end">
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={busy}
+              aria-label="User actions"
+            />
+          }
         >
-          Approve
-        </Button>
-      ) : null}
-      {!isSelf && approvalStatus !== "rejected" ? (
-        <>
-          <Button
-            size="sm"
-            variant="destructive"
-            disabled={busy}
-            onClick={() => setRejectOpen(true)}
-          >
-            Reject
-          </Button>
-          <AlertDialog open={rejectOpen} onOpenChange={setRejectOpen}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Reject this user?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  The account stays registered but cannot sign in. You can
-                  approve it again later from this list.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  disabled={busy}
-                  onClick={() => void setApproval("rejected")}
-                >
-                  {busy ? "Working…" : "Reject user"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </>
-      ) : null}
-      <Link
-        href={`/users/${id}`}
-        className={buttonVariants({ variant: "ghost", size: "sm" })}
-      >
-        View
-      </Link>
+          <MoreHorizontal aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuItem render={<Link href={`/users/${id}`} />}>
+            View
+          </DropdownMenuItem>
+          {canApprove || canReject ? <DropdownMenuSeparator /> : null}
+          {canApprove ? (
+            <DropdownMenuItem
+              disabled={busy}
+              onClick={() => void setApproval("approved")}
+            >
+              <CheckIcon aria-hidden="true" />
+              Approve
+            </DropdownMenuItem>
+          ) : null}
+          {canReject ? (
+            <DropdownMenuItem
+              variant="destructive"
+              disabled={busy}
+              onClick={() => setRejectOpen(true)}
+            >
+              <XIcon aria-hidden="true" />
+              Reject
+            </DropdownMenuItem>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog open={rejectOpen} onOpenChange={setRejectOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reject this user?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The account stays registered but cannot sign in. You can
+              approve it again later from this list.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              onClick={() => void setApproval("rejected")}
+            >
+              {busy ? "Working…" : "Reject user"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

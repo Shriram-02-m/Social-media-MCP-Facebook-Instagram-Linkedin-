@@ -5,6 +5,7 @@ import { AdminPagination } from "@/components/admin/admin-pagination";
 import { SocialStatusBadge, UserStatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { PlatformChip } from "@/components/platform-chip";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -25,7 +26,6 @@ import { requireAdminPage } from "@/lib/admin-page";
 import {
   parseSocialAccountFilters,
   PLATFORMS,
-  type AdminPlatform,
 } from "@/lib/admin-policy";
 import { PLATFORM_META } from "@/lib/platform-meta";
 import {
@@ -73,18 +73,6 @@ function accountLabel(connection: AdminSocialConnectionRow): string {
   return connection.accountName ?? connection.accountId ?? "—";
 }
 
-function PlatformBadge({ platform }: { platform: AdminPlatform }) {
-  const meta = PLATFORM_META[platform];
-  return (
-    <span
-      className={`inline-flex h-5 items-center rounded-full px-2 text-[10px] font-semibold ring-1 ${meta.className}`}
-      title={meta.label}
-    >
-      {meta.label}
-    </span>
-  );
-}
-
 function OwnerRow({ row }: { row: AdminSocialOwnerRow }) {
   // Every user row always shows all three platforms; connections that do not
   // exist render "Not connected" with "—" placeholders in the detail columns.
@@ -122,7 +110,7 @@ function OwnerRow({ row }: { row: AdminSocialOwnerRow }) {
               key={platform}
               className="flex h-9 items-center"
             >
-              <PlatformBadge platform={platform} />
+              <PlatformChip platform={platform} showLabel />
             </div>
           ))}
         </div>
@@ -326,15 +314,15 @@ export default async function AdminSocialAccountsPage({
                 <col className="w-[12%]" />
                 <col className="w-[14%]" />
               </colgroup>
-              <TableHeader>
+              <TableHeader className="bg-muted/40">
                 <TableRow>
-                  <TableHead className="px-3">Owner</TableHead>
-                  <TableHead className="px-3">Platform</TableHead>
-                  <TableHead className="px-3">Connected account</TableHead>
-                  <TableHead className="px-3">Status</TableHead>
-                  <TableHead className="px-3">Last sync</TableHead>
-                  <TableHead className="px-3">Token expiry</TableHead>
-                  <TableHead className="px-3">Last error</TableHead>
+                  <TableHead className="px-3 text-xs font-medium text-muted-foreground">Owner</TableHead>
+                  <TableHead className="px-3 text-xs font-medium text-muted-foreground">Platform</TableHead>
+                  <TableHead className="px-3 text-xs font-medium text-muted-foreground">Connected account</TableHead>
+                  <TableHead className="px-3 text-xs font-medium text-muted-foreground">Status</TableHead>
+                  <TableHead className="px-3 text-xs font-medium text-muted-foreground">Last sync</TableHead>
+                  <TableHead className="px-3 text-xs font-medium text-muted-foreground">Token expiry</TableHead>
+                  <TableHead className="px-3 text-xs font-medium text-muted-foreground">Last error</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

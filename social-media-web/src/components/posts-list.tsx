@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  CalendarClock,
   CircleAlert,
   History,
   LoaderCircle,
   ListChecks,
+  RotateCcw,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -230,7 +233,7 @@ export function PostsList({
   }
 
   return (
-    <Card>
+    <Card className="shadow-card">
       <CardHeader className="flex flex-row items-start justify-between gap-4">
         <div>
           <CardTitle>Posts</CardTitle>
@@ -347,10 +350,11 @@ export function PostsList({
             }
           />
         ) : posts === null ? (
-          <div className="flex flex-col gap-3">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
           </div>
         ) : visible.length === 0 ? (
           <EmptyState
@@ -375,18 +379,18 @@ export function PostsList({
         ) : (
           <Table className="min-w-[640px]">
             <TableHeader>
-              <TableRow>
-                <TableHead>Platform</TableHead>
-                <TableHead>Post</TableHead>
-                <TableHead>When</TableHead>
-                <TableHead className="hidden md:table-cell">Media</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="text-xs text-muted-foreground">Platform</TableHead>
+                <TableHead className="text-xs text-muted-foreground">Post</TableHead>
+                <TableHead className="text-xs text-muted-foreground">When</TableHead>
+                <TableHead className="hidden text-xs text-muted-foreground md:table-cell">Media</TableHead>
+                <TableHead className="text-xs text-muted-foreground">Status</TableHead>
+                <TableHead className="text-right text-xs text-muted-foreground">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.map((post) => (
-                <TableRow key={post.id}>
+                <TableRow key={post.id} className="border-border/60 hover:bg-muted/40">
                   <TableCell className="whitespace-nowrap">
                     <PlatformChip platform={post.platform} showLabel />
                   </TableCell>
@@ -417,6 +421,7 @@ export function PostsList({
                           size="sm"
                           variant="outline"
                           disabled={busyId !== null}
+                          aria-label={`Retry publishing this ${PLATFORM_LABELS[post.platform]} post`}
                           onClick={() =>
                             void runAction(
                               post.id,
@@ -425,26 +430,32 @@ export function PostsList({
                             )
                           }
                         >
+                          <RotateCcw aria-hidden="true" />
                           Retry Publishing
                         </Button>
                       ) : null}
                       {canReschedule(post) ? (
                         <Button
                           size="sm"
-                          variant="outline"
+                          variant="ghost"
                           disabled={busyId !== null}
+                          aria-label={`Reschedule this ${PLATFORM_LABELS[post.platform]} post`}
                           onClick={() => setRescheduling(post)}
                         >
+                          <CalendarClock aria-hidden="true" />
                           Reschedule
                         </Button>
                       ) : null}
                       {canCancel(post) ? (
                         <Button
                           size="sm"
-                          variant="outline"
+                          variant="ghost"
+                          className="text-destructive hover:text-destructive"
                           disabled={busyId !== null}
+                          aria-label={`Cancel this ${PLATFORM_LABELS[post.platform]} post`}
                           onClick={() => setCancelling(post)}
                         >
+                          <X aria-hidden="true" />
                           Cancel
                         </Button>
                       ) : null}

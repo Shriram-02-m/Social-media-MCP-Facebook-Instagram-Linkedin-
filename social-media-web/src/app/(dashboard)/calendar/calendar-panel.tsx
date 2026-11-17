@@ -13,7 +13,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Calendar } from "@/components/ui/calendar";
+import { Calendar, CalendarDayButton } from "@/components/ui/calendar";
+import type { DayButton } from "react-day-picker";
 
 export interface CalendarPost {
   id: string;
@@ -39,6 +40,37 @@ const timeFormatter = new Intl.DateTimeFormat("en-US", {
   timeStyle: "short",
 });
 
+// Day-cell override for the shared Calendar: days that carry scheduled or
+// published posts get a small brand dot below the day number and an expanded
+// aria-label, so the mark is announced without relying on color alone.
+function ScheduledDayButton({
+  day,
+  modifiers,
+  children,
+  ...props
+}: React.ComponentProps<typeof DayButton>) {
+  const hasPosts = Boolean(modifiers.scheduled);
+  const baseLabel =
+    typeof props["aria-label"] === "string"
+      ? props["aria-label"]
+      : dayFormatter.format(day.date);
+  return (
+    <CalendarDayButton day={day} modifiers={modifiers} {...props}
+      aria-label={
+        hasPosts ? `${baseLabel}, has scheduled or published posts` : baseLabel
+      }
+    >
+      {children}
+      {hasPosts ? (
+        <span
+          aria-hidden="true"
+          className="size-1.5 rounded-full bg-brand"
+        />
+      ) : null}
+    </CalendarDayButton>
+  );
+}
+
 export function CalendarPanel({ posts }: { posts: CalendarPost[] }) {
   const [selected, setSelected] = useState<Date | undefined>(undefined);
 
@@ -59,7 +91,7 @@ export function CalendarPanel({ posts }: { posts: CalendarPost[] }) {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-      <Card>
+      <Card className="shadow-card">
         <CardHeader>
           <CardTitle>Schedule</CardTitle>
           <CardDescription>
@@ -73,13 +105,14 @@ export function CalendarPanel({ posts }: { posts: CalendarPost[] }) {
             selected={selected}
             onSelect={setSelected}
             modifiers={{ scheduled: scheduledDates }}
-            modifiersClassNames={{ scheduled: "bg-primary/15 font-semibold" }}
-            className="rounded-md border"
+            modifiersClassNames={{ scheduled: "font-semibold" }}
+            components={{ DayButton: ScheduledDayButton }}
+            className="rounded-xl border bg-background p-3 shadow-card"
           />
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="shadow-card">
         <CardHeader>
           <CardTitle>
             {selected ? dayFormatter.format(selected) : "Select a day"}
@@ -105,7 +138,7 @@ export function CalendarPanel({ posts }: { posts: CalendarPost[] }) {
             selectedPosts.map(({ post }) => (
               <div
                 key={post.id}
-                className="flex items-start justify-between gap-3 border-b pb-3 last:border-b-0 last:pb-0"
+                className="flex items-start justify-between gap-3 border-b border-border/60 pb-3 last:border-b-0 last:pb-0"
               >
                 <div className="flex min-w-0 items-start gap-2.5">
                   <span className="mt-0.5">

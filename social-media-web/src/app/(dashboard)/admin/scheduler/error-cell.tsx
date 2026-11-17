@@ -25,7 +25,10 @@ export function ErrorCell({
 
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <p className="line-clamp-2 text-xs leading-snug break-words text-red-600 dark:text-red-400">
+      <p
+        className="line-clamp-2 text-xs leading-snug break-words text-destructive"
+        title={error}
+      >
         {error}
       </p>
       <Dialog>

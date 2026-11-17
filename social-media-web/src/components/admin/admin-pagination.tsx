@@ -27,7 +27,10 @@ export function AdminPagination({
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+    <div
+      className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground"
+      aria-busy={pending || undefined}
+    >
       <span>
         {total === 0
           ? "No results"

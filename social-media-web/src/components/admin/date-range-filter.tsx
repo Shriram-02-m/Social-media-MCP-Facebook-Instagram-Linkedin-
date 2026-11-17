@@ -46,6 +46,7 @@ export function DateRangeFilter({
   return (
     <form
       className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end"
+      aria-busy={pending || undefined}
       onSubmit={(event) => {
         event.preventDefault();
         apply(from, to);

@@ -223,329 +223,340 @@ export function Composer() {
 
   return (
     <form className="flex flex-col gap-6" onSubmit={onSubmit}>
-      <Card>
-        <CardHeader>
-          <CardTitle>Post content</CardTitle>
-          <CardDescription>
-            Choose where to publish and write the caption.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-5">
-          <div className="flex flex-col gap-2">
-            <Label id="platforms-label">Platforms</Label>
-            <div
-              role="group"
-              aria-labelledby="platforms-label"
-              className="flex flex-col gap-2"
-            >
-              {PLATFORMS.map((platform) => {
-                const active = platforms.includes(platform.id);
-                return (
-                  <label
-                    key={platform.id}
+      {/* Two-column workspace: the editor and its media live on the left, the
+          publish options and per-platform preview in a fixed sidebar on the
+          right (like the admin scheduler). Single column below `lg`. */}
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="flex min-w-0 flex-col gap-6">
+          <Card className="shadow-card">
+            <CardHeader>
+              <CardTitle>Post content</CardTitle>
+              <CardDescription>
+                Choose where to publish and write the caption.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-5">
+              <div className="flex flex-col gap-2">
+                <Label id="platforms-label">Platforms</Label>
+                <div
+                  role="group"
+                  aria-labelledby="platforms-label"
+                  className="flex flex-col gap-2"
+                >
+                  {PLATFORMS.map((platform) => {
+                    const active = platforms.includes(platform.id);
+                    return (
+                      <label
+                        key={platform.id}
+                        className={cn(
+                          "flex cursor-pointer select-none items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors hover:bg-muted/50 focus-within:ring-[3px] focus-within:ring-ring/50 focus-within:outline-none",
+                          active
+                            ? "border-brand bg-brand/5"
+                            : "border-input",
+                        )}
+                      >
+                        <Checkbox
+                          checked={active}
+                          onCheckedChange={() => togglePlatform(platform.id)}
+                        />
+                        <PlatformLogo
+                          platform={platform.id}
+                          className="size-7 rounded-md"
+                        />
+                        <span className="text-sm font-medium">
+                          {platform.label}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {platformError ? <FieldError>{platformError}</FieldError> : null}
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="text">Post text</Label>
+                  <span
                     className={cn(
-                      "flex cursor-pointer select-none items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors hover:bg-muted/50 focus-within:ring-[3px] focus-within:ring-ring/50 focus-within:outline-none",
-                      active ? "border-primary bg-primary/5" : "border-input",
+                      "text-xs tabular-nums text-muted-foreground",
+                      text.length > selectedLimit && "font-medium text-destructive",
                     )}
                   >
-                    <Checkbox
-                      checked={active}
-                      onCheckedChange={() => togglePlatform(platform.id)}
-                    />
-                    <PlatformLogo
-                      platform={platform.id}
-                      className="size-7 rounded-md"
-                    />
-                    <span className="text-sm font-medium">
-                      {platform.label}
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-            {platformError ? <FieldError>{platformError}</FieldError> : null}
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="text">Post text</Label>
-              <span
-                className={cn(
-                  "text-xs text-muted-foreground",
-                  text.length > selectedLimit && "font-medium text-destructive",
-                )}
-              >
-                {text.length} / {selectedLimit}
-              </span>
-            </div>
-            <Textarea
-              id="text"
-              rows={6}
-              value={text}
-              aria-invalid={textError !== null}
-              onChange={(event) => setText(event.target.value)}
-              placeholder="Write your post..."
-            />
-            {textError ? <FieldError>{textError}</FieldError> : null}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Media</CardTitle>
-          <CardDescription>
-            Optional: images, a video, or an Instagram carousel.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <p className="text-xs text-muted-foreground">
-            JPEG, PNG, or GIF images (2–10 for an Instagram carousel), or a
-            single MP4/MOV video up to 50&nbsp;MB. Instagram needs at least one
-            item.
-          </p>
-          <label
-            htmlFor="media"
-            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-6 py-8 text-center transition-colors hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
-          >
-            <ImagePlus className="size-5 text-muted-foreground" aria-hidden="true" />
-            <span className="text-sm font-medium">
-              Click to choose images or a video
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {files.length === 0
-                ? "Nothing attached yet"
-                : `${files.length} of ${MAX_ITEMS} items attached`}
-            </span>
-            <Input
-              id="media"
-              ref={inputRef}
-              type="file"
-              accept={ACCEPT}
-              multiple
-              className="sr-only"
-              onChange={(event) => onFiles(event.target.files)}
-            />
-          </label>
-          {mediaError ? <FieldError>{mediaError}</FieldError> : null}
-          {previews.length > 0 ? (
-            <ul className="flex flex-wrap gap-3">
-              {previews.map((item, index) => (
-                <li key={`${item.file.name}-${index}`} className="w-24">
-                  <figure className="flex flex-col gap-1">
-                    <div className="relative overflow-hidden rounded-md border">
-                      {item.kind === "image" && item.url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={item.url}
-                          alt={item.file.name}
-                          className="aspect-square w-full object-cover"
-                        />
-                      ) : (
-                        <video
-                          src={item.url}
-                          className="aspect-square w-full object-cover"
-                          muted
-                          playsInline
-                        />
-                      )}
-                      <button
-                        type="button"
-                        aria-label={`Remove ${item.file.name}`}
-                        className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm transition-colors hover:bg-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                        onClick={() => removeFile(index)}
-                      >
-                        <X className="size-3" aria-hidden="true" />
-                      </button>
-                    </div>
-                    <figcaption className="flex items-center gap-1">
-                      <span className="truncate text-[10px] text-muted-foreground">
-                        {item.file.name}
-                      </span>
-                      <Badge variant="secondary" className="shrink-0 text-[9px]">
-                        {item.kind}
-                      </Badge>
-                    </figcaption>
-                  </figure>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Publish options</CardTitle>
-          <CardDescription>
-            Publish immediately, or schedule for a future time.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div
-            role="radiogroup"
-            aria-label="When to publish"
-            className="grid gap-2 sm:grid-cols-2"
-          >
-            {(
-              [
-                {
-                  value: true,
-                  title: "Publish Now",
-                  description: "Queue the post and let the worker publish it right away.",
-                },
-                {
-                  value: false,
-                  title: "Schedule Post",
-                  description: "Publish automatically at the chosen date and time.",
-                },
-              ] as const
-            ).map((option) => {
-              const active = publishNow === option.value;
-              return (
-                <button
-                  key={option.title}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  onClick={() => setPublishNow(option.value)}
-                  className={cn(
-                    "flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
-                    active
-                      ? "border-primary bg-primary/5"
-                      : "hover:bg-muted/50",
-                  )}
-                >
-                  <span className="flex items-center gap-2 text-sm font-medium">
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        "size-3 rounded-full border",
-                        active ? "border-primary bg-primary" : "border-muted-foreground/50",
-                      )}
-                    />
-                    {option.title}
+                    {text.length} / {selectedLimit}
                   </span>
-                  <span className="text-xs text-muted-foreground">
-                    {option.description}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {!publishNow ? (
-            <div className="flex max-w-xs flex-col gap-2">
-              <Label htmlFor="scheduledAt">Publish at</Label>
-              <Input
-                id="scheduledAt"
-                type="datetime-local"
-                value={scheduledAt}
-                min={minSchedule}
-                aria-invalid={scheduleError !== null}
-                onChange={(event) => setScheduledAt(event.target.value)}
-              />
-              {scheduledAt && !scheduleError ? (
-                <p className="text-xs text-muted-foreground">
-                  Scheduled {formatCountdown(scheduledAt)}.
-                </p>
-              ) : null}
-              {scheduleError ? <FieldError>{scheduleError}</FieldError> : null}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              The post is queued now and published by the worker within seconds.
-            </p>
-          )}
-
-          <div className="flex flex-wrap items-center gap-2 border-t pt-4">
-            <Button type="submit" disabled={issues.length > 0 || pending}>
-              {pending ? (
-                <>
-                  <LoaderCircle className="animate-spin" aria-hidden="true" />
-                  {publishNow ? "Publishing…" : "Scheduling…"}
-                </>
-              ) : (
-                <>
-                  <Send aria-hidden="true" />
-                  {publishNow ? "Publish Now" : "Schedule Post"}
-                </>
-              )}
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => router.push("/")}>
-              Discard
-            </Button>
-            {issues.length > 0 ? (
-              <span className="text-xs text-muted-foreground">
-                Fix the highlighted fields to continue.
-              </span>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Preview</CardTitle>
-          <CardDescription>
-            An approximate preview of what will be sent to each platform.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {platforms.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Select a platform to see its preview.
-            </p>
-          ) : (
-            PLATFORMS.filter((platform) => platforms.includes(platform.id)).map(
-              (platform) => (
-                <div key={platform.id} className="rounded-lg border p-3">
-                  <div className="mb-2 flex items-center gap-2">
-                    <PlatformChip platform={platform.id} />
-                    <span className="text-sm font-medium">{platform.label}</span>
-                    <Badge variant="outline" className="ml-auto text-[10px]">
-                      {publishNow
-                        ? "Publishing now"
-                        : `Scheduled ${formatCountdown(scheduledAt)}`}
-                    </Badge>
-                  </div>
-                  {previews.length > 0 ? (
-                    <div className="mb-2 flex gap-2 overflow-x-auto">
-                      {previews
-                        .slice(0, isCarousel ? 10 : 1)
-                        .map((item, index) => (
-                          <div
-                            key={index}
-                            className="h-20 w-20 shrink-0 overflow-hidden rounded-md border"
-                          >
-                            {item.kind === "image" && item.url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={item.url}
-                                alt=""
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <video
-                                src={item.url}
-                                className="h-full w-full object-cover"
-                                muted
-                                playsInline
-                              />
-                            )}
-                          </div>
-                        ))}
-                    </div>
-                  ) : null}
-                  <p className="whitespace-pre-wrap break-words text-sm">
-                    {text.trim() || "No text yet."}
-                  </p>
                 </div>
-              ),
-            )
-          )}
-        </CardContent>
-      </Card>
+                <Textarea
+                  id="text"
+                  rows={8}
+                  value={text}
+                  aria-invalid={textError !== null}
+                  onChange={(event) => setText(event.target.value)}
+                  placeholder="Write your post..."
+                />
+                {textError ? <FieldError>{textError}</FieldError> : null}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-card">
+            <CardHeader>
+              <CardTitle>Media</CardTitle>
+              <CardDescription>
+                Optional: images, a video, or an Instagram carousel.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <p className="text-xs text-muted-foreground">
+                JPEG, PNG, or GIF images (2–10 for an Instagram carousel), or a
+                single MP4/MOV video up to 50&nbsp;MB. Instagram needs at least one
+                item.
+              </p>
+              <label
+                htmlFor="media"
+                className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-muted/40 px-6 py-8 text-center transition-colors hover:border-brand/50 hover:bg-muted/60 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+              >
+                <ImagePlus className="size-5 text-muted-foreground" aria-hidden="true" />
+                <span className="text-sm font-medium">
+                  Click to choose images or a video
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {files.length === 0
+                    ? "Nothing attached yet"
+                    : `${files.length} of ${MAX_ITEMS} items attached`}
+                </span>
+                <Input
+                  id="media"
+                  ref={inputRef}
+                  type="file"
+                  accept={ACCEPT}
+                  multiple
+                  className="sr-only"
+                  onChange={(event) => onFiles(event.target.files)}
+                />
+              </label>
+              {mediaError ? <FieldError>{mediaError}</FieldError> : null}
+              {previews.length > 0 ? (
+                <ul className="flex flex-wrap gap-3">
+                  {previews.map((item, index) => (
+                    <li key={`${item.file.name}-${index}`} className="w-24">
+                      <figure className="flex flex-col gap-1">
+                        <div className="relative overflow-hidden rounded-md border">
+                          {item.kind === "image" && item.url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={item.url}
+                              alt={item.file.name}
+                              className="aspect-square w-full object-cover"
+                            />
+                          ) : (
+                            <video
+                              src={item.url}
+                              className="aspect-square w-full object-cover"
+                              muted
+                              playsInline
+                            />
+                          )}
+                          <button
+                            type="button"
+                            aria-label={`Remove ${item.file.name}`}
+                            className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm transition-colors hover:bg-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                            onClick={() => removeFile(index)}
+                          >
+                            <X className="size-3" aria-hidden="true" />
+                          </button>
+                        </div>
+                        <figcaption className="flex items-center gap-1">
+                          <span className="truncate text-[10px] text-muted-foreground">
+                            {item.file.name}
+                          </span>
+                          <Badge variant="secondary" className="shrink-0 text-[9px]">
+                            {item.kind}
+                          </Badge>
+                        </figcaption>
+                      </figure>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-6">
+          <Card className="shadow-card">
+            <CardHeader>
+              <CardTitle>Publish options</CardTitle>
+              <CardDescription>
+                Publish immediately, or schedule for a future time.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div
+                role="radiogroup"
+                aria-label="When to publish"
+                className="grid gap-2"
+              >
+                {(
+                  [
+                    {
+                      value: true,
+                      title: "Publish Now",
+                      description: "Queue the post and let the worker publish it right away.",
+                    },
+                    {
+                      value: false,
+                      title: "Schedule Post",
+                      description: "Publish automatically at the chosen date and time.",
+                    },
+                  ] as const
+                ).map((option) => {
+                  const active = publishNow === option.value;
+                  return (
+                    <button
+                      key={option.title}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => setPublishNow(option.value)}
+                      className={cn(
+                        "flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+                        active
+                          ? "border-brand bg-brand/5"
+                          : "hover:bg-muted/50",
+                      )}
+                    >
+                      <span className="flex items-center gap-2 text-sm font-medium">
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "size-3 rounded-full border",
+                            active ? "border-primary bg-primary" : "border-muted-foreground/50",
+                          )}
+                        />
+                        {option.title}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {option.description}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {!publishNow ? (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="scheduledAt">Publish at</Label>
+                  <Input
+                    id="scheduledAt"
+                    type="datetime-local"
+                    value={scheduledAt}
+                    min={minSchedule}
+                    aria-invalid={scheduleError !== null}
+                    onChange={(event) => setScheduledAt(event.target.value)}
+                  />
+                  {scheduledAt && !scheduleError ? (
+                    <p className="text-xs text-muted-foreground">
+                      Scheduled {formatCountdown(scheduledAt)}.
+                    </p>
+                  ) : null}
+                  {scheduleError ? <FieldError>{scheduleError}</FieldError> : null}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  The post is queued now and published by the worker within seconds.
+                </p>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2 border-t pt-4">
+                <Button type="submit" disabled={issues.length > 0 || pending}>
+                  {pending ? (
+                    <>
+                      <LoaderCircle className="animate-spin" aria-hidden="true" />
+                      {publishNow ? "Publishing…" : "Scheduling…"}
+                    </>
+                  ) : (
+                    <>
+                      <Send aria-hidden="true" />
+                      {publishNow ? "Publish Now" : "Schedule Post"}
+                    </>
+                  )}
+                </Button>
+                <Button type="button" variant="ghost" onClick={() => router.push("/")}>
+                  Discard
+                </Button>
+                {issues.length > 0 ? (
+                  <span className="text-xs text-muted-foreground">
+                    Fix the highlighted fields to continue.
+                  </span>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-card">
+            <CardHeader>
+              <CardTitle>Preview</CardTitle>
+              <CardDescription>
+                An approximate preview of what will be sent to each platform.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              {platforms.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Select a platform to see its preview.
+                </p>
+              ) : (
+                PLATFORMS.filter((platform) => platforms.includes(platform.id)).map(
+                  (platform) => (
+                    <div key={platform.id} className="rounded-lg border bg-muted/30 p-3">
+                      <div className="mb-2 flex items-center gap-2">
+                        <PlatformChip platform={platform.id} />
+                        <span className="text-sm font-medium">{platform.label}</span>
+                        <Badge variant="outline" className="ml-auto text-[10px]">
+                          {publishNow
+                            ? "Publishing now"
+                            : `Scheduled ${formatCountdown(scheduledAt)}`}
+                        </Badge>
+                      </div>
+                      {previews.length > 0 ? (
+                        <div className="mb-2 flex gap-2 overflow-x-auto">
+                          {previews
+                            .slice(0, isCarousel ? 10 : 1)
+                            .map((item, index) => (
+                              <div
+                                key={index}
+                                className="h-20 w-20 shrink-0 overflow-hidden rounded-md border"
+                              >
+                                {item.kind === "image" && item.url ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={item.url}
+                                    alt=""
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <video
+                                    src={item.url}
+                                    className="h-full w-full object-cover"
+                                    muted
+                                    playsInline
+                                  />
+                                )}
+                              </div>
+                            ))}
+                        </div>
+                      ) : null}
+                      <p className="whitespace-pre-wrap break-words text-sm">
+                        {text.trim() || "No text yet."}
+                      </p>
+                    </div>
+                  ),
+                )
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </form>
   );
 }

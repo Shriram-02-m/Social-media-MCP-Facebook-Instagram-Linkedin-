@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -49,13 +49,13 @@ export function LoginForm({ next }: { next: string }) {
   }
 
   return (
-    <Card className="w-full max-w-sm">
+    <Card className="w-full max-w-sm shadow-pop [--card-spacing:--spacing(6)]">
       <CardHeader>
-        <CardTitle>Sign in</CardTitle>
+        <CardTitle className="text-lg font-semibold">Sign in</CardTitle>
         <CardDescription>Administrator access to the social media console.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form className="flex flex-col gap-4" onSubmit={onSubmit}>
+        <form aria-busy={pending} className="flex flex-col gap-4" onSubmit={onSubmit}>
           <div className="flex flex-col gap-2">
             <Label htmlFor="email">Email</Label>
             <Input
@@ -63,6 +63,7 @@ export function LoginForm({ next }: { next: string }) {
               type="email"
               autoComplete="username"
               required
+              aria-invalid={error ? true : undefined}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
             />
@@ -76,6 +77,7 @@ export function LoginForm({ next }: { next: string }) {
                 autoComplete="current-password"
                 className="pr-9"
                 required
+                aria-invalid={error ? true : undefined}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
               />
@@ -94,14 +96,25 @@ export function LoginForm({ next }: { next: string }) {
               </button>
             </div>
           </div>
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
-          <Button type="submit" disabled={pending}>
-            {pending ? "Signing in..." : "Sign in"}
+          {error ? (
+            <p className="text-xs text-destructive" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <Button type="submit" size="lg" className="w-full" disabled={pending}>
+            {pending ? (
+              <>
+                <Loader2 className="animate-spin" aria-hidden />
+                Signing in...
+              </>
+            ) : (
+              "Sign in"
+            )}
           </Button>
           <p className="text-center text-sm text-muted-foreground">
             Don&apos;t have an account?{" "}
             <Link
-              className="underline underline-offset-4 hover:text-foreground"
+              className="font-medium text-foreground underline underline-offset-4 hover:text-foreground"
               href={next === "/" ? "/signup" : `/signup?next=${encodeURIComponent(next)}`}
             >
               Sign up

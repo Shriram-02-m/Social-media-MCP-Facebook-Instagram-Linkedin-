@@ -35,7 +35,7 @@ export function StatCard({
       className="group block rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
       <Card
-        className={`h-full transition-colors group-hover:bg-muted/50 ${attention ?? ""}`}
+        className={`h-full shadow-card transition-colors group-hover:bg-muted/50 ${attention ?? ""}`}
       >
         <CardHeader>
           <CardDescription className="flex items-center gap-2">

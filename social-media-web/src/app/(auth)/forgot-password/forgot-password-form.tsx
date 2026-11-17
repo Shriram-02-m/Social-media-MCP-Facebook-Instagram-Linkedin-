@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { CircleCheck, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -49,7 +50,11 @@ function messageFor(error: AuthErrorShape | null, fallback: string): string {
 
 function Requirement({ met, children }: { met: boolean; children: React.ReactNode }) {
   return (
-    <li className={`text-xs ${met ? "text-foreground" : "text-muted-foreground"}`}>
+    <li
+      className={`text-xs ${
+        met ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"
+      }`}
+    >
       {met ? "✓" : "•"} {children}
     </li>
   );
@@ -154,9 +159,9 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <Card className="w-full max-w-sm">
+    <Card className="w-full max-w-md shadow-pop [--card-spacing:--spacing(6)]">
       <CardHeader>
-        <CardTitle>Reset your password</CardTitle>
+        <CardTitle className="text-lg font-semibold">Reset your password</CardTitle>
         <CardDescription>
           {step === "done"
             ? "Your password has been changed."
@@ -165,7 +170,7 @@ export function ForgotPasswordForm() {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {step === "request" ? (
-          <form className="flex flex-col gap-4" onSubmit={requestCode}>
+          <form aria-busy={pending} className="flex flex-col gap-4" onSubmit={requestCode}>
             <div className="flex flex-col gap-2">
               <Label htmlFor="reset-email">Email</Label>
               <Input
@@ -173,23 +178,31 @@ export function ForgotPasswordForm() {
                 type="email"
                 autoComplete="username"
                 required
+                aria-invalid={error ? true : undefined}
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
               />
             </div>
             {error ? (
-              <p className="text-sm text-destructive" role="alert">
+              <p className="text-xs text-destructive" role="alert">
                 {error}
               </p>
             ) : null}
-            <Button type="submit" disabled={pending}>
-              {pending ? "Sending..." : "Send reset code"}
+            <Button type="submit" size="lg" className="w-full" disabled={pending}>
+              {pending ? (
+                <>
+                  <Loader2 className="animate-spin" aria-hidden />
+                  Sending...
+                </>
+              ) : (
+                "Send reset code"
+              )}
             </Button>
           </form>
         ) : null}
 
         {step === "verify" ? (
-          <form className="flex flex-col gap-4" onSubmit={resetPassword}>
+          <form aria-busy={pending} className="flex flex-col gap-4" onSubmit={resetPassword}>
             <p className="text-sm text-muted-foreground">
               If an account exists for <span className="font-medium text-foreground">{email}</span>,
               a {OTP_LENGTH}-digit code is on its way. It expires in 5 minutes.
@@ -238,16 +251,24 @@ export function ForgotPasswordForm() {
               <Requirement met={requirements.symbol}>Symbol</Requirement>
             </ul>
             {error ? (
-              <p className="text-sm text-destructive" role="alert">
+              <p className="text-xs text-destructive" role="alert">
                 {error}
               </p>
             ) : null}
-            <Button type="submit" disabled={pending}>
-              {pending ? "Resetting..." : "Reset password"}
+            <Button type="submit" size="lg" className="w-full" disabled={pending}>
+              {pending ? (
+                <>
+                  <Loader2 className="animate-spin" aria-hidden />
+                  Resetting...
+                </>
+              ) : (
+                "Reset password"
+              )}
             </Button>
             <Button
               type="button"
               variant="ghost"
+              className="w-full"
               disabled={pending || secondsUntilResend > 0}
               onClick={() => void requestCode()}
             >
@@ -260,12 +281,20 @@ export function ForgotPasswordForm() {
 
         {step === "done" ? (
           <div className="flex flex-col gap-4">
+            <span
+              aria-hidden="true"
+              className="flex size-11 items-center justify-center rounded-xl border bg-muted/60 text-muted-foreground shadow-card"
+            >
+              <CircleCheck className="size-5 text-emerald-600 dark:text-emerald-400" />
+            </span>
             <p className="text-sm text-muted-foreground">
               Every signed-in session was signed out. Use your new password to
               sign in again.
             </p>
             <Link href="/login">
-              <Button className="w-full">Back to sign in</Button>
+              <Button size="lg" className="w-full">
+                Back to sign in
+              </Button>
             </Link>
           </div>
         ) : null}
@@ -273,7 +302,10 @@ export function ForgotPasswordForm() {
         {step !== "done" ? (
           <p className="text-center text-sm text-muted-foreground">
             Remembered it?{" "}
-            <Link className="underline underline-offset-4 hover:text-foreground" href="/login">
+            <Link
+              className="font-medium text-foreground underline underline-offset-4 hover:text-foreground"
+              href="/login"
+            >
               Sign in
             </Link>
           </p>

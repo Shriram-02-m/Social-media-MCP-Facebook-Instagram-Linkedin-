@@ -35,6 +35,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PlatformLogo } from "@/components/platform-logo";
+import { SocialStatusBadge } from "@/components/status-badge";
 import {
   accountConnectionState,
   connectionAction,
@@ -76,7 +78,6 @@ interface ProviderMeta {
   description: string;
   idPlaceholder: string;
   secretPlaceholder: string;
-  tint: string;
 }
 
 interface FormState {
@@ -96,7 +97,6 @@ const PROVIDERS: Record<PlatformId, ProviderMeta> = {
     description: "Meta app for Facebook Pages",
     idPlaceholder: "Your Meta app ID",
     secretPlaceholder: "Your Meta app secret",
-    tint: "bg-blue-600/10 text-blue-600 dark:text-blue-400",
   },
   instagram: {
     label: "Instagram",
@@ -105,7 +105,6 @@ const PROVIDERS: Record<PlatformId, ProviderMeta> = {
     description: "Instagram Login app",
     idPlaceholder: "Your Instagram app ID",
     secretPlaceholder: "Your Instagram app secret",
-    tint: "bg-pink-600/10 text-pink-600 dark:text-pink-400",
   },
   linkedin: {
     label: "LinkedIn",
@@ -114,7 +113,6 @@ const PROVIDERS: Record<PlatformId, ProviderMeta> = {
     description: "LinkedIn developer app",
     idPlaceholder: "Your LinkedIn client ID",
     secretPlaceholder: "Your LinkedIn client secret",
-    tint: "bg-sky-700/10 text-sky-700 dark:text-sky-400",
   },
 };
 
@@ -209,48 +207,6 @@ function authStatusMessage(platform: PlatformId, status: AuthSessionStatus): str
     return `${label} authorization expired before it completed. Try again.`;
   }
   return `${label} authorization failed. Check the app ID, app secret, and callback URL, then try again.`;
-}
-
-function PlatformIcon({
-  platform,
-  className,
-}: {
-  platform: PlatformId;
-  className?: string;
-}) {
-  if (platform === "facebook") {
-    return (
-      <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-        <path d="M14 9h3V6h-3c-2.21 0-4 1.79-4 4v2H7v3h3v7h3v-7h3l1-3h-4v-2c0-.55.45-1 1-1Z" />
-      </svg>
-    );
-  }
-  if (platform === "instagram") {
-    return (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        className={className}
-        aria-hidden="true"
-      >
-        <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
-        <circle cx="12" cy="12" r="4" />
-        <circle cx="17.2" cy="6.8" r="1" fill="currentColor" stroke="none" />
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      <path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM3 9h4v12H3V9Zm7 0h3.8v1.7h.05c.53-1 1.83-2.05 3.77-2.05 4.03 0 4.78 2.65 4.78 6.1V21h-4v-5.5c0-1.31-.02-3-1.83-3-1.83 0-2.11 1.43-2.11 2.9V21h-4V9Z" />
-    </svg>
-  );
-}
-
-function statusBadgeClass(state: AccountConnectionState): string {
-  if (state === "connected") return "bg-emerald-600 text-white hover:bg-emerald-600";
-  return "";
 }
 
 function cardRingClass(state: AccountConnectionState): string {
@@ -735,21 +691,13 @@ export function AccountsPanel() {
             <Card
               key={platform}
               className={cn(
-                "transition-colors duration-200",
+                "shadow-card transition-colors duration-200",
                 cardRingClass(state),
               )}
             >
               <CardHeader className="flex flex-row items-start justify-between gap-3">
                 <div className="flex min-w-0 items-start gap-3">
-                  <span
-                    className={cn(
-                      "flex size-9 shrink-0 items-center justify-center rounded-lg",
-                      meta.tint,
-                    )}
-                    aria-hidden="true"
-                  >
-                    <PlatformIcon platform={platform} className="size-5" />
-                  </span>
+                  <PlatformLogo platform={platform} className="size-10" />
                   <div className="min-w-0">
                     <CardTitle className="truncate">{meta.label}</CardTitle>
                     <CardDescription className="truncate">
@@ -761,16 +709,7 @@ export function AccountsPanel() {
                     </CardDescription>
                   </div>
                 </div>
-                <Badge
-                  variant={state === "connected" ? "default" : "destructive"}
-                  className={statusBadgeClass(state)}
-                >
-                  {state === "connected"
-                    ? "Connected"
-                    : state === "expired"
-                      ? "Reconnect required"
-                      : "Not connected"}
-                </Badge>
+                <SocialStatusBadge status={state} />
               </CardHeader>
 
               <CardContent className="flex flex-1 flex-col gap-4">
@@ -831,11 +770,13 @@ export function AccountsPanel() {
                   <p className="text-xs text-muted-foreground">{cardMessage}</p>
                 ) : null}
 
-                <div className="flex flex-col gap-3">
+                {/* Developer App Settings is its own clearly-titled section so
+                    the credential form reads apart from the connection state. */}
+                <div className="flex flex-col gap-3 rounded-lg border p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 text-sm font-medium">
-                      <KeyRound className="size-4" />
-                      Developer app
+                    <div className="flex items-center gap-1.5 text-sm font-semibold">
+                      <KeyRound className="size-4 text-muted-foreground" />
+                      Developer App Settings
                     </div>
                     <Badge variant="outline" className="text-[10px]">
                       {configured ? "Credentials saved" : "Using shared app"}
@@ -844,16 +785,20 @@ export function AccountsPanel() {
 
                   {!isEditing ? (
                     <>
-                      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-                        <dt className="text-muted-foreground">{meta.idLabel}</dt>
+                      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
+                        <dt className="text-xs text-muted-foreground">
+                          {meta.idLabel}
+                        </dt>
                         <dd
-                          className="truncate font-mono"
+                          className="truncate font-mono text-sm font-medium"
                           title={credential.clientId}
                         >
                           {credential.clientId ?? "—"}
                         </dd>
-                        <dt className="text-muted-foreground">{meta.secretLabel}</dt>
-                        <dd className="text-muted-foreground">
+                        <dt className="text-xs text-muted-foreground">
+                          {meta.secretLabel}
+                        </dt>
+                        <dd className="text-sm font-medium text-muted-foreground">
                           •••••••• (saved)
                         </dd>
                       </dl>
@@ -953,7 +898,10 @@ export function AccountsPanel() {
                 </div>
 
                 <div className="mt-auto flex flex-wrap items-center gap-2 border-t pt-3">
+                  {/* Primary while action is needed; a live connection only
+                      offers outline-styled reconnect management. */}
                   <Button
+                    variant={state === "connected" ? "outline" : "default"}
                     disabled={busy !== null}
                     onClick={() => void connect(platform)}
                   >

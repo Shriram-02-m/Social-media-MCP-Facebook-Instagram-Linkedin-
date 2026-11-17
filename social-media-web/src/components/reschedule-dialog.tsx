@@ -96,20 +96,24 @@ export function RescheduleDialog({
           </DialogDescription>
         </DialogHeader>
         <form className="flex flex-col gap-4" onSubmit={onSubmit}>
-          <div className="flex flex-col gap-2 rounded-md border bg-muted/40 p-3 text-sm">
+          <dl className="flex flex-col gap-2 rounded-lg border bg-muted/40 p-3 text-sm">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">Platform</span>
-              <Badge variant="secondary">{PLATFORM_LABELS[post.platform]}</Badge>
+              <dt className="text-xs text-muted-foreground">Platform</dt>
+              <dd>
+                <Badge variant="secondary">{PLATFORM_LABELS[post.platform]}</Badge>
+              </dd>
             </div>
             <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground">Caption</span>
-              <span className="line-clamp-3">{post.text || "—"}</span>
+              <dt className="text-xs text-muted-foreground">Caption</dt>
+              <dd className="line-clamp-3">{post.text || "—"}</dd>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">Currently scheduled</span>
-              <span>{new Date(post.scheduledAt).toLocaleString()}</span>
+              <dt className="text-xs text-muted-foreground">Currently scheduled</dt>
+              <dd className="tabular-nums">
+                {new Date(post.scheduledAt).toLocaleString()}
+              </dd>
             </div>
-          </div>
+          </dl>
 
           <p className="text-xs text-muted-foreground">
             Only the {PLATFORM_LABELS[post.platform]} scheduled post is updated. Other platforms

@@ -42,6 +42,7 @@ export default async function OverviewPage() {
   const scheduled = posts.filter((post) => post.status === "scheduled");
   const published = posts.filter((post) => post.status === "published");
   const failed = posts.filter((post) => post.status === "failed");
+  const held = posts.filter((post) => post.status === "held");
 
   const tokenByPlatform = new Map(tokens.map((t) => [t.platform, t]));
   const connected = PLATFORMS.filter(
@@ -83,6 +84,13 @@ export default async function OverviewPage() {
       tint: "bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-300",
       href: "/history",
     },
+    {
+      label: "Held",
+      value: held.length,
+      icon: CalendarClock,
+      tint: "bg-violet-50 text-violet-600 dark:bg-violet-950/50 dark:text-violet-300",
+      href: "/queue",
+    },
   ];
 
   return (
@@ -115,17 +123,17 @@ export default async function OverviewPage() {
         </p>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {stats.map((stat) => (
           <Link
             key={stat.label}
             href={stat.href}
             className="group block rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
-            <Card className="h-full transition-colors group-hover:bg-muted/50">
+            <Card className="h-full shadow-card transition-colors group-hover:bg-muted/50">
               <CardContent className="flex items-center justify-between gap-3">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-sm text-muted-foreground">
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground">
                     {stat.label}
                   </span>
                   <span className="text-2xl font-semibold tabular-nums">
@@ -143,7 +151,7 @@ export default async function OverviewPage() {
         ))}
       </div>
 
-      <Card>
+      <Card className="shadow-card">
         <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div>
             <CardTitle>Connected accounts</CardTitle>
@@ -175,7 +183,7 @@ export default async function OverviewPage() {
                 return (
                   <li
                     key={platform}
-                    className="flex min-w-0 items-center gap-3 border-b pb-3 last:border-b-0 last:pb-0"
+                    className="flex min-w-0 items-center gap-3 border-b border-border/60 pb-3 last:border-b-0 last:pb-0"
                   >
                     <PlatformLogo platform={platform} />
                     <span className="flex min-w-0 flex-col gap-0.5">
@@ -205,7 +213,7 @@ export default async function OverviewPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="shadow-card">
         <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div>
             <CardTitle>Upcoming</CardTitle>
@@ -232,7 +240,7 @@ export default async function OverviewPage() {
             upcoming.map((post) => (
               <div
                 key={post.id}
-                className="flex items-center justify-between gap-3 border-b pb-3 last:border-b-0 last:pb-0"
+                className="flex items-center justify-between gap-3 border-b border-border/60 pb-3 last:border-b-0 last:pb-0"
               >
                 <div className="flex min-w-0 items-center gap-2.5">
                   <PlatformChip platform={post.platform} />
