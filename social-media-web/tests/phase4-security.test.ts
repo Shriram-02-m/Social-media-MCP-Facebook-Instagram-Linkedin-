@@ -475,6 +475,14 @@ describe("settings and recovery UI", () => {
     expect(client).toMatch(/readOnly/);
   });
 
+  it("never prefills a development email into the production login form", () => {
+    expect(login).not.toMatch(/@social-media\.local/);
+    expect(login).not.toMatch(/defaultValue/);
+    expect(login).not.toMatch(/process\.env/);
+    expect(login).toMatch(/useState\(""\)/);
+    expect(login).toMatch(/autoComplete="off"/);
+  });
+
   it("links to password recovery and provides password visibility controls", () => {
     expect(login).toMatch(/href="\/forgot-password"/);
     expect(login).toMatch(/Forgot password/);

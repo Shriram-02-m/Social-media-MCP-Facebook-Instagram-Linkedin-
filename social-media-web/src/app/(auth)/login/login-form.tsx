@@ -58,10 +58,12 @@ export function LoginForm({ next }: { next: string }) {
         <form aria-busy={pending} className="flex flex-col gap-4" onSubmit={onSubmit}>
           <div className="flex flex-col gap-2">
             <Label htmlFor="email">Email</Label>
+            {/* Do not let a browser's stale saved credential prefill a
+                development email into the production login form. */}
             <Input
               id="email"
               type="email"
-              autoComplete="username"
+              autoComplete="off"
               required
               aria-invalid={error ? true : undefined}
               value={email}
