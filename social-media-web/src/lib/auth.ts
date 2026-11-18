@@ -16,18 +16,15 @@ import {
   OTP_LENGTH,
   OTP_RESEND_COOLDOWN_SECONDS,
 } from "@/lib/security-policy";
+import { resolveTrustedOrigins } from "@/lib/trusted-origins";
 
 const baseURL =
   process.env.BETTER_AUTH_URL?.trim() ||
   "http://localhost:3000";
 
-const trustedOrigins = [
-  baseURL,
-  "https://social-media-mcp-facebook-instagram.vercel.app",
-  ...(process.env.NODE_ENV === "development"
-    ? ["http://localhost:3000"]
-    : []),
-];
+// Exact allowlist only: canonical production origin, the configured base URL,
+// the current Vercel deployment host(s) and any explicitly approved previews.
+const trustedOrigins = resolveTrustedOrigins(process.env);
 
 // Shown to a user whose account was suspended when they try to sign in.
 // Contains no account details beyond the plain suspension notice.
@@ -77,7 +74,7 @@ export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL,
   logger: authLogger,
-  trustedOrigins: [...new Set(trustedOrigins)],
+  trustedOrigins,
   emailAndPassword: {
     enabled: true,
     disableSignUp: process.env.ALLOW_ADMIN_SIGNUP === "false",
