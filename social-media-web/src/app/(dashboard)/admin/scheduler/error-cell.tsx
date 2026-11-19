@@ -48,7 +48,7 @@ export function ErrorCell({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CircleAlertIcon
-                className="size-4 text-red-600 dark:text-red-400"
+                className="size-4 text-rose"
                 aria-hidden="true"
               />
               Publishing error
@@ -66,8 +66,8 @@ export function ErrorCell({
                 </span>
               </p>
             ) : null}
-            <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-red-200 bg-red-50/60 p-3 dark:border-red-900/50 dark:bg-red-950/30">
-              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-red-700 dark:text-red-300">
+            <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-rose/25 bg-rose/5 p-3 dark:bg-rose/10">
+              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-rose">
                 {error}
               </p>
             </div>

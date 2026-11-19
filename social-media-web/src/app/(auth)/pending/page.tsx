@@ -36,7 +36,7 @@ export default async function PendingApprovalPage() {
     : "Your registration was received and is waiting for an administrator to approve it. You will be able to sign in once the account is approved.";
 
   return (
-    <main className="flex min-h-svh flex-1 flex-col items-center justify-center gap-6 bg-background px-4 py-10 [background-image:radial-gradient(60rem_40rem_at_50%_-10%,color-mix(in_oklch,var(--brand)_6%,transparent),transparent)]">
+    <main className="auth-shell flex min-h-svh flex-1 flex-col items-center justify-center gap-6 px-4 py-10">
       <BrandLogo priority />
       <Card className="w-full max-w-sm shadow-pop [--card-spacing:--spacing(6)]">
         <CardHeader className="gap-3">

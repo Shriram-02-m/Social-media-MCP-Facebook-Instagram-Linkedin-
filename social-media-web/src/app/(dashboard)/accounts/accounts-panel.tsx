@@ -210,11 +210,11 @@ function authStatusMessage(platform: PlatformId, status: AuthSessionStatus): str
 }
 
 function cardRingClass(state: AccountConnectionState): string {
-  // Only a live connection earns a coloured outline. Expired tokens get an
-  // amber warning, while never-connected / disconnected cards stay neutral so
+  // Only a live connection earns a coloured outline. Expired tokens get a
+  // warning accent, while never-connected / disconnected cards stay neutral so
   // the page does not read as a wall of errors.
-  if (state === "connected") return "ring-2 ring-emerald-500/80";
-  if (state === "expired") return "ring-2 ring-amber-500/70";
+  if (state === "connected") return "ring-2 ring-success/60";
+  if (state === "expired") return "ring-2 ring-warning/60";
   return "ring-1 ring-foreground/10";
 }
 
@@ -716,7 +716,7 @@ export function AccountsPanel() {
                 <div className="rounded-lg border bg-muted/30 p-3">
                   {state === "connected" ? (
                     <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                      <div className="flex items-center gap-1.5 text-sm font-medium text-success">
                         <CircleCheck className="size-4" />
                         Connected
                       </div>
@@ -750,7 +750,7 @@ export function AccountsPanel() {
                     </p>
                   ) : null}
                   {connection.warning ? (
-                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                    <p className="mt-2 text-xs text-warning">
                       {connection.warning}
                     </p>
                   ) : null}

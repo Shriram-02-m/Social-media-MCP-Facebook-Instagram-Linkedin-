@@ -241,7 +241,7 @@ function OwnerRow({ row }: { row: AdminSocialOwnerRow }) {
               <div key={platform} className="flex h-9 min-w-0 items-center">
                 {connection?.lastError ? (
                   <p
-                    className="line-clamp-2 w-full text-[11px] leading-4 break-words text-red-600 dark:text-red-400"
+                    className="line-clamp-2 w-full text-[11px] leading-4 break-words text-rose"
                     title={connection.lastError}
                   >
                     {connection.lastError}

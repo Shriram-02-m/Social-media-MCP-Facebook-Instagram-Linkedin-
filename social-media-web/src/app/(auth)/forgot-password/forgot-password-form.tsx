@@ -52,7 +52,7 @@ function Requirement({ met, children }: { met: boolean; children: React.ReactNod
   return (
     <li
       className={`text-xs ${
-        met ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"
+        met ? "text-success" : "text-muted-foreground"
       }`}
     >
       {met ? "✓" : "•"} {children}
@@ -319,7 +319,7 @@ export function ForgotPasswordForm() {
               aria-hidden="true"
               className="flex size-11 items-center justify-center rounded-xl border bg-muted/60 text-muted-foreground shadow-card"
             >
-              <CircleCheck className="size-5 text-emerald-600 dark:text-emerald-400" />
+              <CircleCheck className="size-5 text-success" />
             </span>
             <p className="text-sm text-muted-foreground">
               Every signed-in session was signed out. Use your new password to

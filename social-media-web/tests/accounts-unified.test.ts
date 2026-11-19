@@ -87,8 +87,8 @@ describe("unified Accounts page", () => {
 
   it("drives the card border from the connection state, never from saved credentials", () => {
     expect(panel).toMatch(/cardRingClass\(state\)/);
-    expect(panel).toContain("ring-emerald-500/80");
-    expect(panel).toContain("ring-amber-500/70");
+    expect(panel).toContain("ring-success/60");
+    expect(panel).toContain("ring-warning/60");
     // Premium redesign: the connect action is the card's primary (design-token)
     // button when the platform is not connected, and outline when it is.
     expect(

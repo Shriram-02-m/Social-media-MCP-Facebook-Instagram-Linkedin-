@@ -115,8 +115,8 @@ export function PostDetails({ post }: { post: AdminUserPost }) {
             <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Error{post.failureStage ? ` · ${post.failureStage}` : ""}
             </h3>
-            <div className="max-h-48 overflow-y-auto rounded-lg border border-red-200 bg-red-50/60 p-3 dark:border-red-900/50 dark:bg-red-950/30">
-              <p className="text-sm leading-relaxed break-words whitespace-pre-wrap text-red-700 dark:text-red-300">
+            <div className="max-h-48 overflow-y-auto rounded-lg border border-rose/25 bg-rose/5 p-3 dark:bg-rose/10">
+              <p className="text-sm leading-relaxed break-words whitespace-pre-wrap text-rose">
                 {post.error}
               </p>
             </div>

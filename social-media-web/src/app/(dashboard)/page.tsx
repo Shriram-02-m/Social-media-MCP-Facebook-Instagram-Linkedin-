@@ -67,28 +67,28 @@ export default async function OverviewPage() {
       label: "Scheduled",
       value: scheduled.length,
       icon: CalendarClock,
-      tint: "bg-sky-50 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300",
+      tint: "bg-primary/10 text-primary dark:bg-primary/15",
       href: "/queue",
     },
     {
       label: "Published",
       value: published.length,
       icon: CheckCircle2,
-      tint: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300",
+      tint: "bg-success/10 text-success dark:bg-success/15",
       href: "/history",
     },
     {
       label: "Failed",
       value: failed.length,
       icon: CircleAlert,
-      tint: "bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-300",
+      tint: "bg-rose/10 text-rose dark:bg-rose/15",
       href: "/history",
     },
     {
       label: "Held",
       value: held.length,
       icon: CalendarClock,
-      tint: "bg-violet-50 text-violet-600 dark:bg-violet-950/50 dark:text-violet-300",
+      tint: "bg-warning/10 text-warning dark:bg-warning/15",
       href: "/queue",
     },
   ];
@@ -107,7 +107,7 @@ export default async function OverviewPage() {
       />
 
       {expired.length > 0 ? (
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-warning/25 bg-warning/10 px-3 py-2 text-sm text-warning dark:border-warning/30 dark:bg-warning/15">
           <strong className="font-semibold">
             {expired
               .map((platform) => PLATFORM_LABEL(platform))
@@ -199,7 +199,7 @@ export default async function OverviewPage() {
                         <span
                           aria-hidden="true"
                           className={`size-1.5 rounded-full ${
-                            token?.expired ? "bg-amber-500" : "bg-emerald-500"
+                            token?.expired ? "bg-warning" : "bg-success"
                           }`}
                         />
                         {token?.expired ? "Expired — reconnect" : "Connected"}

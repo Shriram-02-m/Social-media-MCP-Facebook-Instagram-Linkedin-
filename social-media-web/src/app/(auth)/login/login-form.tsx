@@ -49,7 +49,7 @@ export function LoginForm({ next }: { next: string }) {
   }
 
   return (
-    <Card className="w-full max-w-sm shadow-pop [--card-spacing:--spacing(6)]">
+    <Card className="brand-accent-top w-full max-w-sm shadow-pop [--card-spacing:--spacing(6)]">
       <CardHeader>
         <CardTitle className="text-lg font-semibold">Sign in</CardTitle>
         <CardDescription>Sign in to your social media console.</CardDescription>

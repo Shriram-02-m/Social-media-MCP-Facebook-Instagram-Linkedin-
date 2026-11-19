@@ -41,6 +41,14 @@
   --color-card: var(--card);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
+  /* Semantic accents. Blue is the primary brand signal; rose is the
+     secondary accent used for destructive actions and supporting highlights. */
+  --color-rose: var(--rose);
+  --color-info: var(--info);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  /* Sparse blue-to-rose brand gradient and the soft auth/hero wash. */
+  --background-image-brand-gradient: var(--gradient-brand);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -48,89 +56,166 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
-  --shadow-card: 0 1px 2px 0 oklch(0 0 0 / 0.03), 0 1px 3px 0 oklch(0 0 0 / 0.05);
-  --shadow-pop: 0 4px 6px -2px oklch(0 0 0 / 0.05), 0 10px 24px -6px oklch(0 0 0 / 0.1);
-  --shadow-overlay: 0 24px 64px -16px oklch(0 0 0 / 0.25);
+  --shadow-card: 0 1px 2px 0 oklch(0.21 0.03 265 / 0.04), 0 1px 3px 0 oklch(0.21 0.03 265 / 0.06);
+  --shadow-pop: 0 4px 6px -2px oklch(0.21 0.03 265 / 0.06), 0 10px 24px -6px oklch(0.21 0.03 265 / 0.12);
+  --shadow-overlay: 0 24px 64px -16px oklch(0.15 0.04 265 / 0.28);
 }
 
 :root {
-  /* Light surfaces: white canvas, cool-gray structure (hue ~260, near-zero
-     chroma) so borders read crisp without feeling cold or blue. */
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.155 0.012 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.155 0.012 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.155 0.012 260);
-  /* Primary action stays near-black (Vercel/Stripe-style monochrome CTA);
-     brand hue is reserved for focus, active nav, and small accents. */
-  --primary: oklch(0.185 0.02 265);
-  --primary-foreground: oklch(0.985 0.002 260);
-  --secondary: oklch(0.966 0.004 260);
-  --secondary-foreground: oklch(0.24 0.02 265);
-  --muted: oklch(0.966 0.004 260);
-  --muted-foreground: oklch(0.53 0.016 260);
-  --accent: oklch(0.962 0.005 260);
-  --accent-foreground: oklch(0.24 0.02 265);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.918 0.005 260);
-  --input: oklch(0.912 0.006 260);
-  /* Brand: restrained indigo, used for focus rings and active states. */
-  --brand: oklch(0.545 0.19 265);
-  --brand-foreground: oklch(0.985 0.002 260);
-  --ring: oklch(0.545 0.19 265);
-  --chart-1: oklch(0.545 0.19 265);
-  --chart-2: oklch(0.6 0.12 230);
-  --chart-3: oklch(0.6 0.13 155);
-  --chart-4: oklch(0.72 0.15 80);
-  --chart-5: oklch(0.62 0.18 25);
+  /* Blue + Rose SaaS palette. Slate neutrals keep the canvas calm so blue can
+     carry primary actions/navigation and rose can stay a deliberate accent. */
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+
+  /* Blue primary action. */
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+
+  /* Light-blue secondary surface. */
+  --secondary: #eff6ff;
+  --secondary-foreground: #1d4ed8;
+
+  /* Neutral supporting surfaces and secondary text. */
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #ffe4e6;
+  --accent-foreground: #be123c;
+
+  /* Rose destructive/alert color. */
+  --destructive: #e11d48;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+
+  /* Brand focus/selection follows the blue primary. */
+  --brand: #2563eb;
+  --brand-foreground: #ffffff;
+  --ring: #2563eb;
+
+  /* Supporting status accents. Muted teal/amber stay functional without
+     competing with the blue/rose hierarchy. */
+  --rose: #e11d48;
+  --info: #2563eb;
+  --success: #0f766e;
+  --warning: #92400e;
+  /* Soft tints for the auth/hero wash. */
+  --brand-wash: rgb(219 234 254 / 0.65);
+  --rose-wash: rgb(255 228 230 / 0.5);
+
+  /* Chart order: blue, rose, teal, amber, slate. */
+  --chart-1: #2563eb;
+  --chart-2: #e11d48;
+  --chart-3: #0f766e;
+  --chart-4: #b45309;
+  --chart-5: #64748b;
+
+  /* Sparse branding accents. */
+  --gradient-brand: linear-gradient(135deg, #2563eb 0%, #e11d48 100%);
+
   --radius: 0.625rem;
-  --sidebar: oklch(0.983 0.003 260);
-  --sidebar-foreground: oklch(0.24 0.015 260);
-  --sidebar-primary: oklch(0.545 0.19 265);
-  --sidebar-primary-foreground: oklch(0.985 0.002 260);
-  --sidebar-accent: oklch(0.945 0.006 260);
-  --sidebar-accent-foreground: oklch(0.2 0.02 265);
-  --sidebar-border: oklch(0.918 0.005 260);
-  --sidebar-ring: oklch(0.545 0.19 265);
+
+  /* Sidebar stays neutral; the active item is a soft-blue indicator. */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #2563eb;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eff6ff;
+  --sidebar-accent-foreground: #1d4ed8;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #2563eb;
 }
 
 .dark {
-  /* Dark surfaces: Linear-style cool dark with real elevation — the card
-     sits slightly above the canvas so tables and panels read as layered. */
-  --background: oklch(0.148 0.008 265);
-  --foreground: oklch(0.965 0.003 260);
-  --card: oklch(0.182 0.01 265);
-  --card-foreground: oklch(0.965 0.003 260);
-  --popover: oklch(0.198 0.01 265);
-  --popover-foreground: oklch(0.965 0.003 260);
-  --primary: oklch(0.955 0.003 260);
-  --primary-foreground: oklch(0.19 0.02 265);
-  --secondary: oklch(0.245 0.01 265);
-  --secondary-foreground: oklch(0.965 0.003 260);
-  --muted: oklch(0.245 0.01 265);
-  --muted-foreground: oklch(0.672 0.014 260);
-  --accent: oklch(0.252 0.012 265);
-  --accent-foreground: oklch(0.965 0.003 260);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 13%);
-  --brand: oklch(0.66 0.17 265);
-  --brand-foreground: oklch(0.16 0.02 265);
-  --ring: oklch(0.66 0.17 265);
-  --chart-1: oklch(0.66 0.17 265);
-  --chart-2: oklch(0.68 0.11 230);
-  --chart-3: oklch(0.66 0.13 155);
-  --chart-4: oklch(0.78 0.14 80);
-  --chart-5: oklch(0.68 0.17 25);
-  --sidebar: oklch(0.163 0.009 265);
-  --sidebar-foreground: oklch(0.965 0.003 260);
-  --sidebar-primary: oklch(0.66 0.17 265);
-  --sidebar-primary-foreground: oklch(0.985 0.002 260);
-  --sidebar-accent: oklch(0.245 0.012 265);
-  --sidebar-accent-foreground: oklch(0.965 0.003 260);
-  --sidebar-border: oklch(1 0 0 / 9%);
-  --sidebar-ring: oklch(0.66 0.17 265);
+  /* Dark surfaces keep the same hierarchy: deep slate canvas, elevated cards. */
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  --card: #1e293b;
+  --card-foreground: #f8fafc;
+  --popover: #1e293b;
+  --popover-foreground: #f8fafc;
+
+  /* A lighter blue keeps primary CTAs legible on dark surfaces. */
+  --primary: #60a5fa;
+  --primary-foreground: #0f172a;
+
+  --secondary: #1e293b;
+  --secondary-foreground: #dbeafe;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #4c0519;
+  --accent-foreground: #ffe4e6;
+
+  --destructive: #fb7185;
+  --border: #334155;
+  --input: #334155;
+
+  --brand: #60a5fa;
+  --brand-foreground: #0f172a;
+  --ring: #60a5fa;
+
+  --rose: #fb7185;
+  --info: #60a5fa;
+  --success: #2dd4bf;
+  --warning: #fbbf24;
+  --brand-wash: rgb(23 37 84 / 0.65);
+  --rose-wash: rgb(76 5 25 / 0.5);
+
+  --chart-1: #60a5fa;
+  --chart-2: #fb7185;
+  --chart-3: #2dd4bf;
+  --chart-4: #fbbf24;
+  --chart-5: #94a3b8;
+
+  --gradient-brand: linear-gradient(135deg, #3b82f6 0%, #f43f5e 100%);
+
+  --sidebar: #0b1220;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-primary: #60a5fa;
+  --sidebar-primary-foreground: #0f172a;
+  --sidebar-accent: #172554;
+  --sidebar-accent-foreground: #bfdbfe;
+  --sidebar-border: #334155;
+  --sidebar-ring: #60a5fa;
+}
+
+/* Shared, token-driven wash for public/auth surfaces. Kept in one place so
+   the brand hue changes never need to be repeated across route files. */
+@utility auth-shell {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(
+      50rem 32rem at 50% -12%,
+      var(--brand-wash),
+      transparent 70%
+    ),
+    radial-gradient(
+      38rem 26rem at 100% 100%,
+      var(--rose-wash),
+      transparent 70%
+    );
+}
+
+@utility brand-rule {
+  background-image: var(--gradient-brand);
+}
+
+/* Thin blue-to-rose top rule for selected branding surfaces only. */
+@utility brand-accent-top {
+  position: relative;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 3px;
+    border-start-start-radius: inherit;
+    border-start-end-radius: inherit;
+    background-image: var(--gradient-brand);
+  }
 }
 
 @layer base {
@@ -157,7 +242,7 @@
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
   }
-  /* Calmer default focus: brand ring on interactive elements. */
+  /* Calmer default focus: blue ring on interactive elements. */
   :focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;

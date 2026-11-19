@@ -94,17 +94,17 @@ const ACCOUNT_STATUS_META: Record<
   active: {
     label: "Active",
     className:
-      "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300",
+      "border-success/20 bg-success/10 text-success dark:bg-success/15",
   },
   pending: {
     label: "Pending",
     className:
-      "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300",
+      "border-warning/20 bg-warning/10 text-warning dark:bg-warning/15",
   },
   inactive: {
     label: "Inactive",
     className:
-      "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300",
+      "border-rose/20 bg-rose/10 text-rose dark:bg-rose/15",
   },
 };
 
@@ -303,7 +303,7 @@ function PostRow({ post }: { post: AdminUserPost }) {
       <TableCell className="whitespace-normal px-3 py-3 align-top">
         {post.error ? (
           <p
-            className="line-clamp-2 text-xs leading-snug break-words text-red-600 dark:text-red-400"
+            className="line-clamp-2 text-xs leading-snug break-words text-rose"
             title={post.error}
           >
             {post.error}
@@ -385,12 +385,12 @@ export default async function UserDetailPage(props: PageProps<"/users/[id]">) {
             <span className="inline-flex items-center gap-1.5">
               {detail.emailVerified ? (
                 <CheckCircle2
-                  className="size-3.5 text-emerald-600 dark:text-emerald-400"
+                  className="size-3.5 text-success"
                   aria-hidden="true"
                 />
               ) : (
                 <XCircle
-                  className="size-3.5 text-amber-600 dark:text-amber-400"
+                  className="size-3.5 text-warning"
                   aria-hidden="true"
                 />
               )}
@@ -407,7 +407,7 @@ export default async function UserDetailPage(props: PageProps<"/users/[id]">) {
       {failedPosts > 0 || expiredConnections > 0 ? (
         <div
           role="status"
-          className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300"
+          className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-warning/25 bg-warning/10 px-3 py-2 text-xs text-warning dark:border-warning/30 dark:bg-warning/15"
         >
           <CircleAlert className="size-4 shrink-0" aria-hidden="true" />
           <span className="font-medium">Needs attention</span>
@@ -447,12 +447,12 @@ export default async function UserDetailPage(props: PageProps<"/users/[id]">) {
                 <span className="inline-flex items-center gap-1.5">
                   {detail.emailVerified ? (
                     <CheckCircle2
-                      className="size-3.5 text-emerald-600 dark:text-emerald-400"
+                      className="size-3.5 text-success"
                       aria-hidden="true"
                     />
                   ) : (
                     <XCircle
-                      className="size-3.5 text-amber-600 dark:text-amber-400"
+                      className="size-3.5 text-warning"
                       aria-hidden="true"
                     />
                   )}

@@ -204,25 +204,25 @@ export default async function AdminSchedulerPage({
           label="Scheduled"
           value={result.counts.scheduled}
           icon={Clock3}
-          iconClassName="bg-sky-50 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300"
+          iconClassName="bg-primary/10 text-primary dark:bg-primary/15"
         />
         <StatCard
           label="Published"
           value={result.counts.published}
           icon={CheckCircle2}
-          iconClassName="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300"
+          iconClassName="bg-success/10 text-success dark:bg-success/15"
         />
         <StatCard
           label="Failed"
           value={result.counts.failed}
           icon={CircleAlert}
-          iconClassName="bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-300"
+          iconClassName="bg-rose/10 text-rose dark:bg-rose/15"
         />
         <StatCard
           label="Held"
           value={result.counts.held}
           icon={PauseCircle}
-          iconClassName="bg-violet-50 text-violet-600 dark:bg-violet-950/50 dark:text-violet-300"
+          iconClassName="bg-warning/10 text-warning dark:bg-warning/15"
         />
       </section>
 

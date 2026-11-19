@@ -15,19 +15,19 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     padding: "24px",
-    background: "#fafafa",
-    color: "#18181b",
+    background: "#f8fafc",
+    color: "#0f172a",
     fontFamily:
       'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   },
   card: {
     width: "100%",
     maxWidth: "32rem",
-    border: "1px solid #e4e4e7",
+    border: "1px solid #e2e8f0",
     borderRadius: "12px",
     background: "#ffffff",
     padding: "24px",
-    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.04)",
+    boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -8px rgba(37, 99, 235, 0.12)",
   },
   brand: {
     width: "42px",
@@ -46,12 +46,12 @@ const styles = {
     margin: "0 0 16px",
     fontSize: "14px",
     lineHeight: 1.5,
-    color: "#52525b",
+    color: "#64748b",
   },
   reference: {
     margin: "0 0 16px",
     fontSize: "12px",
-    color: "#71717a",
+    color: "#64748b",
   },
   code: {
     fontFamily:
@@ -61,9 +61,9 @@ const styles = {
   actions: { display: "flex", flexWrap: "wrap", gap: "8px" },
   button: {
     appearance: "none",
-    border: "1px solid #18181b",
+    border: "1px solid #2563eb",
     borderRadius: "8px",
-    background: "#18181b",
+    background: "#2563eb",
     color: "#ffffff",
     padding: "8px 16px",
     fontSize: "14px",
@@ -73,12 +73,12 @@ const styles = {
   link: {
     display: "inline-flex",
     alignItems: "center",
-    border: "1px solid #e4e4e7",
+    border: "1px solid #e2e8f0",
     borderRadius: "8px",
     padding: "8px 16px",
     fontSize: "14px",
     fontWeight: 500,
-    color: "#18181b",
+    color: "#1d4ed8",
     textDecoration: "none",
   },
 } as const;
@@ -102,7 +102,7 @@ export default function GlobalError({
           <h1 style={styles.title}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/brand/socialsuite-logo.png" alt="SocialSuite logo" style={styles.brand} />
-            <span aria-hidden style={{ color: "#dc2626" }}>
+            <span aria-hidden style={{ color: "#e11d48" }}>
               &#9888;
             </span>
             This page couldn&apos;t load

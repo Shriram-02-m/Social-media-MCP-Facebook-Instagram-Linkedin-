@@ -40,7 +40,7 @@ function single(value: string | string[] | undefined): string | undefined {
 // card and a single subtle brand-tinted radial accent on the canvas.
 function AuthMain({ children }: { children: React.ReactNode }) {
   return (
-    <main className="flex min-h-svh flex-1 flex-col items-center justify-center gap-6 bg-background px-4 py-10 [background-image:radial-gradient(60rem_40rem_at_50%_-10%,color-mix(in_oklch,var(--brand)_6%,transparent),transparent)]">
+    <main className="auth-shell flex min-h-svh flex-1 flex-col items-center justify-center gap-6 px-4 py-10">
       <BrandLogo priority />
       {children}
     </main>

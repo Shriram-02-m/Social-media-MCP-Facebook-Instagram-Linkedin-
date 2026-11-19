@@ -26,16 +26,16 @@ const STATS: {
     label: "Pending Users",
     description: "Waiting for your approval before they can sign in.",
     href: "/users?status=pending",
-    indicator: "bg-amber-500",
+    indicator: "bg-warning",
     attention:
-      "ring-2 ring-amber-500/60 dark:ring-amber-400/50 focus-visible:ring-amber-500",
+      "ring-2 ring-warning/60 focus-visible:ring-warning",
   },
   {
     key: "active",
     label: "Active Users",
     description: "Approved accounts with console access.",
     href: "/users?status=active",
-    indicator: "bg-emerald-500",
+    indicator: "bg-success",
   },
   {
     key: "inactive",
@@ -49,7 +49,7 @@ const STATS: {
     label: "Total Users",
     description: "Every registered account except the Super Admin.",
     href: "/users",
-    indicator: "bg-sky-500",
+    indicator: "bg-primary",
   },
 ];
 
@@ -65,7 +65,7 @@ export default async function AdminOverviewPage() {
       />
 
       {stats.pending > 0 ? (
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-warning/25 bg-warning/10 px-3 py-2 text-sm text-warning dark:border-warning/30 dark:bg-warning/15">
           <strong className="font-semibold">
             {stats.pending} user{stats.pending === 1 ? "" : "s"}
           </strong>

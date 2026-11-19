@@ -1,6 +1,6 @@
 // Shared post status badge for both the admin panel and the user workspace.
-// Distinct, low-saturation colours keep every status readable at a glance
-// without competing with the primary action colours in the tables.
+// Colours come from the central semantic tokens so every status stays readable
+// in light/dark mode without competing with the blue primary action colour.
 // (src/components/admin/status-badge.tsx re-exports from here so existing
 // admin imports keep working with a single implementation.)
 
@@ -18,16 +18,17 @@ const POST_LABELS: Record<AdminPostStatus, string> = {
 
 const POST_CLASSES: Record<AdminPostStatus, string> = {
   scheduled:
-    "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300",
+    "border-info/20 bg-info/10 text-info dark:border-info/30 dark:bg-info/15",
   publishing:
-    "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300",
+    "border-primary/20 bg-primary/10 text-primary dark:border-primary/30 dark:bg-primary/15",
   published:
-    "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300",
+    "border-success/20 bg-success/10 text-success dark:border-success/30 dark:bg-success/15",
   failed:
-    "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300",
+    "border-rose/20 bg-rose/10 text-rose dark:border-rose/30 dark:bg-rose/15",
   cancelled:
-    "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300",
-  held: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300",
+    "border-border bg-muted text-muted-foreground dark:bg-muted/60",
+  held:
+    "border-warning/20 bg-warning/10 text-warning dark:border-warning/30 dark:bg-warning/15",
 };
 
 export function PostStatusBadge({ status }: { status: AdminPostStatus }) {
@@ -52,17 +53,17 @@ const SOCIAL_LABELS: Record<SocialAccountStatus, string> = {
   disconnected: "Disconnected",
 };
 
-// Semantic tint per connection state: green is healthy, amber needs
-// reconnection, red is a live error, neutral is simply not connected.
+// Semantic tint per connection state: teal is healthy, amber needs
+// reconnection, rose is a live error, neutral is simply not connected.
 const SOCIAL_CLASSES: Record<SocialAccountStatus, string> = {
   connected:
-    "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300",
+    "border-success/20 bg-success/10 text-success dark:border-success/30 dark:bg-success/15",
   expired:
-    "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300",
+    "border-warning/20 bg-warning/10 text-warning dark:border-warning/30 dark:bg-warning/15",
   error:
-    "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300",
+    "border-rose/20 bg-rose/10 text-rose dark:border-rose/30 dark:bg-rose/15",
   disconnected:
-    "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300",
+    "border-border bg-muted text-muted-foreground dark:bg-muted/60",
 };
 
 export function SocialStatusBadge({ status }: { status: SocialAccountStatus }) {

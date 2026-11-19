@@ -59,7 +59,7 @@ function Requirement({ met, children }: { met: boolean; children: React.ReactNod
     <li
       className={`flex items-center gap-2 text-xs ${met ? "text-foreground" : "text-muted-foreground"}`}
     >
-      <Icon className={`size-3.5 ${met ? "text-emerald-600" : ""}`} aria-hidden />
+      <Icon className={`size-3.5 ${met ? "text-success" : ""}`} aria-hidden />
       {children}
     </li>
   );
@@ -161,7 +161,7 @@ export function SettingsClient({ profile }: SettingsClientProps) {
           <CardTitle className="flex items-center gap-2.5">
             <CardIcon
               icon={User}
-              className="bg-sky-50 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300"
+              className="bg-primary/10 text-primary dark:bg-primary/15"
             />
             Profile information
           </CardTitle>
@@ -228,7 +228,7 @@ export function SettingsClient({ profile }: SettingsClientProps) {
           <CardTitle className="flex items-center gap-2.5">
             <CardIcon
               icon={KeyRound}
-              className="bg-violet-50 text-violet-600 dark:bg-violet-950/50 dark:text-violet-300"
+              className="bg-rose/10 text-rose dark:bg-rose/15"
             />
             Change password
           </CardTitle>
