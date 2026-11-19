@@ -7,6 +7,14 @@ import { admin } from "better-auth/plugins/admin";
 import { emailOTP } from "better-auth/plugins/email-otp";
 
 import { db } from "@/lib/db";
+import {
+  databaseErrorCategory,
+  databaseErrorCode,
+  getDatabaseDiagnosticState,
+  newDatabaseCorrelationId,
+  recordDatabaseError,
+  redactDatabaseError,
+} from "@/lib/db/diagnostics";
 import * as schema from "@/lib/db/schema";
 import { logActivity } from "@/lib/activity";
 import { otpEmailContent, sendSecurityEmail } from "@/lib/email";
@@ -35,27 +43,28 @@ const BANNED_USER_MESSAGE =
 export const ADMIN_ROLE = "admin";
 
 // Better Auth wraps every failed database operation in an opaque APIError and
-// only passes the real database error to its internal logger. Capture it so
-// production logs identify the actual connectivity failure (ECONNRESET, "too
-// many clients", ...) instead of the generic "Failed to get session". Values
-// are redacted: a database error message can carry bound parameters such as
-// the session token, so URLs are stripped and the text truncated.
-function redactDatabaseError(text: string): string {
-  return text
-    .replace(/postgres(?:ql)?:\/\/[^\s"'<>]+/gi, "[database URL redacted]")
-    .slice(0, 300);
-}
-
+// only passes the real database error to its internal logger. Capture it in
+// the active diagnostic context so production logs identify the actual
+// connectivity failure (ECONNRESET, "too many clients", ...) and the session
+// layer can retry only transient connection failures. Values are redacted: a
+// database error message can carry bound parameters such as the session token,
+// so URLs are stripped and the text truncated.
 const authLogger = {
   log: (level: "debug" | "info" | "warn" | "error", message: string, ...args: unknown[]) => {
     if (level === "error") {
       const cause = [message, ...args].find((a): a is Error => a instanceof Error);
       if (cause) {
+        recordDatabaseError(cause);
+        const diagnostics = getDatabaseDiagnosticState();
         console.error(
           JSON.stringify({
             event: "better_auth_internal_error",
+            correlationId: diagnostics?.correlationId ?? newDatabaseCorrelationId(),
+            operation: diagnostics?.operation ?? "auth.unknown",
+            attempt: diagnostics?.attempt ?? 1,
             name: cause.name,
-            code: (cause as NodeJS.ErrnoException).code ?? undefined,
+            category: databaseErrorCategory(cause),
+            code: databaseErrorCode(cause) ?? (cause as NodeJS.ErrnoException).code ?? undefined,
             message: redactDatabaseError(cause.message),
           }),
         );

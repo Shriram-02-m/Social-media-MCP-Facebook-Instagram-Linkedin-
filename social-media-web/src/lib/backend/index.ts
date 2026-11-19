@@ -74,6 +74,10 @@ export type {
   McpOAuthClient,
 } from "../../../../social-media-mcp/dist/auth/mcp-oauth.js";
 
-export { databasePool, closeDatabasePool } from "../../../../social-media-mcp/dist/database.js";
+export {
+  databasePool,
+  closeDatabasePool,
+  setDatabasePool,
+} from "../../../../social-media-mcp/dist/database.js";
 
 export { config } from "../../../../social-media-mcp/dist/config/env.js";

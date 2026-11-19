@@ -4,7 +4,8 @@ import { headers } from "next/headers";
 import { unstable_rethrow } from "next/navigation";
 
 import { auth, ADMIN_ROLE, type AppUser } from "@/lib/auth";
-import { ensureDatabaseConnection } from "@/lib/db";
+import { withDatabaseRecovery } from "@/lib/db";
+import { newDatabaseCorrelationId } from "@/lib/db/diagnostics";
 
 export type AdminSession = NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>;
 
@@ -30,7 +31,7 @@ export class SessionUnavailableError extends Error {
 // Log only non-sensitive identifying fields. The underlying database error can
 // carry the bound session token in its query parameters, so the cause is never
 // logged or forwarded to the client.
-function logSessionLookupFailure(error: unknown): void {
+function logSessionLookupFailure(error: unknown, correlationId: string): void {
   const details =
     error instanceof Error
       ? {
@@ -41,29 +42,41 @@ function logSessionLookupFailure(error: unknown): void {
           code: (error as { body?: { code?: unknown } }).body?.code,
         }
       : { name: typeof error };
-  console.error(JSON.stringify({ event: "session_lookup_failed", ...details }));
+  console.error(JSON.stringify({
+    event: "session_lookup_failed",
+    correlationId,
+    operation: "auth.get_session",
+    ...details,
+  }));
 }
 
 // Better Auth wraps every failed session lookup in an opaque `APIError`
-// (FAILED_TO_GET_SESSION); the underlying database error is only logged, never
-// attached as a cause, so transient connection failures cannot be recognized
-// from the thrown error alone. Live diagnosis against the production database
-// confirmed the failure mode: serverless instances on Vercel freeze between
-// requests, providers close the instance's idle TCP connections while it is
-// frozen, and the pool then hands out those dead clients one query at a time -
-// so a lookup can fail on several consecutive dead clients before reaching a
-// healthy connection, which a single blind retry cannot recover from.
+// (FAILED_TO_GET_SESSION); the underlying database error is only passed to its
+// logger. That logger now records the real error in the active diagnostic
+// context, so recovery can distinguish a transient connection failure from a
+// permanent query/session failure instead of retrying every error blindly.
 //
-// Recovery is therefore deterministic, not a blind retry: verify (and drain
-// dead clients from) the pool with `ensureDatabaseConnection`, then re-run the
-// lookup exactly once. The second attempt re-runs the entire verification
-// against the database - nothing is cached or assumed from the first attempt -
-// so it can never fabricate a session. A persistent outage fails the retry too
-// and still surfaces as `SessionUnavailableError`.
+// On a connection failure the shared pool is drained and verified before one
+// bounded retry. The retry re-runs the entire verification against the
+// database - nothing is cached or assumed from the first attempt - so it can
+// never fabricate a session. A persistent outage still surfaces as
+// `SessionUnavailableError`.
 
 async function lookupSession(): Promise<AdminSession | null> {
   const result = await auth.api.getSession({ headers: await headers() });
   return result ?? null;
+}
+
+// `unstable_rethrow` either rethrows a Next.js control-flow error or returns.
+// It must bypass all database logging/retry paths; during `next build` these
+// errors are how a route is marked dynamic.
+function isFrameworkControlFlowError(error: unknown): boolean {
+  try {
+    unstable_rethrow(error);
+    return false;
+  } catch {
+    return true;
+  }
 }
 
 // `cache` deduplicates the lookup within a single render: the dashboard layout
@@ -71,24 +84,28 @@ async function lookupSession(): Promise<AdminSession | null> {
 // and without dedupe every page render performs two or more full session
 // lookups - each one another chance to hit a stale connection.
 export const getSession = cache(async (): Promise<AdminSession | null> => {
+  const correlationId = newDatabaseCorrelationId();
   try {
-    return await lookupSession();
+    return await withDatabaseRecovery(
+      async () => {
+        try {
+          return await lookupSession();
+        } catch (error) {
+          unstable_rethrow(error);
+          throw error;
+        }
+      },
+      {
+        operation: "auth.get_session",
+        correlationId,
+        maxAttempts: 2,
+        shouldHandleError: (error) => !isFrameworkControlFlowError(error),
+      },
+    );
   } catch (error) {
-    // Never intercept Next.js control-flow errors (dynamic-usage from
-    // `headers()`, redirect/notFound, prerender bailouts). They must reach the
-    // framework; during `next build` they are how a route is marked dynamic.
     unstable_rethrow(error);
-    logSessionLookupFailure(error);
-    if (!(await ensureDatabaseConnection())) {
-      throw new SessionUnavailableError();
-    }
-    try {
-      return await lookupSession();
-    } catch (retryError) {
-      unstable_rethrow(retryError);
-      logSessionLookupFailure(retryError);
-      throw new SessionUnavailableError();
-    }
+    logSessionLookupFailure(error, correlationId);
+    throw new SessionUnavailableError();
   }
 });
 

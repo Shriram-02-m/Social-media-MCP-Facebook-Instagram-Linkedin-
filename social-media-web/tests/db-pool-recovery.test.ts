@@ -28,7 +28,7 @@ if (!databaseUrl) {
   }
 }
 
-const { isConnectionError, ensureDatabaseConnection, pool } = await import("@/lib/db");
+const { isCapacityError, isConnectionError, ensureDatabaseConnection, pool, POOL_MAX } = await import("@/lib/db");
 const { Pool } = await import("pg");
 
 describe.skipIf(!databaseUrl)("database pool zombie recovery", () => {
@@ -39,7 +39,9 @@ describe.skipIf(!databaseUrl)("database pool zombie recovery", () => {
         code: "ECONNRESET",
       });
       expect(isConnectionError(reset)).toBe(true);
-      expect(isConnectionError(new Error("FATAL: sorry, too many clients already"))).toBe(true);
+      // A full pooler is a capacity limit, not a transient socket failure, so
+      // it must never be routed through the connection-recovery retry path.
+      expect(isCapacityError(new Error("FATAL: sorry, too many clients already"))).toBe(true);
       expect(isConnectionError(new Error('column "x" does not exist'))).toBe(false);
       expect(isConnectionError(new Error("syntax error at or near \"FROM\""))).toBe(false);
     },
@@ -54,12 +56,12 @@ describe.skipIf(!databaseUrl)("database pool zombie recovery", () => {
       // sockets), then return them to the pool as idle zombies.
       const held: Array<{ processID?: number; release: (err?: Error | null) => void }> = [];
       try {
-        for (let i = 0; i < 3; i += 1) {
+        for (let i = 0; i < POOL_MAX; i += 1) {
           const client = await pool.connect();
           held.push(client as unknown as { processID?: number; release: (err?: Error | null) => void });
         }
         const pids = held.map((client) => client.processID).filter((pid) => pid !== undefined);
-        expect(pids).toHaveLength(3);
+        expect(pids).toHaveLength(POOL_MAX);
 
         const adminPool = new Pool({ connectionString: databaseUrl, max: 2 });
         try {
