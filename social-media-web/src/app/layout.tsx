@@ -17,8 +17,18 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+  ),
   title: "Social Console",
   description: "Social media scheduling and publishing console.",
+  applicationName: "Social Console",
+  openGraph: {
+    title: "Social Console",
+    description: "Social media scheduling and publishing console.",
+    siteName: "Social Console",
+    type: "website",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

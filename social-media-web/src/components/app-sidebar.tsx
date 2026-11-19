@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { BrandLogo } from "@/components/brand-logo";
 import {
   Sidebar,
   SidebarContent,
@@ -66,9 +67,7 @@ export function AppSidebar({ isAdmin }: { isAdmin: boolean }) {
               render={<Link href="/" />}
               tooltip="Social Console"
             >
-              <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-b from-brand to-brand/85 text-xs font-semibold text-brand-foreground shadow-card ring-1 ring-foreground/10">
-                SC
-              </div>
+              <BrandLogo compact showName={false} />
               <div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="truncate font-semibold">Social Console</span>
               </div>

@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool, type PoolClient, type PoolConfig } from "pg";
 
 import { config } from "@/lib/backend";
+import { resolveDatabaseUrl } from "@/lib/db/connection-url";
 
 import * as schema from "./schema";
 
@@ -10,7 +11,9 @@ const globalForDb = globalThis as unknown as { scheduledMediaDbPool?: Pool };
 const POOL_MAX = 5;
 
 function connectionString(): string {
-  return (process.env.DATABASE_URL?.trim() || config.databaseUrl || "").trim();
+  // Production requires an explicit remote DATABASE_URL. An empty string must
+  // never reach pg: pg would silently use localhost:5432 instead.
+  return resolveDatabaseUrl(process.env, config.databaseUrl);
 }
 
 // `pg` enables TLS only when the connection string itself carries an `sslmode`

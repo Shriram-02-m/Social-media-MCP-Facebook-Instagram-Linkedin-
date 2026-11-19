@@ -29,6 +29,11 @@ const styles = {
     padding: "24px",
     boxShadow: "0 1px 2px rgba(0, 0, 0, 0.04)",
   },
+  brand: {
+    width: "42px",
+    height: "28px",
+    objectFit: "contain",
+  },
   title: {
     display: "flex",
     alignItems: "center",
@@ -95,6 +100,8 @@ export default function GlobalError({
         <title>Social Console</title>
         <div style={styles.card} role="alert">
           <h1 style={styles.title}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/socialsuite-logo.png" alt="SocialSuite logo" style={styles.brand} />
             <span aria-hidden style={{ color: "#dc2626" }}>
               &#9888;
             </span>

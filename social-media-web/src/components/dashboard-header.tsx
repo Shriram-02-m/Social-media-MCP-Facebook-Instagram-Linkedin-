@@ -9,6 +9,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Fragment, useTransition } from "react";
 
+import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -109,6 +110,7 @@ export function DashboardHeader({
   return (
     <header className="sticky top-0 z-20 flex min-h-14 min-w-0 items-center gap-3 border-b bg-background/90 px-3 backdrop-blur-sm sm:px-6">
       <SidebarTrigger aria-label="Toggle navigation" />
+      <BrandLogo compact showName={false} />
       <Separator orientation="vertical" className="hidden h-5 sm:block" />
       <Breadcrumb className="min-w-0">
         <BreadcrumbList className="flex-nowrap gap-1 text-[13px]">
