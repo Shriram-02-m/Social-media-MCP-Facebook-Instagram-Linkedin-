@@ -37,13 +37,13 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
 
   return (
     <SidebarProvider>
-      <AppSidebar isAdmin={state?.isAdmin ?? false} />
+      <AppSidebar
+        isAdmin={state?.isAdmin ?? false}
+        name={session.user.name}
+        email={session.user.email}
+      />
       <SidebarInset>
-        <DashboardHeader
-          name={session.user.name}
-          email={session.user.email}
-          isAdmin={state?.isAdmin ?? false}
-        />
+        <DashboardHeader />
         <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-4 sm:gap-6 sm:px-6 sm:py-6">
           {children}
         </div>

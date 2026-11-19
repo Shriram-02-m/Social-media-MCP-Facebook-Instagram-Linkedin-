@@ -17,9 +17,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { BrandLogo } from "@/components/brand-logo";
+import { UserProfileMenu } from "@/components/user-profile-menu";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -27,6 +29,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
 } from "@/components/ui/sidebar";
 
 const NAV_ITEMS = [
@@ -53,7 +56,15 @@ function isActive(href: string, pathname: string, exact: boolean): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function AppSidebar({ isAdmin }: { isAdmin: boolean }) {
+export function AppSidebar({
+  isAdmin,
+  name,
+  email,
+}: {
+  isAdmin: boolean;
+  name: string;
+  email: string;
+}) {
   const pathname = usePathname();
   // The server enforces admin access on the page and APIs; this only keeps the
   // admin navigation out of the regular-user interface.
@@ -120,6 +131,10 @@ export function AppSidebar({ isAdmin }: { isAdmin: boolean }) {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter className="mt-auto gap-0 p-2">
+        <SidebarSeparator />
+        <UserProfileMenu name={name} email={email} isAdmin={isAdmin} />
+      </SidebarFooter>
     </Sidebar>
   );
 }
