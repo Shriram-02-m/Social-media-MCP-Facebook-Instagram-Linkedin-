@@ -600,4 +600,37 @@ describe("user-management wiring", () => {
       expect(file).not.toMatch(/access_token|refresh_token|client_secret/i);
     }
   });
+
+  it("scopes row-action hover color overrides to View and Approve", () => {
+    const actions = readFile("src/app/(dashboard)/users/user-row-actions.tsx");
+    const menu = readFile("src/components/ui/dropdown-menu.tsx");
+
+    const itemAttributes = (label: string) => {
+      const match = actions.match(
+        new RegExp(
+          `<DropdownMenuItem\\b((?:(?!</DropdownMenuItem>)[\\s\\S])*?)\\r?\\n\\s*${label}\\r?\\n\\s*</DropdownMenuItem>`,
+        ),
+      );
+      return match?.[1] ?? "";
+    };
+
+    const view = itemAttributes("View");
+    const approve = itemAttributes("Approve");
+    const reject = itemAttributes("Reject");
+
+    expect(view).toContain("focus:text-popover-foreground");
+    expect(view).toContain(
+      "not-data-[variant=destructive]:focus:**:text-popover-foreground",
+    );
+    expect(approve).toContain("focus:text-success");
+    expect(approve).toContain(
+      "not-data-[variant=destructive]:focus:**:text-success",
+    );
+    expect(reject).toContain('variant="destructive"');
+    expect(reject).not.toContain("focus:text-success");
+    expect(reject).not.toContain("focus:text-popover-foreground");
+
+    expect(actions).not.toContain("text-accent-foreground");
+    expect(menu).toContain("focus:text-accent-foreground");
+  });
 });

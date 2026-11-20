@@ -89,12 +89,16 @@ export function UserRowActions({
           <MoreHorizontal aria-hidden="true" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-40">
-          <DropdownMenuItem render={<Link href={`/users/${id}`} />}>
+          <DropdownMenuItem
+            render={<Link href={`/users/${id}`} />}
+            className="focus:text-popover-foreground not-data-[variant=destructive]:focus:**:text-popover-foreground"
+          >
             View
           </DropdownMenuItem>
           {canApprove || canReject ? <DropdownMenuSeparator /> : null}
           {canApprove ? (
             <DropdownMenuItem
+              className="focus:text-success not-data-[variant=destructive]:focus:**:text-success"
               disabled={busy}
               onClick={() => void setApproval("approved")}
             >
