@@ -24,11 +24,11 @@ import {
   OTP_LENGTH,
   OTP_RESEND_COOLDOWN_SECONDS,
 } from "@/lib/security-policy";
-import { resolveTrustedOrigins } from "@/lib/trusted-origins";
+import { resolveAuthBaseURL, resolveTrustedOrigins } from "@/lib/trusted-origins";
 
-const baseURL =
-  process.env.BETTER_AUTH_URL?.trim() ||
-  "http://localhost:3000";
+// In production an explicit HTTPS BETTER_AUTH_URL wins; otherwise fall back to
+// the canonical deployed origin rather than localhost (no protocol mismatch).
+const baseURL = resolveAuthBaseURL(process.env);
 
 // Exact allowlist only: canonical production origin, the configured base URL,
 // the current Vercel deployment host(s) and any explicitly approved previews.

@@ -4,8 +4,11 @@ import {
   CANONICAL_PRODUCTION_ORIGIN,
   LOCAL_DEVELOPMENT_ORIGIN,
   isTrustedOrigin,
+  resolveAuthBaseURL,
   resolveTrustedOrigins,
 } from "../src/lib/trusted-origins";
+
+const PRODUCTION_ORIGIN = "https://social-media-web-brown.vercel.app";
 
 const REPORTED_PREVIEW_HOST
   = "social-media-i4yq1n3a7-shriram-muthuramans-projects.vercel.app";
@@ -15,6 +18,17 @@ const UNAPPROVED_ORIGIN = "https://unapproved-attacker.example.com";
 describe("resolveTrustedOrigins", () => {
   it("always includes the canonical production origin", () => {
     expect(resolveTrustedOrigins({})).toEqual([CANONICAL_PRODUCTION_ORIGIN]);
+  });
+
+  it("uses the reported production domain as the canonical origin", () => {
+    expect(CANONICAL_PRODUCTION_ORIGIN).toBe(PRODUCTION_ORIGIN);
+    const origins = resolveTrustedOrigins({
+      NODE_ENV: "production",
+      // Simulate a stale env: the production alias must still be trusted.
+      BETTER_AUTH_URL: "http://localhost:3000",
+    });
+    expect(origins).toContain(PRODUCTION_ORIGIN);
+    expect(isTrustedOrigin(PRODUCTION_ORIGIN, origins)).toBe(true);
   });
 
   it("includes a valid BETTER_AUTH_URL", () => {
@@ -130,6 +144,31 @@ describe("resolveTrustedOrigins", () => {
   });
 });
 
+describe("resolveAuthBaseURL", () => {
+  it("uses the canonical production origin when the env is missing or unsafe", () => {
+    expect(resolveAuthBaseURL({ NODE_ENV: "production" })).toBe(PRODUCTION_ORIGIN);
+    expect(resolveAuthBaseURL({
+      NODE_ENV: "production",
+      BETTER_AUTH_URL: "http://localhost:3000",
+    })).toBe(PRODUCTION_ORIGIN);
+  });
+
+  it("honors an explicit HTTPS production base URL without a trailing slash", () => {
+    expect(resolveAuthBaseURL({
+      NODE_ENV: "production",
+      BETTER_AUTH_URL: `${PRODUCTION_ORIGIN}/`,
+    })).toBe(PRODUCTION_ORIGIN);
+  });
+
+  it("keeps localhost available for development", () => {
+    expect(resolveAuthBaseURL({ NODE_ENV: "development" })).toBe(LOCAL_DEVELOPMENT_ORIGIN);
+    expect(resolveAuthBaseURL({
+      NODE_ENV: "development",
+      BETTER_AUTH_URL: "http://localhost:3001",
+    })).toBe("http://localhost:3001");
+  });
+});
+
 describe("isTrustedOrigin", () => {
   it("matches exact origins only", () => {
     const origins = resolveTrustedOrigins({
@@ -146,7 +185,7 @@ describe("auth.ts trusted-origin wiring", () => {
   const auth = readFileSync("src/lib/auth.ts", "utf8");
 
   it("passes the resolved allowlist to Better Auth", () => {
-    expect(auth).toMatch(/import \{ resolveTrustedOrigins \} from "@\/lib\/trusted-origins";/);
+    expect(auth).toMatch(/import \{[^}]*resolveTrustedOrigins[^}]*\} from "@\/lib\/trusted-origins";/);
     expect(auth).toMatch(/trustedOrigins,\s*\n\s*emailAndPassword:/);
   });
 

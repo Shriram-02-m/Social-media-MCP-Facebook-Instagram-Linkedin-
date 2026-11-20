@@ -11,7 +11,7 @@
 
 /** Stable production origin, always trusted regardless of deployment URL. */
 export const CANONICAL_PRODUCTION_ORIGIN
-  = "https://social-media-mcp-facebook-instagram.vercel.app";
+  = "https://social-media-web-brown.vercel.app";
 
 /** Local Next.js development origin. Only trusted when NODE_ENV=development. */
 export const LOCAL_DEVELOPMENT_ORIGIN = "http://localhost:3000";
@@ -100,6 +100,21 @@ export function resolveTrustedOrigins(env: TrustedOriginEnv = process.env): stri
   if (isDevelopment) origins.push(LOCAL_DEVELOPMENT_ORIGIN);
 
   return [...new Set(origins)];
+}
+
+/**
+ * Resolve the Better Auth `baseURL` without ever producing a protocol mismatch
+ * in production. An explicitly configured HTTPS origin wins; a missing or
+ * invalid value falls back to the canonical production origin instead of
+ * localhost. Development keeps the local default.
+ */
+export function resolveAuthBaseURL(env: TrustedOriginEnv = process.env): string {
+  const configured = env.BETTER_AUTH_URL?.trim();
+  if (env.NODE_ENV === "production") {
+    return (configured ? normalizeOrigin(configured, false) : null)
+      ?? CANONICAL_PRODUCTION_ORIGIN;
+  }
+  return configured || LOCAL_DEVELOPMENT_ORIGIN;
 }
 
 /**
