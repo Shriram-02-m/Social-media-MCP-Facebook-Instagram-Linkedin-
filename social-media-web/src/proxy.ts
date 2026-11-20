@@ -5,7 +5,6 @@ const PUBLIC_PREFIXES = [
   "/login",
   "/signup",
   "/pending",
-  "/forgot-password",
   "/api/auth",
   "/api/health",
 ];

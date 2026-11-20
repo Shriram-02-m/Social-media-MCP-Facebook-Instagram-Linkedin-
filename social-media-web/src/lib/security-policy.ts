@@ -1,4 +1,4 @@
-// Pure profile/password/OTP policy helpers. Kept free of database, auth, and
+// Pure profile/password policy helpers. Kept free of database, auth, and
 // Next.js imports so the same rules run in the browser form, the API route,
 // the emergency recovery script, and unit tests.
 
@@ -7,11 +7,6 @@ export const DISPLAY_NAME_MAX_LENGTH = 80;
 
 export const PASSWORD_MIN_LENGTH = 12;
 export const PASSWORD_MAX_LENGTH = 128;
-
-export const OTP_LENGTH = 6;
-export const OTP_EXPIRES_IN_SECONDS = 300;
-export const OTP_ALLOWED_ATTEMPTS = 3;
-export const OTP_RESEND_COOLDOWN_SECONDS = 60;
 
 export type ValidationResult<T> =
   | { ok: true; value: T }
@@ -161,25 +156,4 @@ export function validatePasswordChange(
     ok: true,
     value: { currentPassword, newPassword: strength.value },
   };
-}
-
-/** Validates the 6-digit numeric OTP accepted by the email-OTP provider. */
-export function validateOtp(value: unknown): ValidationResult<string> {
-  if (typeof value !== "string") {
-    return { ok: false, message: "Enter the 6-digit code from your email." };
-  }
-  const otp = value.trim();
-  if (!new RegExp(`^\\d{${OTP_LENGTH}}$`).test(otp)) {
-    return { ok: false, message: "Enter the 6-digit code from your email." };
-  }
-  return { ok: true, value: otp };
-}
-
-/** Lowercases and lightly validates an email before an OTP request. */
-export function normalizeEmail(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const email = value.trim().toLowerCase();
-  if (email.length === 0 || email.length > 254) return null;
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
-  return email;
 }

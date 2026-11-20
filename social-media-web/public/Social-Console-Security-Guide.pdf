@@ -127,7 +127,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 11 0 R >>
 endobj
 13 0 obj
-<< /Length 4763 >>
+<< /Length 3302 >>
 stream
 BT /F2 8 Tf 0.145 0.388 0.922 rg 1.8 Tc 64.00 776.00 Td (SECTION 2) Tj ET
 BT /F2 21 Tf 0.067 0.094 0.153 rg 0 Tc 64.00 746.00 Td (Authentication & Password Protection) Tj ET
@@ -153,24 +153,11 @@ BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 460.50 Td (Better Auth performs the
 BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 446.00 Td (operation, so a password change immediately signs out unknown devices.) Tj ET
 0.145 0.388 0.922 rg 65.50 429.70 3.00 3.00 re f
 BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 427.50 Td (The change is recorded in the activity infrastructure as an administrative security event.) Tj ET
-BT /F2 13 Tf 0.067 0.094 0.153 rg 0 Tc 64.00 390.00 Td (Email one-time codes) Tj ET
-0.145 0.388 0.922 rg 65.50 371.20 3.00 3.00 re f
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 369.00 Td (Where email verification is configured, the console uses 6-digit one-time codes that expire after 5) Tj ET
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 354.50 Td (minutes, allow at most 3 attempts, and enforce a 60-second cooldown between resend requests.) Tj ET
-0.145 0.388 0.922 rg 65.50 338.20 3.00 3.00 re f
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 336.00 Td (One-time codes are stored in hashed form and are never written to logs or audit metadata.) Tj ET
-0.145 0.388 0.922 rg 65.50 319.70 3.00 3.00 re f
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 317.50 Td (Codes are delivered by email through the configured transport \(Resend or a generic HTTPS) Tj ET
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 303.00 Td (delivery webhook\). Delivery failures are deliberately indistinguishable from an unknown email) Tj ET
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 288.50 Td (address, so responses do not reveal whether an account exists.) Tj ET
-0.145 0.388 0.922 rg 65.50 272.20 3.00 3.00 re f
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 270.00 Td (Completing a password reset through a one-time code revokes every existing session once the) Tj ET
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 255.50 Td (new password is set.) Tj ET
-0.937 0.965 1 rg 64.00 195.50 467.28 44.50 re f
-0.145 0.388 0.922 rg 64.00 195.50 3.00 44.50 re f
-BT /F2 9 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 231.00 Td (Enforced by the application) Tj ET
-BT /F1 9.5 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 218.00 Td (Password rules, hashed credential storage, one-time-code limits, and session revocation on) Tj ET
-BT /F1 9.5 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 204.50 Td (password changes and resets are all enforced server-side.) Tj ET
+0.937 0.965 1 rg 64.00 367.50 467.28 44.50 re f
+0.145 0.388 0.922 rg 64.00 367.50 3.00 44.50 re f
+BT /F2 9 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 403.00 Td (Enforced by the application) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 390.00 Td (Password rules, hashed credential storage, and session revocation on password changes are all) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 376.50 Td (enforced server-side.) Tj ET
 BT /F2 7 Tf 0.145 0.388 0.922 rg 1.4 Tc 64.00 813.00 Td (SOCIAL CONSOLE) Tj ET
 BT /F1 7 Tf 0.420 0.447 0.502 rg 0.3 Tc 403.67 813.00 Td (Authentication & Password Protection) Tj ET
 0.898 0.906 0.922 RG 0.6 w 64.00 806.00 m 531.28 806.00 l S
@@ -183,7 +170,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 13 0 R >>
 endobj
 15 0 obj
-<< /Length 3148 >>
+<< /Length 3057 >>
 stream
 BT /F2 8 Tf 0.145 0.388 0.922 rg 1.8 Tc 64.00 776.00 Td (SECTION 3) Tj ET
 BT /F2 21 Tf 0.067 0.094 0.153 rg 0 Tc 64.00 746.00 Td (Session Management) Tj ET
@@ -192,26 +179,25 @@ BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 64.00 706.00 Td (Every sign-in creates an
 BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 64.00 691.00 Td (cookie; the session record itself lives in the database and can be inspected and revoked from) Tj ET
 BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 64.00 676.00 Td (Settings.) Tj ET
 0.145 0.388 0.922 rg 65.50 654.20 3.00 3.00 re f
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 652.00 Td (Sessions expire after 7 days, and end earlier when you sign out, change your password, or) Tj ET
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 637.50 Td (complete a password reset.) Tj ET
-0.145 0.388 0.922 rg 65.50 621.20 3.00 3.00 re f
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 619.00 Td (The Active sessions list in Settings shows every browser currently signed in, with the device and) Tj ET
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 604.50 Td (browser, the last active time, and the expiration time.) Tj ET
-0.145 0.388 0.922 rg 65.50 588.20 3.00 3.00 re f
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 586.00 Td (Your current device is marked as the current session so you can tell it apart from other devices at) Tj ET
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 571.50 Td (a glance.) Tj ET
-0.145 0.388 0.922 rg 65.50 555.20 3.00 3.00 re f
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 553.00 Td (The Sign out other sessions action revokes every session except the one you are using, after a) Tj ET
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 538.50 Td (confirmation step.) Tj ET
-0.145 0.388 0.922 rg 65.50 522.20 3.00 3.00 re f
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 520.00 Td (Every request re-validates the session server-side. A revoked or expired session is rejected) Tj ET
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 505.50 Td (immediately, even if the browser still holds the cookie.) Tj ET
-0.937 0.965 1 rg 64.00 432.00 467.28 58.00 re f
-0.145 0.388 0.922 rg 64.00 432.00 3.00 58.00 re f
-BT /F2 9 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 481.00 Td (Enforced by the application) Tj ET
-BT /F1 9.5 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 468.00 Td (Session creation, expiration, server-side validation, and revocation are handled by the) Tj ET
-BT /F1 9.5 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 454.50 Td (authentication library and verified on every admin request. Session tokens are never displayed in) Tj ET
-BT /F1 9.5 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 441.00 Td (the dashboard.) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 652.00 Td (Sessions expire after 7 days, and end earlier when you sign out or change your password.) Tj ET
+0.145 0.388 0.922 rg 65.50 635.70 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 633.50 Td (The Active sessions list in Settings shows every browser currently signed in, with the device and) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 619.00 Td (browser, the last active time, and the expiration time.) Tj ET
+0.145 0.388 0.922 rg 65.50 602.70 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 600.50 Td (Your current device is marked as the current session so you can tell it apart from other devices at) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 586.00 Td (a glance.) Tj ET
+0.145 0.388 0.922 rg 65.50 569.70 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 567.50 Td (The Sign out other sessions action revokes every session except the one you are using, after a) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 553.00 Td (confirmation step.) Tj ET
+0.145 0.388 0.922 rg 65.50 536.70 3.00 3.00 re f
+BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 534.50 Td (Every request re-validates the session server-side. A revoked or expired session is rejected) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 520.00 Td (immediately, even if the browser still holds the cookie.) Tj ET
+0.937 0.965 1 rg 64.00 446.50 467.28 58.00 re f
+0.145 0.388 0.922 rg 64.00 446.50 3.00 58.00 re f
+BT /F2 9 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 495.50 Td (Enforced by the application) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 482.50 Td (Session creation, expiration, server-side validation, and revocation are handled by the) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 469.00 Td (authentication library and verified on every admin request. Session tokens are never displayed in) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 455.50 Td (the dashboard.) Tj ET
 BT /F2 7 Tf 0.145 0.388 0.922 rg 1.4 Tc 64.00 813.00 Td (SOCIAL CONSOLE) Tj ET
 BT /F1 7 Tf 0.420 0.447 0.502 rg 0.3 Tc 458.48 813.00 Td (Session Management) Tj ET
 0.898 0.906 0.922 RG 0.6 w 64.00 806.00 m 531.28 806.00 l S
@@ -339,7 +325,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 21 0 R >>
 endobj
 23 0 obj
-<< /Length 3195 >>
+<< /Length 2867 >>
 stream
 BT /F2 8 Tf 0.145 0.388 0.922 rg 1.8 Tc 64.00 776.00 Td (SECTION 7) Tj ET
 BT /F2 21 Tf 0.067 0.094 0.153 rg 0 Tc 64.00 746.00 Td (Administrative Responsibilities) Tj ET
@@ -351,8 +337,8 @@ BT /F2 13 Tf 0.067 0.094 0.153 rg 0 Tc 64.00 654.00 Td (Recommended practices) T
 BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 633.00 Td (Use a strong, unique administrator password that meets the console minimum of 12 characters) Tj ET
 BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 618.50 Td (with three of four character types, and do not reuse it on other services.) Tj ET
 0.145 0.388 0.922 rg 65.50 602.20 3.00 3.00 re f
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 600.00 Td (Never share administrator credentials or one-time codes with anyone. No legitimate support) Tj ET
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 585.50 Td (process will ask for them.) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 600.00 Td (Never share administrator credentials with anyone. No legitimate support process will ask for) Tj ET
+BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 585.50 Td (them.) Tj ET
 0.145 0.388 0.922 rg 65.50 569.20 3.00 3.00 re f
 BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 567.00 Td (Sign out other sessions from Settings when a device is lost, replaced, or no longer used.) Tj ET
 0.145 0.388 0.922 rg 65.50 550.70 3.00 3.00 re f
@@ -360,14 +346,11 @@ BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 548.50 Td (Review social account co
 BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 534.00 Td (connection before its next scheduled post.) Tj ET
 0.145 0.388 0.922 rg 65.50 517.70 3.00 3.00 re f
 BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 515.50 Td (Review scheduled posts before their publish window and hold anything that is not ready to go out.) Tj ET
-0.145 0.388 0.922 rg 65.50 499.20 3.00 3.00 re f
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 497.00 Td (Keep the authentication and email delivery configuration valid and up to date so one-time codes) Tj ET
-BT /F1 10 Tf 0.067 0.094 0.153 rg 0 Tc 80.00 482.50 Td (and security messages actually arrive.) Tj ET
-0.965 0.973 0.980 rg 64.00 422.50 467.28 44.50 re f
-0.200 0.251 0.325 rg 64.00 422.50 3.00 44.50 re f
-BT /F2 9 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 458.00 Td (Recommended practice - not enforced) Tj ET
-BT /F1 9.5 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 445.00 Td (The items in this section are operational advice for administrators. They complement, but are not) Tj ET
-BT /F1 9.5 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 431.50 Td (enforced by, the application.) Tj ET
+0.965 0.973 0.980 rg 64.00 455.50 467.28 44.50 re f
+0.200 0.251 0.325 rg 64.00 455.50 3.00 44.50 re f
+BT /F2 9 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 491.00 Td (Recommended practice - not enforced) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 478.00 Td (The items in this section are operational advice for administrators. They complement, but are not) Tj ET
+BT /F1 9.5 Tf 0.067 0.094 0.153 rg 0 Tc 78.00 464.50 Td (enforced by, the application.) Tj ET
 BT /F2 7 Tf 0.145 0.388 0.922 rg 1.4 Tc 64.00 813.00 Td (SOCIAL CONSOLE) Tj ET
 BT /F1 7 Tf 0.420 0.447 0.502 rg 0.3 Tc 427.76 813.00 Td (Administrative Responsibilities) Tj ET
 0.898 0.906 0.922 RG 0.6 w 64.00 806.00 m 531.28 806.00 l S
@@ -419,27 +402,27 @@ xref
 0000005205 00000 n 
 0000008875 00000 n 
 0000008970 00000 n 
-0000013785 00000 n 
-0000013880 00000 n 
-0000017080 00000 n 
-0000017175 00000 n 
-0000020205 00000 n 
-0000020300 00000 n 
-0000023390 00000 n 
-0000023485 00000 n 
-0000026481 00000 n 
-0000026576 00000 n 
-0000029823 00000 n 
-0000029918 00000 n 
-0000030034 00000 n 
-0000030183 00000 n 
-0000030314 00000 n 
-0000030458 00000 n 
-0000030588 00000 n 
-0000030726 00000 n 
-0000030857 00000 n 
+0000012324 00000 n 
+0000012419 00000 n 
+0000015528 00000 n 
+0000015623 00000 n 
+0000018653 00000 n 
+0000018748 00000 n 
+0000021838 00000 n 
+0000021933 00000 n 
+0000024929 00000 n 
+0000025024 00000 n 
+0000027943 00000 n 
+0000028038 00000 n 
+0000028154 00000 n 
+0000028303 00000 n 
+0000028434 00000 n 
+0000028578 00000 n 
+0000028708 00000 n 
+0000028846 00000 n 
+0000028977 00000 n 
 trailer
 << /Size 33 /Root 1 0 R /Info 6 0 R >>
 startxref
-30931
+29051
 %%EOF

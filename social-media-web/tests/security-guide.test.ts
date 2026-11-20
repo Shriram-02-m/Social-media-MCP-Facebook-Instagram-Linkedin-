@@ -111,8 +111,6 @@ describe("security guide PDF asset", () => {
 
   it("contains no secrets, credentials, or private account data", () => {
     const forbidden = [
-      "RESEND_API_KEY",
-      "EMAIL_DELIVERY_TOKEN",
       "BETTER_AUTH_SECRET",
       "DATABASE_URL",
       "TOKEN_ENCRYPTION_KEY",
@@ -127,6 +125,18 @@ describe("security guide PDF asset", () => {
     ];
     for (const needle of forbidden) {
       expect(pdfText).not.toContain(needle);
+    }
+  });
+
+  it("does not describe the removed password-reset or OTP flows", () => {
+    const removedCopy = [
+      "password reset",
+      "one-time code",
+      "EMAIL_DELIVERY",
+      "RESEND",
+    ];
+    for (const needle of removedCopy) {
+      expect(pdfText.toLowerCase()).not.toContain(needle.toLowerCase());
     }
   });
 

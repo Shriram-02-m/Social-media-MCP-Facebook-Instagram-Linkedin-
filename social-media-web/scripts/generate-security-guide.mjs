@@ -336,14 +336,7 @@ const sections = [
         "Better Auth performs the update and revokes every other signed-in session in the same operation, so a password change immediately signs out unknown devices.",
         "The change is recorded in the activity infrastructure as an administrative security event.",
       ] },
-      { t: "h2", x: "Email one-time codes" },
-      { t: "bullets", items: [
-        "Where email verification is configured, the console uses 6-digit one-time codes that expire after 5 minutes, allow at most 3 attempts, and enforce a 60-second cooldown between resend requests.",
-        "One-time codes are stored in hashed form and are never written to logs or audit metadata.",
-        "Codes are delivered by email through the configured transport (Resend or a generic HTTPS delivery webhook). Delivery failures are deliberately indistinguishable from an unknown email address, so responses do not reveal whether an account exists.",
-        "Completing a password reset through a one-time code revokes every existing session once the new password is set.",
-      ] },
-      { t: "callout", tone: "enforced", label: "Enforced by the application", x: "Password rules, hashed credential storage, one-time-code limits, and session revocation on password changes and resets are all enforced server-side." },
+      { t: "callout", tone: "enforced", label: "Enforced by the application", x: "Password rules, hashed credential storage, and session revocation on password changes are all enforced server-side." },
     ],
   },
   {
@@ -351,7 +344,7 @@ const sections = [
     blocks: [
       { t: "p", x: "Every sign-in creates an independent server-side session. The browser only holds a signed session cookie; the session record itself lives in the database and can be inspected and revoked from Settings." },
       { t: "bullets", items: [
-        "Sessions expire after 7 days, and end earlier when you sign out, change your password, or complete a password reset.",
+        "Sessions expire after 7 days, and end earlier when you sign out or change your password.",
         "The Active sessions list in Settings shows every browser currently signed in, with the device and browser, the last active time, and the expiration time.",
         "Your current device is marked as the current session so you can tell it apart from other devices at a glance.",
         "The Sign out other sessions action revokes every session except the one you are using, after a confirmation step.",
@@ -408,11 +401,10 @@ const sections = [
       { t: "h2", x: "Recommended practices" },
       { t: "bullets", items: [
         "Use a strong, unique administrator password that meets the console minimum of 12 characters with three of four character types, and do not reuse it on other services.",
-        "Never share administrator credentials or one-time codes with anyone. No legitimate support process will ask for them.",
+        "Never share administrator credentials with anyone. No legitimate support process will ask for them.",
         "Sign out other sessions from Settings when a device is lost, replaced, or no longer used.",
         "Review social account connection statuses periodically and reconnect any expired or invalid connection before its next scheduled post.",
         "Review scheduled posts before their publish window and hold anything that is not ready to go out.",
-        "Keep the authentication and email delivery configuration valid and up to date so one-time codes and security messages actually arrive.",
       ] },
       { t: "callout", tone: "advice", label: "Recommended practice - not enforced", x: "The items in this section are operational advice for administrators. They complement, but are not enforced by, the application." },
     ],

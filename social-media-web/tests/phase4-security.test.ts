@@ -4,15 +4,9 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  OTP_ALLOWED_ATTEMPTS,
-  OTP_EXPIRES_IN_SECONDS,
-  OTP_LENGTH,
-  OTP_RESEND_COOLDOWN_SECONDS,
   PASSWORD_MIN_LENGTH,
-  normalizeEmail,
   passwordRequirements,
   validateDisplayName,
-  validateOtp,
   validatePasswordChange,
   validatePasswordStrength,
 } from "@/lib/security-policy";
@@ -181,30 +175,6 @@ describe("password policy", () => {
   });
 });
 
-describe("OTP and email policy", () => {
-  it("accepts only six digits", () => {
-    expect(validateOtp(" 123456 ")).toEqual({ ok: true, value: "123456" });
-    expect(validateOtp("12345").ok).toBe(false);
-    expect(validateOtp("1234567").ok).toBe(false);
-    expect(validateOtp("12a456").ok).toBe(false);
-    expect(validateOtp(123456).ok).toBe(false);
-  });
-
-  it("normalizes a valid email and rejects malformed input", () => {
-    expect(normalizeEmail(" Admin@Example.COM ")).toBe("admin@example.com");
-    expect(normalizeEmail("not-an-email")).toBeNull();
-    expect(normalizeEmail("a@b")).toBeNull();
-    expect(normalizeEmail(7)).toBeNull();
-  });
-
-  it("matches the configured OTP lifecycle", () => {
-    expect(OTP_LENGTH).toBe(6);
-    expect(OTP_EXPIRES_IN_SECONDS).toBe(300);
-    expect(OTP_ALLOWED_ATTEMPTS).toBe(3);
-    expect(OTP_RESEND_COOLDOWN_SECONDS).toBe(60);
-  });
-});
-
 // ---------------------------------------------------------------------------
 // Auth configuration
 // ---------------------------------------------------------------------------
@@ -223,59 +193,48 @@ function walk(relative: string): string[] {
   return out;
 }
 
-describe("Better Auth recovery configuration", () => {
+describe("password reset removal from auth configuration", () => {
   const auth = readFile("src/lib/auth.ts");
+  const authClient = readFile("src/lib/auth-client.ts");
+  const proxy = readFile("src/proxy.ts");
+  const resetSurfaceFiles = [
+    "src/lib/auth.ts",
+    "src/lib/auth-client.ts",
+    "src/proxy.ts",
+    "src/app/(auth)/login/login-form.tsx",
+  ];
 
-  it("registers the email OTP plugin with hardened storage and limits", () => {
-    expect(auth).toMatch(/emailOTP\(/);
-    expect(auth).toMatch(/storeOTP:\s*"hashed"/);
-    expect(auth).toMatch(/expiresIn:\s*OTP_EXPIRES_IN_SECONDS/);
-    expect(auth).toMatch(/allowedAttempts:\s*OTP_ALLOWED_ATTEMPTS/);
-    expect(auth).toMatch(/resendStrategy:\s*"rotate"/);
-    expect(auth).toMatch(/rateLimit:\s*\{/);
-    expect(auth).toMatch(/disableSignUp:\s*true/);
+  it("keeps core password auth, signup policy, sessions, and the admin plugin", () => {
+    expect(auth).toMatch(/emailAndPassword:\s*\{/);
+    expect(auth).toMatch(/enabled:\s*true/);
+    expect(auth).toMatch(/disableSignUp:\s*process\.env\.ALLOW_ADMIN_SIGNUP/);
+    expect(auth).toMatch(/session:\s*\{/);
+    expect(auth).toMatch(/databaseHooks:/);
+    expect(auth).toMatch(/approvalStatus:\s*"pending"/);
+    expect(auth).toMatch(/admin\(\{/);
   });
 
-  it("revokes sessions on reset and audits without sensitive values", () => {
-    expect(auth).toMatch(/revokeSessionsOnPasswordReset:\s*true/);
-    expect(auth).toMatch(/onPasswordReset/);
-    expect(auth).toMatch(/afterEmailVerification/);
-    expect(auth).toMatch(/\/email-otp\/request-password-reset/);
-    expect(auth).toMatch(/logActivity\(/);
-    expect(auth).not.toMatch(/metadata:\s*\{[^}]*\botp\s*:/i);
-  });
-
-  it("delegates delivery to the non-throwing email helper", () => {
-    expect(auth).toMatch(/sendSecurityEmail/);
-    expect(auth).toMatch(/otpEmailContent/);
-  });
-});
-
-describe("email delivery", () => {
-  const email = readFile("src/lib/email.ts");
-  const consoleLines = email
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith("console."));
-
-  it("never logs OTP values, recipients, or message bodies", () => {
-    for (const line of consoleLines) {
-      expect(line).not.toMatch(/\botp\b/i);
-      expect(line).not.toMatch(/message\.(text|to)/);
-      expect(line).not.toMatch(/\.text\b/);
+  it("removes every OTP, reset hook, and email delivery reference", () => {
+    for (const file of resetSurfaceFiles) {
+      const source = readFile(file);
+      expect(source).not.toMatch(/emailOTP|emailOtp/i);
+      expect(source).not.toMatch(/requestPasswordReset|resetPassword/i);
+      expect(source).not.toMatch(/forgot-password/i);
+      expect(source).not.toMatch(/EMAIL_DELIVERY_UNAVAILABLE/);
+      expect(source).not.toMatch(/sendSecurityEmail|otpEmailContent/);
     }
+    expect(auth).not.toMatch(/revokeSessionsOnPasswordReset|onPasswordReset/);
+    expect(auth).not.toMatch(/afterEmailVerification/);
+    expect(auth).not.toMatch(/createAuthMiddleware/);
+    expect(authClient).not.toMatch(/emailOTPClient/);
+    expect(proxy).not.toMatch(/\/forgot-password/);
   });
 
-  it("swallows delivery failures so responses cannot enumerate accounts", () => {
-    expect(email).toMatch(/try\s*\{/);
-    expect(email).toMatch(/catch/);
-    expect(email).toMatch(/never throws/i);
-  });
-
-  it("supports Resend and a generic webhook without new dependencies", () => {
-    expect(email).toMatch(/RESEND_API_KEY/);
-    expect(email).toMatch(/EMAIL_DELIVERY_URL/);
-    expect(email).toMatch(/api\.resend\.com/);
+  it("leaves no reset-specific route or helper file behind", () => {
+    const appFiles = walk("src/app");
+    const libFiles = walk("src/lib");
+    expect(appFiles.some((file) => /forgot|password-reset|reset-password/i.test(file))).toBe(false);
+    expect(libFiles.some((file) => /(^|\/)email\.ts$|otp/i.test(file))).toBe(false);
   });
 });
 
@@ -433,7 +392,6 @@ describe("settings and recovery UI", () => {
   const client = readFile("src/app/(dashboard)/admin/settings/settings-client.tsx");
   const login = readFile("src/app/(auth)/login/login-form.tsx");
   const signup = readFile("src/app/(auth)/signup/signup-form.tsx");
-  const forgot = readFile("src/app/(auth)/forgot-password/forgot-password-form.tsx");
 
   it("loads profile data behind the admin page guard", () => {
     expect(page).toMatch(/requireAdminPage/);
@@ -483,9 +441,9 @@ describe("settings and recovery UI", () => {
     expect(login).toMatch(/autoComplete="off"/);
   });
 
-  it("links to password recovery and provides password visibility controls", () => {
-    expect(login).toMatch(/href="\/forgot-password"/);
-    expect(login).toMatch(/Forgot password/);
+  it("keeps password visibility controls and has no recovery link", () => {
+    expect(login).not.toMatch(/forgot-password/i);
+    expect(login).not.toMatch(/Forgot password/i);
     // The password field starts hidden and toggles through an accessible,
     // keyboard-operable button without losing the entered value.
     expect(login).toMatch(/type=\{showPassword \? "text" : "password"\}/);
@@ -495,23 +453,6 @@ describe("settings and recovery UI", () => {
     expect(login).toMatch(/autoComplete="current-password"/);
     expect(signup).toMatch(/type=\{showPassword \? "text" : "password"\}/);
     expect(signup).toMatch(/aria-label=\{showPassword \? "Hide password" : "Show password"\}/);
-    expect(forgot).toMatch(/type=\{showNewPassword \? "text" : "password"\}/);
-    expect(forgot).toMatch(/type=\{showConfirmPassword \? "text" : "password"\}/);
-  });
-
-  it("keeps the password reset page reachable without a session", () => {
-    // The public self-service route must not be swallowed by the auth redirect.
-    const proxy = readFile("src/proxy.ts");
-    expect(proxy).toMatch(/"\/forgot-password"/);
-  });
-
-  it("requests and consumes recovery OTPs without revealing account existence", () => {
-    expect(forgot).toMatch(/requestPasswordReset/);
-    expect(forgot).toMatch(/resetPassword/);
-    expect(forgot).toMatch(/If an account exists/i);
-    expect(forgot).toMatch(/validatePasswordStrength/);
-    expect(forgot).toMatch(/validateOtp/);
-    expect(forgot).toMatch(/OTP_RESEND_COOLDOWN_SECONDS/);
   });
 
   it("keeps profile and password APIs for the settings sections that remain", () => {
