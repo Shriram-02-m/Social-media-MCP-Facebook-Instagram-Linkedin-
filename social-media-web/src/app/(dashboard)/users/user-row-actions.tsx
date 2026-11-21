@@ -91,14 +91,14 @@ export function UserRowActions({
         <DropdownMenuContent align="end" className="w-40">
           <DropdownMenuItem
             render={<Link href={`/users/${id}`} />}
-            className="focus:text-popover-foreground not-data-[variant=destructive]:focus:**:text-popover-foreground"
+            className="hover:bg-transparent hover:text-popover-foreground focus:bg-transparent focus:text-popover-foreground data-[highlighted]:bg-transparent data-[highlighted]:text-popover-foreground not-data-[variant=destructive]:hover:**:text-popover-foreground not-data-[variant=destructive]:focus:**:text-popover-foreground not-data-[variant=destructive]:data-[highlighted]:**:text-popover-foreground"
           >
             View
           </DropdownMenuItem>
           {canApprove || canReject ? <DropdownMenuSeparator /> : null}
           {canApprove ? (
             <DropdownMenuItem
-              className="focus:text-success not-data-[variant=destructive]:focus:**:text-success"
+              className="text-success hover:bg-green-100 hover:text-success focus:bg-green-100 focus:text-success data-[highlighted]:bg-green-100 data-[highlighted]:text-success not-data-[variant=destructive]:hover:**:text-success not-data-[variant=destructive]:focus:**:text-success not-data-[variant=destructive]:data-[highlighted]:**:text-success"
               disabled={busy}
               onClick={() => void setApproval("approved")}
             >
