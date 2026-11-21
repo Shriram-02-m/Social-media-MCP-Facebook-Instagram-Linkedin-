@@ -44,6 +44,11 @@ export function SocialAccountFilters({
   const [platform, setPlatform] = useState(initialPlatform);
   const [status, setStatus] = useState(initialStatus);
 
+  const optionItemClassName =
+    "text-popover-foreground hover:bg-neutral-200 hover:text-popover-foreground focus:bg-neutral-200 focus:text-popover-foreground data-[highlighted]:bg-neutral-200 data-[highlighted]:text-popover-foreground data-[selected]:text-popover-foreground dark:hover:bg-neutral-800 dark:focus:bg-neutral-800 dark:data-[highlighted]:bg-neutral-800 not-data-[variant=destructive]:hover:**:text-popover-foreground not-data-[variant=destructive]:focus:**:text-popover-foreground not-data-[variant=destructive]:data-[highlighted]:**:text-popover-foreground";
+  const triggerClassName =
+    "w-40 hover:bg-transparent dark:hover:bg-transparent focus-visible:border-input focus-visible:ring-0 focus-visible:ring-offset-0";
+
   function apply(nextQuery: string, nextPlatform: string, nextStatus: string) {
     const params = new URLSearchParams();
     const trimmed = nextQuery.trim();
@@ -88,14 +93,14 @@ export function SocialAccountFilters({
             apply(query, next, status);
           }}
         >
-          <SelectTrigger size="sm" className="w-40" aria-label="Filter by platform">
+          <SelectTrigger size="sm" className={triggerClassName} aria-label="Filter by platform">
             <SelectValue>
               {(value) => PLATFORM_LABELS[value ?? "all"] ?? "All platforms"}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {Object.entries(PLATFORM_LABELS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
+              <SelectItem key={value} value={value} className={optionItemClassName}>
                 {label}
               </SelectItem>
             ))}
@@ -110,14 +115,14 @@ export function SocialAccountFilters({
             apply(query, platform, next);
           }}
         >
-          <SelectTrigger size="sm" className="w-40" aria-label="Filter by connection status">
+          <SelectTrigger size="sm" className={triggerClassName} aria-label="Filter by connection status">
             <SelectValue>
               {(value) => STATUS_LABELS[value ?? "all"] ?? "All statuses"}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {Object.entries(STATUS_LABELS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
+              <SelectItem key={value} value={value} className={optionItemClassName}>
                 {label}
               </SelectItem>
             ))}
